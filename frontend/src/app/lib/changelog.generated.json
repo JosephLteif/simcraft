@@ -1,5 +1,5 @@
 {
-  "contentRevision": "Unreleased-fa96a282def7",
+  "contentRevision": "Unreleased-4f8f6c499d45",
   "releases": [
     {
       "version": "Unreleased",
@@ -36,6 +36,18 @@
             "Use Share result file on a completed result page, then import the file from the header or by dragging it into the web or desktop app.",
             "On Windows, double-clicking a `.wldps` file launches WhyLowDps when it is closed or focuses the existing app when it is already running.",
             "Shared results include the display data needed for review without requiring the original simulation job or account."
+          ]
+        },
+        {
+          "category": "improvement",
+          "title": "Understand result variation at a glance",
+          "summary": "Result pages now place a clearer analysis section at the bottom, helping you interpret DPS variation and compare upgrades without overreacting to simulation noise.",
+          "items": [
+            "View an estimated DPS distribution with P5, P25, P50, P75, and P95 percentile markers.",
+            "See a 95% confidence interval for the reported DPS mean when iteration data is available.",
+            "Compare Top Gear deltas against an uncertainty threshold labeled Meaningful, Within noise, or Needs more data.",
+            "Read stat plots against a visible baseline and compare stat weights using ranked relative bars.",
+            "The Result Insights section starts collapsed so the primary result remains the first thing you see."
           ]
         }
       ]

@@ -17,6 +17,7 @@ import ExternalBuffMatrixChart from '../../components/ExternalBuffMatrixChart';
 import ConsumableMatrixChart from '../../components/ConsumableMatrixChart';
 import SimResultTalentsCard from '../../components/SimResultTalentsCard';
 import SimTimelineAnalyzer from '../../components/SimTimelineAnalyzer';
+import ResultInsights from '../../components/ResultInsights';
 import { calculateAverageIlevel } from '../../lib/ilevel';
 import CharacterLinkButton from '../../components/CharacterLinkButton';
 import { useAuth } from '../../components/AuthContext';
@@ -1237,6 +1238,8 @@ export default function SimResultClient({ initialJob, shared = false }: SimResul
           {r.stat_plots ? (
             <StatPlotChart
               statPlots={r.stat_plots as Record<string, Array<{ delta: number; dps: number }>>}
+              dpsError={r.dps_error as number | undefined}
+              iterations={r.iterations as number | undefined}
             />
           ) : null}
           {r.stat_weights ? (
@@ -1260,6 +1263,13 @@ export default function SimResultClient({ initialJob, shared = false }: SimResul
                 framed={false}
               />
             </CollapsibleSection>
+          )}
+          {r.dps != null && (
+            <ResultInsights
+              dps={r.dps as number}
+              dpsError={r.dps_error as number | undefined}
+              iterations={r.iterations as number | undefined}
+            />
           )}
         </>
       ) : (
@@ -1540,6 +1550,11 @@ export default function SimResultClient({ initialJob, shared = false }: SimResul
           {r.stat_weights && (
             <StatWeightsTable statWeights={r.stat_weights as Record<string, number>} />
           )}
+          <ResultInsights
+            dps={r.dps as number}
+            dpsError={r.dps_error as number | undefined}
+            iterations={r.iterations as number | undefined}
+          />
         </>
       )}
 

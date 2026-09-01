@@ -34,6 +34,16 @@ Completed simulation results can now travel as portable `.wldps` files and open 
 - On Windows, double-clicking a `.wldps` file launches WhyLowDps when it is closed or focuses the existing app when it is already running.
 - Shared results include the display data needed for review without requiring the original simulation job or account.
 
+#### Understand result variation at a glance
+
+Result pages now place a clearer analysis section at the bottom, helping you interpret DPS variation and compare upgrades without overreacting to simulation noise.
+
+- View an estimated DPS distribution with P5, P25, P50, P75, and P95 percentile markers.
+- See a 95% confidence interval for the reported DPS mean when iteration data is available.
+- Compare Top Gear deltas against an uncertainty threshold labeled Meaningful, Within noise, or Needs more data.
+- Read stat plots against a visible baseline and compare stat weights using ranked relative bars.
+- The Result Insights section starts collapsed so the primary result remains the first thing you see.
+
 ## v5.0.1 — 2026-08-31 — Release notes for v5.0.1
 
 ### Bug fixes

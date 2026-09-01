@@ -15,6 +15,12 @@ The format is based on Keep a Changelog and this project uses semantic versionin
 - Drop Finder, Wishlist, and Upgrade Planner are grouped together with direct navigation and clearer guidance for moving an item from acquisition to upgrade planning.
 - Completed simulation results can now be exported as portable `.wldps` files, imported by picker or drag-and-drop, and opened directly by the desktop app through Windows file association.
 
+### Changed
+
+- Result pages now place a clearer analysis section at the bottom with an estimated DPS distribution, percentile markers, confidence intervals, and uncertainty-aware comparison guidance.
+- Top Gear deltas now show whether their difference is meaningful, within simulation noise, or needs more data; stat plots include a baseline and stat weights show ranked relative values.
+- Result Insights starts collapsed by default so the primary result content stays focused until deeper analysis is requested.
+
 ## [5.0.1] - 2026-08-31
 
 ### Fixed

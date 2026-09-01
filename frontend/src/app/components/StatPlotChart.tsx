@@ -5,11 +5,13 @@ import {
   CartesianGrid,
   Line,
   LineChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from 'recharts';
+import { calculateMeaningfulDifferenceThreshold } from '../lib/result-insights';
 
 interface StatPlotPoint {
   delta: number;
@@ -18,6 +20,8 @@ interface StatPlotPoint {
 
 interface StatPlotChartProps {
   statPlots: Record<string, StatPlotPoint[]>;
+  dpsError?: number;
+  iterations?: number;
 }
 
 const STAT_DISPLAY_NAMES: Record<string, string> = {
@@ -47,7 +51,7 @@ function keyForDelta(v: number): string {
   return Number(v).toFixed(4);
 }
 
-export default function StatPlotChart({ statPlots }: StatPlotChartProps) {
+export default function StatPlotChart({ statPlots, dpsError, iterations }: StatPlotChartProps) {
   const statKeys = useMemo(() => Object.keys(statPlots), [statPlots]);
   const [visibleStats, setVisibleStats] = useState<string[]>(statKeys);
 
@@ -78,6 +82,22 @@ export default function StatPlotChart({ statPlots }: StatPlotChartProps) {
       }));
   }, [statKeys, statPlots]);
 
+  const baselineDps = useMemo(() => {
+    const baselineValues = statKeys
+      .map((stat) => {
+        const points = statPlots[stat] || [];
+        if (points.length === 0) return null;
+        return points.reduce((closest, point) =>
+          Math.abs(point.delta) < Math.abs(closest.delta) ? point : closest
+        ).dps;
+      })
+      .filter((value): value is number => Number.isFinite(value));
+    if (baselineValues.length === 0) return null;
+    return baselineValues.reduce((sum, value) => sum + value, 0) / baselineValues.length;
+  }, [statKeys, statPlots]);
+
+  const meaningfulThreshold = calculateMeaningfulDifferenceThreshold(dpsError, iterations);
+
   if (statKeys.length === 0) {
     return null;
   }
@@ -85,7 +105,15 @@ export default function StatPlotChart({ statPlots }: StatPlotChartProps) {
   return (
     <div className="card p-5">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h3 className="text-xs font-medium uppercase tracking-widest text-muted">Stat Plot</h3>
+        <div>
+          <h3 className="text-muted text-xs font-medium tracking-widest uppercase">Stat Plot</h3>
+          <p className="text-muted mt-1 text-[11px]">
+            Baseline is the point closest to zero stat delta.
+            {meaningfulThreshold != null
+              ? ` Changes smaller than +/-${Math.round(meaningfulThreshold).toLocaleString()} DPS may be noise.`
+              : ' Add iteration data to estimate a meaningful difference.'}
+          </p>
+        </div>
         <div className="flex flex-wrap gap-2">
           {statKeys.map((stat, i) => {
             const active = visibleStats.includes(stat);
@@ -142,6 +170,19 @@ export default function StatPlotChart({ statPlots }: StatPlotChartProps) {
                 fontSize: 12,
               }}
             />
+            {baselineDps != null && (
+              <ReferenceLine
+                y={baselineDps}
+                stroke="#a1a1aa"
+                strokeDasharray="4 4"
+                label={{
+                  value: 'Baseline',
+                  position: 'insideTopRight',
+                  fill: '#a1a1aa',
+                  fontSize: 11,
+                }}
+              />
+            )}
             <Tooltip
               contentStyle={{
                 background: '#111115',

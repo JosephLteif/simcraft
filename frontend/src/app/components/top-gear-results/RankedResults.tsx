@@ -12,6 +12,8 @@ export interface ResultListProps {
   results: TopGearResult[];
   maxDps: number;
   baseDps: number;
+  dpsError?: number;
+  iterations?: number;
   equippedGear?: Record<string, ResultItem>;
   baseAvgIlevel: number;
   itemInfoMap: Record<number, ItemInfo>;
@@ -39,6 +41,8 @@ export function ResultList({
   results,
   maxDps,
   baseDps,
+  dpsError,
+  iterations,
   equippedGear,
   baseAvgIlevel,
   itemInfoMap,
@@ -86,6 +90,8 @@ export function ResultList({
               rank={showRanks ? pageStart + idx + 1 : undefined}
               maxDps={maxDps}
               baseDps={baseDps}
+              dpsError={dpsError}
+              iterations={iterations}
               equippedGear={equippedGear}
               baseAvgIlevel={baseAvgIlevel}
               isBest={

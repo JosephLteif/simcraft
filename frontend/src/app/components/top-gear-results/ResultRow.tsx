@@ -12,6 +12,7 @@ import {
   parseUpgradeTierLevel,
 } from '../../lib/upgrade-preview';
 import ItemTag from './ItemTag';
+import { MeaningfulDifferenceIndicator } from '../ResultInsights';
 import {
   AUGMENT_RUNE_OPTIONS,
   FLASK_OPTIONS,
@@ -154,6 +155,8 @@ interface ResultRowProps {
   rank?: number;
   maxDps: number;
   baseDps: number;
+  dpsError?: number;
+  iterations?: number;
   equippedGear?: Record<string, ResultItem>;
   baseAvgIlevel: number;
   isBest: boolean;
@@ -229,6 +232,8 @@ export default function ResultRow({
   rank,
   maxDps,
   baseDps,
+  dpsError,
+  iterations,
   equippedGear,
   baseAvgIlevel,
   isBest,
@@ -720,6 +725,14 @@ export default function ResultRow({
                 ({result.delta > 0 ? '+' : ''}
                 {((result.delta / baseDps) * 100).toFixed(1)}%)
               </span>
+            )}
+            {!isEquipped && result.delta !== 0 && (
+              <MeaningfulDifferenceIndicator
+                delta={result.delta}
+                standardDeviation={dpsError}
+                iterations={iterations}
+                compact
+              />
             )}
           </span>
           <span className="text-left font-mono text-[14px] tabular-nums text-zinc-200 xl:w-20 xl:text-right xl:text-[15px]">

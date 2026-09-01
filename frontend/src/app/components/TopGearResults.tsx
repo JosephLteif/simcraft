@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { ChevronDown } from 'lucide-react';
 import { API_URL, fetchJson, fetchJsonCached } from '../lib/api';
 import DpsHeroCard from './DpsHeroCard';
+import ResultInsights, { MeaningfulDifferenceIndicator } from './ResultInsights';
 import GearOverview from './GearOverview';
 import SimStatsComparisonCard from './SimStatsComparisonCard';
 import type { StatSnapshot } from '../lib/stat-snapshot';
@@ -809,6 +810,14 @@ export default function TopGearResults({
               </div>
             )}
 
+            {selectedResult.delta !== 0 && (
+              <MeaningfulDifferenceIndicator
+                delta={selectedResult.delta}
+                standardDeviation={dpsError}
+                iterations={iterations}
+              />
+            )}
+
             {selectedResultName && selectedResultName !== results[0]?.name && (
               <span className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">
                 Viewing Selection: {selectedResultName}
@@ -998,6 +1007,8 @@ export default function TopGearResults({
                     results={group}
                     maxDps={maxDps}
                     baseDps={baseDps}
+                    dpsError={dpsError}
+                    iterations={iterations}
                     equippedGear={equippedGear}
                     baseAvgIlevel={baseAvgIlevel}
                     itemInfoMap={itemInfoMap}
@@ -1027,6 +1038,8 @@ export default function TopGearResults({
             results={filteredResults}
             maxDps={maxDps}
             baseDps={baseDps}
+            dpsError={dpsError}
+            iterations={iterations}
             equippedGear={equippedGear}
             baseAvgIlevel={baseAvgIlevel}
             itemInfoMap={itemInfoMap}
@@ -1047,6 +1060,11 @@ export default function TopGearResults({
           />
         )}
       </CollapsibleSection>
+      <ResultInsights
+        dps={selectedResult?.dps || baseDps}
+        dpsError={dpsError}
+        iterations={iterations}
+      />
     </div>
   );
 }
