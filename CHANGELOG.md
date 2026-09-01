@@ -22,6 +22,10 @@ The format is based on Keep a Changelog and this project uses semantic versionin
 - Top Gear deltas now show whether their difference is meaningful, within simulation noise, or needs more data; stat plots include a baseline and stat weights show ranked relative values.
 - Result Insights starts collapsed by default so the primary result content stays focused until deeper analysis is requested.
 
+### Fixed
+
+- Character Raiding tabs now show current-season progression when active raid pools identify bosses by encounter ID instead of raid instance ID.
+
 ## [5.0.1] - 2026-08-31
 
 ### Fixed

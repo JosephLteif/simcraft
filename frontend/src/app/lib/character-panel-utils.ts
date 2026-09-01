@@ -167,6 +167,33 @@ export function isLikelyCurrentExpansionLabel(value: unknown): boolean {
   return lower === 'current season' || lower === 'current expansion';
 }
 
+export function raidMatchesActiveIds(raid: unknown, activeIds?: number[]): boolean {
+  if (!activeIds) return true;
+
+  const ids = new Set(activeIds.map((id) => Number(id)).filter((id) => Number.isFinite(id)));
+  if (ids.size === 0) return false;
+
+  const instance = (raid || {}) as Record<string, any>;
+  const instanceId = Number(instance.instance?.id ?? instance.id ?? 0);
+  if (ids.has(instanceId)) return true;
+
+  const modes = Array.isArray(instance.modes) ? instance.modes : [];
+  return modes.some((mode: any) => {
+    const progress = mode?.progress ?? {};
+    const encounters = Array.isArray(progress.encounters)
+      ? progress.encounters
+      : Array.isArray(mode?.encounters)
+        ? mode.encounters
+        : [];
+    return encounters.some((encounter: any) => {
+      const encounterId = Number(
+        encounter?.encounter?.id ?? encounter?.id ?? encounter?.journal_encounter_id ?? 0
+      );
+      return ids.has(encounterId);
+    });
+  });
+}
+
 function normalizeRaidKey(value: unknown): string {
   return String(value ?? '')
     .trim()

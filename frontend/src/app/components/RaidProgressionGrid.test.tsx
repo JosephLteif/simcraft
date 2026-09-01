@@ -54,4 +54,36 @@ describe('RaidProgressionGrid', () => {
     ).toHaveAttribute('href', 'https://www.warcraftlogs.com/guide/fallen-king-salhadaar');
     expect(screen.queryByRole('link', { name: /warcraft logs guide for unknown boss/i })).not.toBeInTheDocument();
   });
+
+  it('matches active raid pools that contain encounter ids', () => {
+    render(
+      <RaidProgressionGrid
+        selectedExpansion="all"
+        activeRaidInstanceIds={[101]}
+        raidEncounters={{
+          expansions: [
+            {
+              name: 'Midnight',
+              instances: [
+                {
+                  instance: { id: 900, name: 'Current Raid' },
+                  modes: [
+                    {
+                      difficulty: { type: 'normal' },
+                      progress: {
+                        encounters: [{ encounter: { id: 101, name: 'Current Boss' } }],
+                      },
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByText('Current Raid')).toBeInTheDocument();
+    expect(screen.getByText('Current Boss')).toBeInTheDocument();
+  });
 });

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { getWarcraftLogsGuideUrl } from '../lib/warcraft-logs-guides';
 import { RAID_VAULT_THRESHOLDS } from '../lib/game-rules';
-import { getWeeklyResetStartMs } from '../lib/character-panel-utils';
+import { getWeeklyResetStartMs, raidMatchesActiveIds } from '../lib/character-panel-utils';
 
 type DifficultyKey = 'lfr' | 'normal' | 'heroic' | 'mythic';
 
@@ -107,8 +107,6 @@ function parseRaidData(raidEncounters: any, activeRaidInstanceIds?: number[]): {
   const raids = new Map<string, RaidProgression>();
   const totalsByExpansion: Record<string, DifficultyTotals> = {};
   const expansionOrder: string[] = [];
-  const activeIds = activeRaidInstanceIds ? new Set(activeRaidInstanceIds) : null;
-
   for (const expansion of expansions) {
     const rawExpansion =
       expansion?.expansion?.name || expansion?.expansion_name || expansion?.label || expansion?.name;
@@ -121,8 +119,7 @@ function parseRaidData(raidEncounters: any, activeRaidInstanceIds?: number[]): {
 
     const instances = Array.isArray(expansion?.instances) ? expansion.instances : [];
     for (const instance of instances) {
-      const instanceId = Number(instance?.instance?.id ?? instance?.id ?? 0);
-      if (activeIds && !activeIds.has(instanceId)) continue;
+      if (!raidMatchesActiveIds(instance, activeRaidInstanceIds)) continue;
       const raidName = String(instance?.instance?.name || instance?.name || 'Raid').trim() || 'Raid';
       const raidKey = `${expansionKey}::${normalizeSlug(raidName)}`;
 

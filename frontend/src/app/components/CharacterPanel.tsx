@@ -34,6 +34,7 @@ import {
   isCurrentExpansionPlaceholder,
   isLikelyCurrentExpansionLabel,
   parseVaultRewardsFromSimcInput,
+  raidMatchesActiveIds,
 } from '../lib/character-panel-utils';
 import { parseTalentLoadouts, type TalentLoadoutParsed } from '../lib/types';
 import { useMythicDungeonDetails } from '../lib/useMythicDungeonDetails';
@@ -914,7 +915,6 @@ function RaidProgressCard({
   const raids = useMemo(() => {
     if (!raidEncounters || typeof raidEncounters !== 'object') return [];
     const expansions = Array.isArray(raidEncounters.expansions) ? raidEncounters.expansions : [];
-    const activeIds = activeRaidInstanceIds ? new Set(activeRaidInstanceIds) : null;
     const byName = new Map<
       string,
       {
@@ -986,8 +986,7 @@ function RaidProgressCard({
       const expansionKey = normalize(expansionLabel) || canonicalExpansionKey(rawExpansionLabel);
       const instances = Array.isArray(exp?.instances) ? exp.instances : [];
       for (const inst of instances) {
-        const instanceId = Number((inst as any)?.instance?.id ?? (inst as any)?.id ?? 0);
-        if (activeIds && !activeIds.has(instanceId)) continue;
+        if (!raidMatchesActiveIds(inst, activeRaidInstanceIds)) continue;
         const modes = Array.isArray(inst?.modes) ? inst.modes : [];
         const getMode = (modeName: string) =>
           modes.find((mode: RaidMode) => (mode?.difficulty?.type || '').toLowerCase() === modeName);
@@ -1036,7 +1035,7 @@ function RaidProgressCard({
     }
 
     return Array.from(byName.values());
-  }, [raidEncounters]);
+  }, [activeRaidInstanceIds, raidEncounters]);
 
   const visibleRaids = useMemo(
     () =>

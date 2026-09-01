@@ -45,6 +45,14 @@ Result pages now place a clearer analysis section at the bottom, helping you int
 - Read stat plots against a visible baseline and compare stat weights using ranked relative bars.
 - The Result Insights section starts collapsed so the primary result remains the first thing you see.
 
+### Bug fixes
+
+#### Show current raid progression
+
+The character Raiding tab now displays current-season raid progress when the active raid pool identifies bosses instead of raid instances.
+
+- Active raid filters now match both raid instance IDs and boss encounter IDs returned by the game data context.
+
 ## v5.0.1 — 2026-08-31 — Release notes for v5.0.1
 
 ### Bug fixes

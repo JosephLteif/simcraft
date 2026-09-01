@@ -1,5 +1,5 @@
 {
-  "contentRevision": "Unreleased-440ac4a15bfc",
+  "contentRevision": "Unreleased-e78a4b002676",
   "releases": [
     {
       "version": "Unreleased",
@@ -49,6 +49,14 @@
             "Compare Top Gear deltas against an uncertainty threshold labeled Meaningful, Within noise, or Needs more data.",
             "Read stat plots against a visible baseline and compare stat weights using ranked relative bars.",
             "The Result Insights section starts collapsed so the primary result remains the first thing you see."
+          ]
+        },
+        {
+          "category": "fix",
+          "title": "Show current raid progression",
+          "summary": "The character Raiding tab now displays current-season raid progress when the active raid pool identifies bosses instead of raid instances.",
+          "items": [
+            "Active raid filters now match both raid instance IDs and boss encounter IDs returned by the game data context."
           ]
         }
       ]
