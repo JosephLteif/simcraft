@@ -24,6 +24,7 @@ import PwaInstallPrompt from './components/PwaInstallPrompt';
 import { NotificationProvider } from './components/shared/NotificationSystem';
 import { GuidedTourProvider } from './components/GuidedTour';
 import SimulationActivity from './components/SimulationActivity';
+import SharedResultIntegrationListener from './components/SharedResultIntegrationListener';
 import './globals.css';
 import React from 'react';
 
@@ -66,6 +67,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <NotificationProvider>
             <AuthProvider>
               <LanSessionLifecycle />
+              <SharedResultIntegrationListener />
               <ActiveCharacterProvider>
                 <DataGuard>
                   <SimProvider>

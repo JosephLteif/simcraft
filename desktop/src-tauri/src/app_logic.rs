@@ -9,7 +9,7 @@ pub(crate) fn is_supported_import_path(path: &Path) -> bool {
             .and_then(|extension| extension.to_str())
             .map(|extension| extension.to_ascii_lowercase())
             .as_deref(),
-        Some("simc") | Some("txt")
+        Some("simc") | Some("txt") | Some("wldps")
     )
 }
 
@@ -942,11 +942,12 @@ mod tests {
     }
 
     #[test]
-    fn importable_file_paths_accept_simc_and_text_files_case_insensitively() {
+    fn importable_file_paths_accept_simc_text_and_shared_result_files_case_insensitively() {
         let args = vec![
             "whylowdps.exe".to_string(),
             "profile.SIMC".to_string(),
             "notes.txt".to_string(),
+            "shared-result.WLDPS".to_string(),
             "image.png".to_string(),
         ];
 
@@ -954,7 +955,11 @@ mod tests {
 
         assert_eq!(
             paths,
-            vec![PathBuf::from("profile.SIMC"), PathBuf::from("notes.txt")]
+            vec![
+                PathBuf::from("profile.SIMC"),
+                PathBuf::from("notes.txt"),
+                PathBuf::from("shared-result.WLDPS"),
+            ]
         );
     }
 

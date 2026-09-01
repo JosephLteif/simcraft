@@ -49,6 +49,13 @@
         ],
         "mimeType": "text/plain",
         "role": "Editor"
+      },
+      {
+        "ext": [
+          "wldps"
+        ],
+        "mimeType": "application/json",
+        "role": "Editor"
       }
     ]
   },

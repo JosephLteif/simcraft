@@ -5,6 +5,7 @@ import { FileInput } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { isDesktop } from '../lib/api';
 import { simResultHref } from '../lib/routes';
+import { isSharedResultPath } from '../lib/shared-result';
 import { useSimContext } from './SimContext';
 import { useNotifications } from './shared/NotificationSystem';
 
@@ -64,6 +65,7 @@ export default function DesktopIntegrationListener() {
 
     const applyImportedInput = (payload: FileImportPayload) => {
       if (!payload?.content?.trim()) return;
+      if (isSharedResultPath(payload.path || '')) return;
       setSimcInput(payload.content);
       try {
         sessionStorage.setItem('whylowdps_simc_input', payload.content);
@@ -75,7 +77,9 @@ export default function DesktopIntegrationListener() {
 
     (async () => {
       try {
+        const { invoke } = await import('@tauri-apps/api/core');
         const { listen } = await import('@tauri-apps/api/event');
+        const { getCurrentWebview } = await import('@tauri-apps/api/webview');
         if (cancelled) return;
 
         const removeSimCompletedListener = await listen<SimCompletedPayload>(
@@ -117,22 +121,17 @@ export default function DesktopIntegrationListener() {
         }
         unlisten.push(removeFileImportListener);
 
-        const removeDragDropListener = await listen<{ paths?: string[] }>(
-          'tauri://drag-drop',
-          async (event) => {
-            const path = event.payload?.paths?.find((candidate) =>
-              /\.(simc|txt)$/i.test(candidate)
-            );
-            if (!path) return;
-            try {
-              const { invoke } = await import('@tauri-apps/api/core');
-              const payload = await invoke<FileImportPayload>('read_import_file', { path });
-              applyImportedInput(payload);
-            } catch {
-              // Ignore unsupported or unreadable drops.
-            }
+        const removeDragDropListener = await getCurrentWebview().onDragDropEvent(async (event) => {
+          if (event.payload.type !== 'drop') return;
+          const path = event.payload.paths.find((candidate) => /\.(simc|txt)$/i.test(candidate));
+          if (!path) return;
+          try {
+            const payload = await invoke<FileImportPayload>('read_import_file', { path });
+            applyImportedInput(payload);
+          } catch {
+            // Ignore unsupported or unreadable drops.
           }
-        );
+        });
         if (cancelled) {
           removeDragDropListener();
           return;

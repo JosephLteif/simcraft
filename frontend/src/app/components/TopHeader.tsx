@@ -26,6 +26,7 @@ import { CHANGELOG_OPEN_EVENT } from './ChangelogPopup';
 import { COMMAND_PALETTE_OPEN_EVENT } from './CommandPalette';
 import NotificationCenter from './shared/NotificationCenter';
 import { useGuidedTour } from './GuidedTour';
+import SharedResultImport from './SharedResultImport';
 
 type SearchCharacter = {
   realm: string;
@@ -454,6 +455,7 @@ export default function TopHeader() {
                 <Sparkles className="h-3.5 w-3.5" strokeWidth={2} />
                 <span className="hidden md:inline">What&apos;s new</span>
               </button>
+              <SharedResultImport />
               {currentTour ? (
                 <button
                   type="button"
@@ -512,6 +514,7 @@ export default function TopHeader() {
                     <Sparkles className="h-4 w-4 text-zinc-400" strokeWidth={2} />
                     What&apos;s new
                   </button>
+                  <SharedResultImport variant="menu" />
                   {currentTour ? (
                     <button
                       type="button"

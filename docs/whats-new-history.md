@@ -26,6 +26,14 @@ Wishlist targets and owned-item upgrades now follow one clear gear roadmap witho
 - See the matching character's Wishlist count and move between Drop Finder, Wishlist, and Upgrade Planner from one Upgrades navigation group.
 - Reorder roadmap entries, mark upgrades complete, and track planned costs against available currencies.
 
+#### Share and open simulation results anywhere
+
+Completed simulation results can now travel as portable `.wldps` files and open in another WhyLowDps app with the same result view.
+
+- Use Share result file on a completed result page, then import the file from the header or by dragging it into the web or desktop app.
+- On Windows, double-clicking a `.wldps` file launches WhyLowDps when it is closed or focuses the existing app when it is already running.
+- Shared results include the display data needed for review without requiring the original simulation job or account.
+
 ## v5.0.1 — 2026-08-31 — Release notes for v5.0.1
 
 ### Bug fixes

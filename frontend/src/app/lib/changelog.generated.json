@@ -1,5 +1,5 @@
 {
-  "contentRevision": "Unreleased-1f4ea03277f1",
+  "contentRevision": "Unreleased-fa96a282def7",
   "releases": [
     {
       "version": "Unreleased",
@@ -26,6 +26,16 @@
             "Open Upgrade Planner to select items already present in your SimC export and add their upgrade paths to Gear Roadmap.",
             "See the matching character's Wishlist count and move between Drop Finder, Wishlist, and Upgrade Planner from one Upgrades navigation group.",
             "Reorder roadmap entries, mark upgrades complete, and track planned costs against available currencies."
+          ]
+        },
+        {
+          "category": "improvement",
+          "title": "Share and open simulation results anywhere",
+          "summary": "Completed simulation results can now travel as portable `.wldps` files and open in another WhyLowDps app with the same result view.",
+          "items": [
+            "Use Share result file on a completed result page, then import the file from the header or by dragging it into the web or desktop app.",
+            "On Windows, double-clicking a `.wldps` file launches WhyLowDps when it is closed or focuses the existing app when it is already running.",
+            "Shared results include the display data needed for review without requiring the original simulation job or account."
           ]
         }
       ]

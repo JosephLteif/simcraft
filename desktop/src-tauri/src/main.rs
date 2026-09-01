@@ -494,11 +494,24 @@ fn emit_file_imports(app: &tauri::AppHandle, args: &[String]) {
 
 fn read_import_file_path(path: PathBuf) -> Result<FileImportEvent, String> {
     if !is_supported_import_path(&path) {
-        return Err("Only .simc and .txt files can be imported.".to_string());
+        return Err("Only .simc, .txt, and .wldps files can be imported.".to_string());
     }
     let metadata = std::fs::metadata(&path).map_err(|e| format!("Unable to inspect file: {e}"))?;
-    if !metadata.is_file() || metadata.len() > 5 * 1024 * 1024 {
-        return Err("The selected file is missing, not a file, or larger than 5 MB.".to_string());
+    let max_bytes = if path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .map(|extension| extension.eq_ignore_ascii_case("wldps"))
+        .unwrap_or(false)
+    {
+        10 * 1024 * 1024
+    } else {
+        5 * 1024 * 1024
+    };
+    if !metadata.is_file() || metadata.len() > max_bytes {
+        return Err(format!(
+            "The selected file is missing, not a file, or larger than {} MB.",
+            max_bytes / (1024 * 1024)
+        ));
     }
     let content =
         std::fs::read_to_string(&path).map_err(|e| format!("Unable to read file: {e}"))?;

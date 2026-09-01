@@ -13,6 +13,7 @@ The format is based on Keep a Changelog and this project uses semantic versionin
 - The dashboard now shows a live Queued Sims count while simulations are in flight.
 - Wishlist and Upgrade Planner now share a character-scoped Gear Roadmap: Wishlist tracks items to obtain, while the roadmap tracks upgrades for owned items without duplicating the same list.
 - Drop Finder, Wishlist, and Upgrade Planner are grouped together with direct navigation and clearer guidance for moving an item from acquisition to upgrade planning.
+- Completed simulation results can now be exported as portable `.wldps` files, imported by picker or drag-and-drop, and opened directly by the desktop app through Windows file association.
 
 ## [5.0.1] - 2026-08-31
 

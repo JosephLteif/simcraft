@@ -49,6 +49,13 @@ export default function DataGuard({ children }: { children: ReactNode }) {
   const statusFailureFirstAtRef = useRef<number | null>(null);
   const autoRetryAttemptRef = useRef(0);
   const autoRetryTimerRef = useRef<number | null>(null);
+  const pathname = usePathname();
+  const router = useRouter();
+  const normalizedPath =
+    pathname.endsWith('/') && pathname !== '/' ? pathname.slice(0, -1) : pathname;
+  const isSharedResultPage = normalizedPath === '/shared-result';
+  const isLanResyncPage = normalizedPath === '/lan/resync';
+  const isSettingsPage = normalizedPath === '/settings';
 
   const safeText = (value: unknown, fallback = ''): string => {
     if (typeof value === 'string') return value;
@@ -139,6 +146,7 @@ export default function DataGuard({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (
       lightMode ||
+      isSharedResultPage ||
       lanAccessRequired ||
       localStorage.getItem(LAN_ACCESS_REQUIRED_STORAGE_KEY) === '1'
     ) {
@@ -167,10 +175,11 @@ export default function DataGuard({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [checkCredentialsStatus, lanAccessRequired, lightMode]);
+  }, [checkCredentialsStatus, isSharedResultPage, lanAccessRequired, lightMode]);
 
   const checkStatus = useCallback(async () => {
     if (
+      isSharedResultPage ||
       lanAccessRequired ||
       localStorage.getItem(LAN_ACCESS_REQUIRED_STORAGE_KEY) === '1'
     ) {
@@ -260,9 +269,10 @@ export default function DataGuard({ children }: { children: ReactNode }) {
         setDataStatus({ status: 'syncing', progress: 'Waiting for backend to start...' });
       }
     }
-  }, [lanAccessRequired, lightMode, missingDataDownloadBusy]);
+  }, [isSharedResultPage, lanAccessRequired, lightMode, missingDataDownloadBusy]);
 
   useEffect(() => {
+    if (isSharedResultPage) return;
     if (
       !isReady &&
       !lanAccessRequired &&
@@ -275,10 +285,11 @@ export default function DataGuard({ children }: { children: ReactNode }) {
           checkStatus();
         });
     }
-  }, [checkStatus, isReady, lanAccessRequired]);
+  }, [checkStatus, isReady, isSharedResultPage, lanAccessRequired]);
 
   useEffect(() => {
     if (
+      isSharedResultPage ||
       lanAccessRequired ||
       localStorage.getItem(LAN_ACCESS_REQUIRED_STORAGE_KEY) === '1' ||
       (isReady && !missingDataDownloadBusy)
@@ -289,7 +300,7 @@ export default function DataGuard({ children }: { children: ReactNode }) {
       checkStatus();
     }, 2000);
     return () => clearInterval(interval);
-  }, [checkStatus, isReady, lanAccessRequired, missingDataDownloadBusy]);
+  }, [checkStatus, isReady, isSharedResultPage, lanAccessRequired, missingDataDownloadBusy]);
 
   const handleRetry = () => {
     if (autoRetryTimerRef.current != null) {
@@ -393,6 +404,7 @@ export default function DataGuard({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (
+      isSharedResultPage ||
       lanAccessRequired ||
       localStorage.getItem(LAN_ACCESS_REQUIRED_STORAGE_KEY) === '1'
     ) {
@@ -447,14 +459,8 @@ export default function DataGuard({ children }: { children: ReactNode }) {
       );
       if (interval) window.clearInterval(interval);
     };
-  }, [lanAccessRequired, showMissingFilesPopup]);
+  }, [isSharedResultPage, lanAccessRequired, showMissingFilesPopup]);
 
-  const pathname = usePathname();
-  const router = useRouter();
-  const normalizedPath =
-    pathname.endsWith('/') && pathname !== '/' ? pathname.slice(0, -1) : pathname;
-  const isLanResyncPage = normalizedPath === '/lan/resync';
-  const isSettingsPage = normalizedPath === '/settings';
   const lightModeBlockedRoute =
     lightMode &&
     (normalizedPath === '/settings' ||
@@ -465,14 +471,14 @@ export default function DataGuard({ children }: { children: ReactNode }) {
   const shouldShowMissingFilesPopup = showMissingFilesPopup;
 
   useEffect(() => {
-    if (!lanAccessRequired || isLanResyncPage) return;
+    if (!lanAccessRequired || isLanResyncPage || isSharedResultPage) return;
     router.replace('/lan/resync');
-  }, [isLanResyncPage, lanAccessRequired, router]);
+  }, [isLanResyncPage, isSharedResultPage, lanAccessRequired, router]);
 
   let content: React.ReactNode = children;
   if (isLanResyncPage) {
     content = children;
-  } else if (lanAccessRequired) {
+  } else if (lanAccessRequired && !isSharedResultPage) {
     content = <SplashScreen status="lan_access_required" progress="" />;
   } else if (lightModeBlockedRoute) {
     content = (
@@ -491,9 +497,14 @@ export default function DataGuard({ children }: { children: ReactNode }) {
         </section>
       </main>
     );
-  } else if ((loading || isChecking) && !isSettingsPage && !lightMode) {
+  } else if (
+    (loading || isChecking) &&
+    !isSettingsPage &&
+    !isSharedResultPage &&
+    !lightMode
+  ) {
     content = null;
-  } else if (user && !isSettingsPage && !isReady) {
+  } else if (user && !isSettingsPage && !isSharedResultPage && !isReady) {
     content = (
       <SplashScreen
         status={toSplashStatus(dataStatus?.status)}
@@ -504,11 +515,17 @@ export default function DataGuard({ children }: { children: ReactNode }) {
         retriesTotal={AUTO_RETRY_DELAYS_MS.length}
       />
     );
-  } else if (!user && isGloballyConfigured === false && !isSettingsPage && !lightMode) {
+  } else if (
+    !user &&
+    isGloballyConfigured === false &&
+    !isSettingsPage &&
+    !isSharedResultPage &&
+    !lightMode
+  ) {
     content = <SplashScreen status="unauthenticated_needs_keys" progress="" />;
-  } else if (!user && !isSettingsPage && !lightMode) {
+  } else if (!user && !isSettingsPage && !isSharedResultPage && !lightMode) {
     content = <SplashScreen status="unauthenticated" progress="" />;
-  } else if (!isReady && !isSettingsPage) {
+  } else if (!isReady && !isSettingsPage && !isSharedResultPage) {
     content = (
       <SplashScreen
         status={toSplashStatus(dataStatus?.status)}
@@ -524,12 +541,12 @@ export default function DataGuard({ children }: { children: ReactNode }) {
   return (
     <>
       {content}
-      {dataStatus?.degraded && !isSettingsPage && (
+      {dataStatus?.degraded && !isSettingsPage && !isSharedResultPage && (
         <div className="mobile-fixed-bottom fixed left-1/2 z-[180] w-[min(92vw,760px)] -translate-x-1/2 rounded-lg border border-amber-400/30 bg-amber-950/90 px-3 py-2 text-xs text-amber-100 shadow-xl backdrop-blur">
           Using the last validated game-data snapshot. New seasonal data is temporarily degraded; simulations and unrelated browsing remain available.
         </div>
       )}
-      {shouldShowMissingFilesPopup && (
+      {shouldShowMissingFilesPopup && !isSharedResultPage && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 p-4">
           <div className="w-full max-w-lg rounded-xl border border-amber-500/30 bg-[#1a1306] p-5 shadow-2xl">
             <p className="text-base font-semibold text-amber-200">Critical data files are missing</p>

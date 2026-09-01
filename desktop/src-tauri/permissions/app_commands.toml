@@ -8,6 +8,7 @@ commands.allow = [
     "load_session_token",
     "save_session_token",
     "open_data_dir",
+    "read_import_file",
     "get_close_behavior_preference",
     "set_close_behavior_preference",
     "clear_close_behavior_preference",
