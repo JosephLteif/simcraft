@@ -1,6 +1,24 @@
 {
-  "contentRevision": "v5.0.1-eb8df667a476",
+  "contentRevision": "Unreleased-6dc17122e731",
   "releases": [
+    {
+      "version": "Unreleased",
+      "date": "",
+      "title": "Simulation queue management",
+      "entries": [
+        {
+          "category": "improvement",
+          "title": "Monitor and manage simulation queues",
+          "summary": "Simulation runs now support a configurable parallel-job limit, with clear queue visibility across desktop, hosted Docker, and the dashboard.",
+          "items": [
+            "Set the number of parallel simulations from Settings > Simulation Performance; Docker-hosted changes are restricted to administrators.",
+            "Monitor running and queued simulations from the global activity card, including from a simulation's own result page.",
+            "Cancel queued or running simulations directly from the activity card.",
+            "See the current queued-job count on the dashboard, which refreshes automatically while simulations are in flight."
+          ]
+        }
+      ]
+    },
     {
       "version": "v5.0.1",
       "date": "2026-08-31",

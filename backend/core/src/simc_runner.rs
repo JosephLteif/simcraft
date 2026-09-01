@@ -9,7 +9,6 @@ use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System};
 use tempfile::TempDir;
 use tokio::io::AsyncReadExt;
 use tokio::process::Command;
-use tokio::sync::Semaphore;
 
 use crate::error::{AppError, Result};
 use crate::types::simc::SimcOutput;
@@ -28,18 +27,85 @@ static CANCELLED_JOBS: Lazy<Mutex<HashSet<String>>> = Lazy::new(|| Mutex::new(Ha
 static JOB_CONTROLS: Lazy<Mutex<HashMap<String, Arc<SimulationControl>>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
 static SYSINFO: Lazy<Mutex<System>> = Lazy::new(|| Mutex::new(System::new_all()));
-static SIMC_ADMISSION: Lazy<Arc<Semaphore>> = Lazy::new(|| {
-    let default_limit = std::thread::available_parallelism()
-        .map(|n| n.get())
-        .unwrap_or(1)
-        .max(1);
-    let limit = std::env::var("MAX_CONCURRENT_SIMULATIONS")
-        .ok()
-        .and_then(|value| value.parse::<usize>().ok())
-        .filter(|value| *value > 0)
-        .unwrap_or(default_limit);
-    Arc::new(Semaphore::new(limit))
-});
+
+struct AdmissionState {
+    limit: usize,
+    active: usize,
+}
+
+struct SimulationAdmission {
+    state: Mutex<AdmissionState>,
+    notify: tokio::sync::Notify,
+}
+
+impl SimulationAdmission {
+    fn new(limit: usize) -> Self {
+        Self {
+            state: Mutex::new(AdmissionState {
+                limit: limit.max(1),
+                active: 0,
+            }),
+            notify: tokio::sync::Notify::new(),
+        }
+    }
+
+    fn limit(&self) -> usize {
+        self.state.lock().unwrap().limit
+    }
+
+    fn set_limit(&self, limit: usize) {
+        self.state.lock().unwrap().limit = limit.max(1);
+        self.notify.notify_waiters();
+    }
+
+    async fn acquire(self: &Arc<Self>) -> SimulationAdmissionGuard {
+        loop {
+            let notified = self.notify.notified();
+            tokio::pin!(notified);
+            notified.as_mut().enable();
+
+            {
+                let mut state = self.state.lock().unwrap();
+                if state.active < state.limit {
+                    state.active += 1;
+                    return SimulationAdmissionGuard {
+                        admission: self.clone(),
+                    };
+                }
+            }
+
+            notified.await;
+        }
+    }
+
+    fn release(&self) {
+        let mut state = self.state.lock().unwrap();
+        state.active = state.active.saturating_sub(1);
+        drop(state);
+        self.notify.notify_waiters();
+    }
+}
+
+pub struct SimulationAdmissionGuard {
+    admission: Arc<SimulationAdmission>,
+}
+
+impl Drop for SimulationAdmissionGuard {
+    fn drop(&mut self) {
+        self.admission.release();
+    }
+}
+
+static SIMC_ADMISSION: Lazy<Arc<SimulationAdmission>> =
+    Lazy::new(|| Arc::new(SimulationAdmission::new(*crate::storage::MAX_PARALLEL_JOBS)));
+
+pub fn simulation_concurrency_limit() -> usize {
+    SIMC_ADMISSION.limit()
+}
+
+pub fn set_simulation_concurrency_limit(limit: usize) {
+    SIMC_ADMISSION.set_limit(limit);
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum JobControlState {
@@ -559,12 +625,29 @@ fn timeout_for_next_output_with_idle(
     idle_timeout.min(total_deadline.saturating_duration_since(now))
 }
 
-async fn acquire_simc_slot() -> Result<tokio::sync::OwnedSemaphorePermit> {
-    SIMC_ADMISSION
-        .clone()
-        .acquire_owned()
-        .await
-        .map_err(|_| AppError::SimcError("simulation admission is unavailable".into()))
+pub async fn acquire_simulation_slot(
+    job_id: &str,
+) -> std::result::Result<SimulationAdmissionGuard, String> {
+    let control = get_or_register_job_control(job_id);
+    loop {
+        control.wait_until_runnable().await?;
+
+        let guard =
+            tokio::time::timeout(Duration::from_millis(250), SIMC_ADMISSION.acquire()).await;
+        let Ok(guard) = guard else {
+            continue;
+        };
+
+        if control.is_paused() {
+            drop(guard);
+            continue;
+        }
+        if control.is_cancelled() {
+            drop(guard);
+            return Err("Job cancelled".to_string());
+        }
+        return Ok(guard);
+    }
 }
 
 fn resolve_threads(options: &Value) -> u32 {
@@ -795,23 +878,6 @@ async fn run_simc_subprocess(
             break;
         }
     }
-
-    let _admission = loop {
-        control
-            .wait_until_runnable()
-            .await
-            .map_err(AppError::SimcError)?;
-        let permit = acquire_simc_slot().await?;
-        if control.is_paused() {
-            drop(permit);
-            continue;
-        }
-        if control.is_cancelled() {
-            drop(permit);
-            return Err(AppError::SimcError("Job cancelled".into()));
-        }
-        break permit;
-    };
 
     let suffix = if stage_name.is_empty() {
         String::new()
@@ -1404,6 +1470,31 @@ mod tests {
             JobControlState::Running
         );
         cleanup_job_control(running_id);
+    }
+
+    #[tokio::test]
+    async fn simulation_admission_limit_can_be_increased_while_a_job_is_running() {
+        let admission = Arc::new(SimulationAdmission::new(1));
+        let first = admission.acquire().await;
+        let (acquired_tx, acquired_rx) = tokio::sync::oneshot::channel();
+        let waiting_admission = admission.clone();
+
+        let waiting = tokio::spawn(async move {
+            let _second = waiting_admission.acquire().await;
+            acquired_tx
+                .send(())
+                .expect("acquisition receiver should exist");
+        });
+
+        tokio::task::yield_now().await;
+        admission.set_limit(2);
+        tokio::time::timeout(Duration::from_secs(1), acquired_rx)
+            .await
+            .expect("increasing the limit should wake queued jobs")
+            .expect("queued job should acquire a slot");
+
+        drop(first);
+        waiting.await.expect("waiting job should finish");
     }
 
     #[tokio::test]

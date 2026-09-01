@@ -9,6 +9,7 @@ use crate::models::{
 pub struct MemoryStorage {
     jobs: Mutex<HashMap<String, Job>>,
     max_jobs: Mutex<usize>,
+    max_parallel_jobs: Mutex<usize>,
     cache: Mutex<HashMap<String, String>>,
     user_configs: Mutex<HashMap<(String, String), String>>,
     routes: Mutex<HashMap<String, SavedRoute>>,
@@ -28,6 +29,7 @@ impl MemoryStorage {
         Self {
             jobs: Mutex::new(HashMap::new()),
             max_jobs: Mutex::new(*super::MAX_JOBS),
+            max_parallel_jobs: Mutex::new(*super::MAX_PARALLEL_JOBS),
             cache: Mutex::new(HashMap::new()),
             user_configs: Mutex::new(HashMap::new()),
             routes: Mutex::new(HashMap::new()),
@@ -271,6 +273,14 @@ impl JobStorage for MemoryStorage {
                 jobs.remove(&id);
             }
         }
+    }
+
+    fn get_max_parallel_jobs(&self) -> usize {
+        *self.max_parallel_jobs.lock().unwrap()
+    }
+
+    fn set_max_parallel_jobs(&self, limit: usize) {
+        *self.max_parallel_jobs.lock().unwrap() = limit.max(1);
     }
 
     fn set_cache(&self, key: &str, value: String) {
@@ -528,6 +538,17 @@ mod tests {
             linked_name,
             pinned,
         }
+    }
+
+    #[test]
+    fn memory_storage_clamps_parallel_simulations_to_one_or_more() {
+        let storage = MemoryStorage::new();
+
+        storage.set_max_parallel_jobs(4);
+        assert_eq!(storage.get_max_parallel_jobs(), 4);
+
+        storage.set_max_parallel_jobs(0);
+        assert_eq!(storage.get_max_parallel_jobs(), 1);
     }
 
     #[test]

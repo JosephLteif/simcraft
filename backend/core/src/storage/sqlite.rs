@@ -9,6 +9,7 @@ use crate::models::{
 pub struct SqliteStorage {
     conn: Mutex<Connection>,
     max_jobs: Mutex<usize>,
+    max_parallel_jobs: Mutex<usize>,
 }
 
 impl SqliteStorage {
@@ -31,9 +32,23 @@ impl SqliteStorage {
             )
             .unwrap_or(*super::MAX_JOBS);
 
+        let max_parallel_jobs = conn
+            .query_row(
+                "SELECT value FROM settings WHERE key = 'max_parallel_jobs'",
+                [],
+                |row| {
+                    let s: String = row.get(0)?;
+                    Ok(s.parse::<usize>()
+                        .unwrap_or(*super::MAX_PARALLEL_JOBS)
+                        .max(1))
+                },
+            )
+            .unwrap_or(*super::MAX_PARALLEL_JOBS);
+
         Self {
             conn: Mutex::new(conn),
             max_jobs: Mutex::new(max_jobs),
+            max_parallel_jobs: Mutex::new(max_parallel_jobs),
         }
     }
 }
@@ -646,6 +661,25 @@ impl JobStorage for SqliteStorage {
         conn.execute(
             "DELETE FROM jobs WHERE pinned = 0 AND id NOT IN (SELECT id FROM jobs WHERE pinned = 0 ORDER BY created_at DESC LIMIT ?1)",
             params![limit as u32],
+        )
+        .ok();
+    }
+
+    fn get_max_parallel_jobs(&self) -> usize {
+        *self.max_parallel_jobs.lock().unwrap()
+    }
+
+    fn set_max_parallel_jobs(&self, limit: usize) {
+        let limit = limit.max(1);
+        let mut current = self.max_parallel_jobs.lock().unwrap();
+        *current = limit;
+        drop(current);
+
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT INTO settings (key, value) VALUES ('max_parallel_jobs', ?1)
+             ON CONFLICT(key) DO UPDATE SET value = ?1",
+            params![limit.to_string()],
         )
         .ok();
     }
@@ -1483,6 +1517,50 @@ mod tests {
 
         let reopened = SqliteStorage::new(&db_path);
         assert_eq!(reopened.get_max_jobs(), *crate::storage::MAX_JOBS);
+    }
+
+    #[test]
+    fn sqlite_persists_max_parallel_jobs_setting_across_reopen() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("whylowdps-tests.db");
+        let db_path = path.to_string_lossy().to_string();
+
+        let storage = SqliteStorage::new(&db_path);
+        let updated_limit = storage.get_max_parallel_jobs().saturating_add(1);
+
+        storage.set_max_parallel_jobs(updated_limit);
+        assert_eq!(storage.get_max_parallel_jobs(), updated_limit);
+
+        drop(storage);
+
+        let reopened = SqliteStorage::new(&db_path);
+        assert_eq!(reopened.get_max_parallel_jobs(), updated_limit);
+    }
+
+    #[test]
+    fn sqlite_invalid_persisted_max_parallel_jobs_falls_back_to_default_limit() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("whylowdps-tests.db");
+        let db_path = path.to_string_lossy().to_string();
+
+        let storage = SqliteStorage::new(&db_path);
+        {
+            let conn = storage.conn.lock().unwrap();
+            conn.execute(
+                "INSERT INTO settings (key, value) VALUES ('max_parallel_jobs', 'not-a-number')
+                 ON CONFLICT(key) DO UPDATE SET value = 'not-a-number'",
+                [],
+            )
+            .expect("store invalid max_parallel_jobs");
+        }
+
+        drop(storage);
+
+        let reopened = SqliteStorage::new(&db_path);
+        assert_eq!(
+            reopened.get_max_parallel_jobs(),
+            *crate::storage::MAX_PARALLEL_JOBS
+        );
     }
 
     #[test]

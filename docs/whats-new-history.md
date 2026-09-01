@@ -4,9 +4,18 @@ This is the append-only archive for the public GitHub Pages changelog. The app p
 
 Add new work under the `Unreleased` section. Stable bump and `promote-dev` releases promote that section to the selected version and date, synchronize the app data, and update `master` for GitHub Pages. `republish` only rebuilds an existing release tag.
 
-## Unreleased
+## Unreleased — Simulation queue management
 
-No unreleased changes yet.
+### Improvements
+
+#### Monitor and manage simulation queues
+
+Simulation runs now support a configurable parallel-job limit, with clear queue visibility across desktop, hosted Docker, and the dashboard.
+
+- Set the number of parallel simulations from Settings > Simulation Performance; Docker-hosted changes are restricted to administrators.
+- Monitor running and queued simulations from the global activity card, including from a simulation's own result page.
+- Cancel queued or running simulations directly from the activity card.
+- See the current queued-job count on the dashboard, which refreshes automatically while simulations are in flight.
 
 ## v5.0.1 — 2026-08-31 — Release notes for v5.0.1
 

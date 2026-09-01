@@ -17,6 +17,7 @@ import {
   BarChart3,
   BookOpen,
   ChartNoAxesCombined,
+  Clock3,
   Cpu,
   Database,
   ExternalLink,
@@ -77,6 +78,7 @@ import { useActiveCharacter } from './components/ActiveCharacterContext';
 import OnboardingChecklist from './components/OnboardingChecklist';
 import ReadinessPanel from './components/ReadinessPanel';
 import { fetchReadiness, type ReadinessSnapshot } from './lib/readiness';
+import { SIMULATION_TRACKED_EVENT } from './lib/sim-tracking';
 
 const LOCAL_MAIN_CHARACTER_KEY = 'whylowdps_main_character';
 const LOCAL_TRACKED_CHARACTERS_KEY = 'whylowdps_tracked_characters';
@@ -85,12 +87,14 @@ const LOCAL_QUICK_LINKS_HEIGHT_KEY = 'whylowdps_quick_links_height';
 const LOCAL_DASHBOARD_WIDGETS_KEY = 'whylowdps_dashboard_widgets';
 const LOCAL_DASHBOARD_WIDGET_SIZES_KEY = 'whylowdps_dashboard_widget_sizes';
 const LOCAL_DASHBOARD_STATS_WIDGET_KEY = 'whylowdps_dashboard_stats_cards';
+const LOCAL_DASHBOARD_STATS_WIDGET_VERSION_KEY = 'whylowdps_dashboard_stats_cards_version';
 const LAST_REFRESH_PREFIX = 'whylowdps_last_refresh_';
+const DASHBOARD_STATS_CARD_VERSION = '1';
 
 type DashboardWidgetId =
   'stats' | 'activity' | 'quick-links' | 'tracked-characters' | 'system-health';
 type DashboardWidgetSize = 1 | 2 | 3;
-type StatCardId = 'active' | 'total' | 'history' | 'system';
+type StatCardId = 'active' | 'queued' | 'total' | 'history' | 'system';
 type QuickLinksHeight = 'compact' | 'standard' | 'tall' | 'extra-tall';
 
 const ACTIVITY_PERIOD_OPTIONS: { value: ActivityPeriod; label: string }[] = [
@@ -124,7 +128,7 @@ const DEFAULT_DASHBOARD_WIDGET_SIZES: Record<DashboardWidgetId, DashboardWidgetS
     {} as Record<DashboardWidgetId, DashboardWidgetSize>
   );
 
-const STAT_CARD_ORDER: StatCardId[] = ['active', 'total', 'history', 'system'];
+const STAT_CARD_ORDER: StatCardId[] = ['active', 'queued', 'total', 'history', 'system'];
 
 const QUICK_LINKS_HEIGHT_OPTIONS = [
   { value: 'compact', label: 'Compact', className: 'h-64' },
@@ -341,6 +345,10 @@ function DashboardWidgetShell({
 
 function ActiveIcon() {
   return <Activity className="h-5 w-5" strokeWidth={2} />;
+}
+
+function QueueIcon() {
+  return <Clock3 className="h-5 w-5" strokeWidth={2} />;
 }
 
 function ListIcon() {
@@ -717,8 +725,22 @@ export default function Home() {
       const parsed = JSON.parse(raw);
       if (!Array.isArray(parsed)) return;
       const valid = new Set<StatCardId>(STAT_CARD_ORDER);
-      const next = parsed.filter((id): id is StatCardId => valid.has(id));
+      const saved = parsed.filter((id): id is StatCardId => valid.has(id));
+      const version = localStorage.getItem(LOCAL_DASHBOARD_STATS_WIDGET_VERSION_KEY);
+      const next: StatCardId[] =
+        version === DASHBOARD_STATS_CARD_VERSION
+          ? saved
+          : saved.includes('queued')
+            ? saved
+            : [...saved, 'queued'];
       setVisibleStatCards(next.length > 0 ? next : STAT_CARD_ORDER);
+      if (version !== DASHBOARD_STATS_CARD_VERSION) {
+        localStorage.setItem(LOCAL_DASHBOARD_STATS_WIDGET_KEY, JSON.stringify(next));
+        localStorage.setItem(
+          LOCAL_DASHBOARD_STATS_WIDGET_VERSION_KEY,
+          DASHBOARD_STATS_CARD_VERSION
+        );
+      }
     } catch {
       setVisibleStatCards(STAT_CARD_ORDER);
     }
@@ -1027,6 +1049,7 @@ export default function Home() {
     setVisibleStatCards(next.length > 0 ? next : STAT_CARD_ORDER);
     if (typeof window !== 'undefined') {
       localStorage.setItem(LOCAL_DASHBOARD_STATS_WIDGET_KEY, JSON.stringify(next));
+      localStorage.setItem(LOCAL_DASHBOARD_STATS_WIDGET_VERSION_KEY, DASHBOARD_STATS_CARD_VERSION);
     }
   }, []);
 
@@ -1409,6 +1432,30 @@ export default function Home() {
   const euNextResetMs = useMemo(() => getNextWeeklyResetMs('eu', new Date(nowMs)), [nowMs]);
 
   const activeSims = useMemo(() => sims.filter((sim) => sim.status === 'running').length, [sims]);
+  const queuedSims = useMemo(() => sims.filter((sim) => sim.status === 'pending').length, [sims]);
+  const hasInFlightSims = useMemo(
+    () =>
+      sims.some(
+        (sim) => sim.status === 'pending' || sim.status === 'running' || sim.status === 'paused'
+      ),
+    [sims]
+  );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const refresh = () => void loadAll();
+    window.addEventListener(SIMULATION_TRACKED_EVENT, refresh);
+    if (!hasInFlightSims) {
+      return () => window.removeEventListener(SIMULATION_TRACKED_EVENT, refresh);
+    }
+
+    const interval = window.setInterval(refresh, 2000);
+    return () => {
+      window.removeEventListener(SIMULATION_TRACKED_EVENT, refresh);
+      window.clearInterval(interval);
+    };
+  }, [hasInFlightSims, loadAll]);
+
   const activity = useMemo(
     () => buildActivityData(sims, activityPeriod, new Date(nowMs)),
     [activityPeriod, nowMs, sims]
@@ -1605,11 +1652,13 @@ export default function Home() {
                         Add{' '}
                         {id === 'active'
                           ? 'Active Sims'
-                          : id === 'total'
-                            ? 'Total Sims'
-                            : id === 'history'
-                              ? 'History Size'
-                              : 'System Load'}
+                          : id === 'queued'
+                            ? 'Queued Sims'
+                            : id === 'total'
+                              ? 'Total Sims'
+                              : id === 'history'
+                                ? 'History Size'
+                                : 'System Load'}
                       </button>
                     ))
                   )}
@@ -1622,34 +1671,38 @@ export default function Home() {
                       ? 'grid-cols-1'
                       : statsWidgetSize === 2
                         ? 'grid-cols-2'
-                        : 'grid-cols-1 md:grid-cols-2 xl:grid-cols-4'
+                        : visibleStatCards.length >= 5
+                          ? 'grid-cols-1 md:grid-cols-2 xl:grid-cols-5'
+                          : 'grid-cols-1 md:grid-cols-2 xl:grid-cols-4'
                   }`}
                 >
                   {visibleStatCards.map((id) => {
                     const metric =
                       id === 'active'
                         ? { label: 'Active Sims', value: String(activeSims), icon: <ActiveIcon /> }
-                        : id === 'total'
-                          ? {
-                              label: 'Total Sims',
-                              value: String(historyStats?.count ?? 0),
-                              icon: <ListIcon />,
-                            }
-                          : id === 'history'
+                        : id === 'queued'
+                          ? { label: 'Queued Sims', value: String(queuedSims), icon: <QueueIcon /> }
+                          : id === 'total'
                             ? {
-                                label: 'History Size',
-                                value: formatBytes(historyStats?.size_bytes ?? 0),
-                                icon: <DatabaseIcon />,
+                                label: 'Total Sims',
+                                value: String(historyStats?.count ?? 0),
+                                icon: <ListIcon />,
                               }
-                            : {
-                                label: 'System Load',
-                                value: isDesktop
-                                  ? cpuUsage != null
-                                    ? `${Math.round(cpuUsage)}%`
-                                    : 'N/A'
-                                  : 'N/A',
-                                icon: <CpuIcon />,
-                              };
+                            : id === 'history'
+                              ? {
+                                  label: 'History Size',
+                                  value: formatBytes(historyStats?.size_bytes ?? 0),
+                                  icon: <DatabaseIcon />,
+                                }
+                              : {
+                                  label: 'System Load',
+                                  value: isDesktop
+                                    ? cpuUsage != null
+                                      ? `${Math.round(cpuUsage)}%`
+                                      : 'N/A'
+                                    : 'N/A',
+                                  icon: <CpuIcon />,
+                                };
                     return (
                       <div
                         key={`stat-card-${id}`}

@@ -512,6 +512,7 @@ export async function clearHistory(): Promise<void> {
 export interface AppConfig {
   max_scenarios: number;
   max_jobs: number;
+  max_parallel_jobs: number;
 }
 
 export async function getConfig(): Promise<AppConfig> {

@@ -413,27 +413,37 @@ pub(super) fn inject_realm(parsed: &mut Value, simc_input: &str) {
     }
 }
 
-/// Spawn a staged (top-gear / droptimizer) simulation in a background task.
-pub(super) async fn prepare_job_run(store: &Arc<dyn JobStorage>, job_id: &str) -> bool {
+/// Wait for a job's turn and transition it to running once a slot is available.
+pub(super) async fn prepare_job_run(
+    store: &Arc<dyn JobStorage>,
+    job_id: &str,
+) -> Option<simc_runner::SimulationAdmissionGuard> {
     loop {
         let Some(job) = store.get(job_id) else {
-            return false;
+            return None;
         };
 
         match job.status {
             JobStatus::Pending => {
+                let admission = match simc_runner::acquire_simulation_slot(job_id).await {
+                    Ok(admission) => admission,
+                    Err(_) => return None,
+                };
                 if store.transition_status(job_id, JobStatus::Pending, JobStatus::Running) {
                     simc_runner::start_job_control(job_id);
-                    return true;
+                    return Some(admission);
                 }
+                drop(admission);
             }
             JobStatus::Paused => {
                 if simc_runner::wait_until_resumed(job_id).await.is_err() {
-                    return false;
+                    return None;
                 }
             }
-            JobStatus::Running => return true,
-            JobStatus::Done | JobStatus::Failed | JobStatus::Cancelled => return false,
+            JobStatus::Running => {
+                return simc_runner::acquire_simulation_slot(job_id).await.ok();
+            }
+            JobStatus::Done | JobStatus::Failed | JobStatus::Cancelled => return None,
         }
     }
 }
@@ -450,11 +460,11 @@ pub(super) fn spawn_staged_sim(
 ) {
     simc_runner::register_job_control(&job_id);
     tokio::spawn(async move {
-        if !prepare_job_run(&store, &job_id).await {
+        let Some(_admission) = prepare_job_run(&store, &job_id).await else {
             simc_runner::cleanup_job_control(&job_id);
             log_buffer.remove(&job_id);
             return;
-        }
+        };
         let store_progress = store.clone();
         let store_stages = store.clone();
         let jid_progress = job_id.clone();
@@ -552,11 +562,11 @@ pub(super) fn spawn_direct_sim(
 ) {
     simc_runner::register_job_control(&job_id);
     tokio::spawn(async move {
-        if !prepare_job_run(&store, &job_id).await {
+        let Some(_admission) = prepare_job_run(&store, &job_id).await else {
             simc_runner::cleanup_job_control(&job_id);
             log_buffer.remove(&job_id);
             return;
-        }
+        };
         store.update_progress(&job_id, 20, "Simulating", "");
         let logs = log_buffer.clone();
         let store_progress = store.clone();

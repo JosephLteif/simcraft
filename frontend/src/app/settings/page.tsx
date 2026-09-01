@@ -8,11 +8,13 @@ import {
   type BlizzardCredentialProfile,
   deleteBlizzardCredentialProfile,
   fetchJson,
+  getConfig,
   isDesktop,
   isHostedPrivate,
   listBlizzardCredentialProfiles,
   renameBlizzardCredentialProfile,
   saveBlizzardCredentialProfile,
+  updateConfig,
 } from '../lib/api';
 import { useSimContext } from '../components/SimContext';
 import DefaultOptionsSettingsCard from '../components/DefaultOptionsSettingsCard';
@@ -120,6 +122,8 @@ export default function SettingsPage() {
   const [secretTouched, setSecretTouched] = useState(false);
   const [hasSecret, setHasSecret] = useState(false);
   const [maxThreads, setMaxThreads] = useState(0);
+  const [maxParallelJobs, setMaxParallelJobs] = useState(1);
+  const [parallelJobsSettingLoaded, setParallelJobsSettingLoaded] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
   const [blizzardSaving, setBlizzardSaving] = useState(false);
   const [blizzardTesting, setBlizzardTesting] = useState(false);
@@ -302,6 +306,28 @@ export default function SettingsPage() {
   ]);
 
   useEffect(() => {
+    if (!user || !simcRuntimeControlAvailable) {
+      setParallelJobsSettingLoaded(false);
+      return;
+    }
+
+    let cancelled = false;
+    setParallelJobsSettingLoaded(false);
+    getConfig()
+      .then((config) => {
+        if (cancelled) return;
+        if (!Number.isFinite(config.max_parallel_jobs) || config.max_parallel_jobs < 1) return;
+        setMaxParallelJobs(config.max_parallel_jobs);
+        setParallelJobsSettingLoaded(true);
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [simcRuntimeControlAvailable, user]);
+
+  useEffect(() => {
     if (!authLoading && user) void refreshReadiness();
   }, [authLoading, refreshReadiness, user]);
 
@@ -391,6 +417,12 @@ export default function SettingsPage() {
       }),
     }).catch(() => {});
   }, [performanceSaved, simIdleTimeoutSeconds, user]);
+
+  useEffect(() => {
+    if (!simcRuntimeControlAvailable || !parallelJobsSettingLoaded || !performanceSaved) return;
+    if (!Number.isFinite(maxParallelJobs) || maxParallelJobs < 1) return;
+    updateConfig({ max_parallel_jobs: Math.floor(maxParallelJobs) }).catch(() => {});
+  }, [maxParallelJobs, simcRuntimeControlAvailable, parallelJobsSettingLoaded, performanceSaved]);
 
   useEffect(() => {
     if (!isDesktop) return;
@@ -1136,6 +1168,33 @@ export default function SettingsPage() {
                 className="w-24 rounded border border-border bg-surface-2 px-2 py-1 text-center font-mono text-xs tabular-nums text-white [appearance:textfield] focus:border-gold/50 focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               />
             </div>
+
+            {simcRuntimeControlAvailable && (
+              <div className="border-border flex items-center justify-between gap-4 border-t pt-4">
+                <div className="space-y-0.5">
+                  <p className="text-sm font-medium text-zinc-300">Parallel simulations</p>
+                  <p className="max-w-xl text-[12px] text-zinc-500">
+                    Run this many simulations at once. Additional simulations stay queued until a
+                    slot is available.
+                  </p>
+                  {isHostedPrivate && (
+                    <p className="text-gold/80 text-[11px]">Only administrators can change this.</p>
+                  )}
+                </div>
+                <input
+                  aria-label="Parallel simulations"
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={maxParallelJobs}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10);
+                    if (Number.isFinite(val) && val > 0) setMaxParallelJobs(val);
+                  }}
+                  className="border-border bg-surface-2 focus:border-gold/50 w-24 [appearance:textfield] rounded border px-2 py-1 text-center font-mono text-xs text-white tabular-nums focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                />
+              </div>
+            )}
 
             <div className="space-y-3 border-t border-border pt-4">
               <div>

@@ -38,7 +38,7 @@ describe('SimulationActivity', () => {
     vi.useRealTimers();
   });
 
-  it('hides the global activity card on the simulation result and shows it after navigating away', async () => {
+  it('keeps the global activity card available on the simulation result', async () => {
     mocks.fetchJson.mockResolvedValue({
       id: 'sim-1',
       status: 'running',
@@ -52,11 +52,9 @@ describe('SimulationActivity', () => {
     mocks.pathname = '/sim/_/';
     const view = render(<SimulationActivity />);
     trackSimulations([{ id: 'sim-1', simType: 'quick', playerName: 'Alice' }]);
-    await Promise.resolve();
-    expect(screen.queryByRole('region', { name: 'Simulation progress' })).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: 'Show 1 active simulation' })
-    ).not.toBeInTheDocument();
+    expect(await screen.findByRole('region', { name: 'Simulation progress' })).toBeInTheDocument();
+    expect(screen.getByText('Alice')).toBeInTheDocument();
+    expect(await screen.findByText('40%')).toBeInTheDocument();
 
     view.unmount();
     mocks.pathname = '/history';
@@ -105,5 +103,29 @@ describe('SimulationActivity', () => {
         dedupeKey: 'simulation:sim-1',
       })
     );
+  });
+
+  it('shows queued simulations and can cancel them', async () => {
+    mocks.fetchJson.mockResolvedValue({
+      id: 'sim-queued',
+      status: 'pending',
+      sim_type: 'quick',
+      simc_input: 'mage="Alice"\nserver=Illidan\nregion=us\n',
+      progress: 0,
+    });
+
+    render(<SimulationActivity />);
+    trackSimulations([{ id: 'sim-queued', simType: 'quick', playerName: 'Alice' }]);
+
+    expect(await screen.findByText('Quick Sim · Queued')).toBeInTheDocument();
+    const cancelButton = screen.getByRole('button', { name: 'Cancel Alice Quick Sim' });
+
+    await act(async () => {
+      fireEvent.click(cancelButton);
+      await Promise.resolve();
+    });
+
+    expect(mocks.fetchJson).toHaveBeenCalledWith('/api/sim/sim-queued/cancel', { method: 'POST' });
+    expect(screen.queryByText('Quick Sim · Queued')).not.toBeInTheDocument();
   });
 });

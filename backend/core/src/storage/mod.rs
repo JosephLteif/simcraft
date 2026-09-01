@@ -21,6 +21,17 @@ fn default_max_jobs() -> usize {
     }
 }
 
+fn default_max_parallel_jobs() -> usize {
+    parse_env_usize("MAX_CONCURRENT_SIMULATIONS")
+        .filter(|limit| *limit > 0)
+        .unwrap_or_else(|| {
+            std::thread::available_parallelism()
+                .map(|parallelism| parallelism.get())
+                .unwrap_or(1)
+                .max(1)
+        })
+}
+
 /// Maximum number of jobs to retain. Oldest jobs are deleted on insert.
 /// Override with MAX_JOBS env var. Defaults: desktop=50, web=200.
 pub static MAX_JOBS: Lazy<usize> = Lazy::new(|| {
@@ -28,6 +39,10 @@ pub static MAX_JOBS: Lazy<usize> = Lazy::new(|| {
         .or_else(|| parse_env_usize("MAX_JOBS"))
         .unwrap_or_else(default_max_jobs)
 });
+
+/// Maximum number of simulations that may execute at the same time.
+/// Override with MAX_CONCURRENT_SIMULATIONS. Defaults to the host parallelism.
+pub static MAX_PARALLEL_JOBS: Lazy<usize> = Lazy::new(default_max_parallel_jobs);
 
 /// Maximum scenarios per batch. Set to 0 to disable batch submissions.
 /// Override with MAX_SCENARIOS env var. Default: 10.
@@ -93,6 +108,8 @@ pub trait JobStorage: Send + Sync {
     fn clear_history_owned(&self, owner_id: &str);
     fn get_max_jobs(&self) -> usize;
     fn set_max_jobs(&self, limit: usize);
+    fn get_max_parallel_jobs(&self) -> usize;
+    fn set_max_parallel_jobs(&self, limit: usize);
     // Cache methods for app-level storage (e.g. blizzard API proxy)
     fn set_cache(&self, key: &str, value: String);
     fn get_cache(&self, key: &str) -> Option<String>;
@@ -222,5 +239,6 @@ mod tests {
         assert_eq!(parse_env_usize("CODEX_TEST_MISSING_LIMIT"), None);
         assert_eq!(*MAX_SCENARIOS, 10);
         assert_eq!(*MAX_JOBS, default_max_jobs());
+        assert!(*MAX_PARALLEL_JOBS >= 1);
     }
 }

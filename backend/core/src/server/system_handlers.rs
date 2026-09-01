@@ -45,20 +45,31 @@ pub(super) async fn get_config(store: web::Data<Arc<dyn JobStorage>>) -> HttpRes
     HttpResponse::Ok().json(json!({
         "max_scenarios": *storage::MAX_SCENARIOS,
         "max_jobs": store.get_max_jobs(),
+        "max_parallel_jobs": store.get_max_parallel_jobs(),
     }))
 }
 
 #[derive(Deserialize)]
 pub(super) struct UpdateConfig {
     pub(super) max_jobs: Option<usize>,
+    #[serde(default)]
+    pub(super) max_parallel_jobs: Option<usize>,
 }
 
 pub(super) async fn update_config(
     body: web::Json<UpdateConfig>,
     store: web::Data<Arc<dyn JobStorage>>,
 ) -> HttpResponse {
+    if body.max_parallel_jobs == Some(0) {
+        return HttpResponse::BadRequest()
+            .json(json!({"error": "max_parallel_jobs must be at least 1"}));
+    }
     if let Some(limit) = body.max_jobs {
         store.set_max_jobs(limit);
+    }
+    if let Some(limit) = body.max_parallel_jobs {
+        store.set_max_parallel_jobs(limit);
+        crate::simc_runner::set_simulation_concurrency_limit(limit);
     }
     HttpResponse::Ok().json(json!({"status": "updated"}))
 }
@@ -293,7 +304,7 @@ mod tests {
         let store = test_store();
         store.set_max_jobs(7);
 
-        let resp = get_config(store).await;
+        let resp = get_config(store.clone()).await;
 
         assert_eq!(resp.status(), 200);
 
@@ -305,6 +316,10 @@ mod tests {
         );
 
         assert_eq!(payload["max_jobs"].as_u64(), Some(7));
+        assert_eq!(
+            payload["max_parallel_jobs"].as_u64(),
+            Some(store.get_max_parallel_jobs() as u64)
+        );
     }
 
     #[actix_web::test]
@@ -312,7 +327,14 @@ mod tests {
         let store = test_store();
         store.set_max_jobs(9);
 
-        let resp = update_config(web::Json(UpdateConfig { max_jobs: None }), store.clone()).await;
+        let resp = update_config(
+            web::Json(UpdateConfig {
+                max_jobs: None,
+                max_parallel_jobs: None,
+            }),
+            store.clone(),
+        )
+        .await;
 
         assert_eq!(resp.status(), 200);
         assert_eq!(
@@ -332,7 +354,10 @@ mod tests {
         store.set_max_jobs(3);
 
         let resp = update_config(
-            web::Json(UpdateConfig { max_jobs: Some(12) }),
+            web::Json(UpdateConfig {
+                max_jobs: Some(12),
+                max_parallel_jobs: None,
+            }),
             store.clone(),
         )
         .await;
@@ -354,12 +379,62 @@ mod tests {
     }
 
     #[actix_web::test]
+    async fn update_config_with_max_parallel_jobs_updates_config() {
+        let store = test_store();
+        let original_limit = crate::simc_runner::simulation_concurrency_limit();
+
+        let resp = update_config(
+            web::Json(UpdateConfig {
+                max_jobs: None,
+                max_parallel_jobs: Some(4),
+            }),
+            store.clone(),
+        )
+        .await;
+
+        assert_eq!(resp.status(), 200);
+        assert_eq!(store.get_max_parallel_jobs(), 4);
+
+        let config = get_config(store).await;
+        let payload = response_json(config).await;
+        assert_eq!(payload["max_parallel_jobs"].as_u64(), Some(4));
+
+        crate::simc_runner::set_simulation_concurrency_limit(original_limit);
+    }
+
+    #[actix_web::test]
+    async fn update_config_rejects_zero_parallel_jobs_without_partial_updates() {
+        let store = test_store();
+        store.set_max_jobs(3);
+        store.set_max_parallel_jobs(2);
+
+        let resp = update_config(
+            web::Json(UpdateConfig {
+                max_jobs: Some(9),
+                max_parallel_jobs: Some(0),
+            }),
+            store.clone(),
+        )
+        .await;
+
+        assert_eq!(resp.status(), 400);
+        assert_eq!(store.get_max_jobs(), 3);
+        assert_eq!(store.get_max_parallel_jobs(), 2);
+    }
+
+    #[actix_web::test]
     async fn update_config_allows_zero_max_jobs() {
         let store = test_store();
         store.set_max_jobs(3);
 
-        let resp =
-            update_config(web::Json(UpdateConfig { max_jobs: Some(0) }), store.clone()).await;
+        let resp = update_config(
+            web::Json(UpdateConfig {
+                max_jobs: Some(0),
+                max_parallel_jobs: None,
+            }),
+            store.clone(),
+        )
+        .await;
 
         assert_eq!(resp.status(), 200);
 
@@ -373,10 +448,20 @@ mod tests {
     async fn update_config_can_be_applied_multiple_times() {
         let store = test_store();
 
-        update_config(web::Json(UpdateConfig { max_jobs: Some(4) }), store.clone()).await;
+        update_config(
+            web::Json(UpdateConfig {
+                max_jobs: Some(4),
+                max_parallel_jobs: None,
+            }),
+            store.clone(),
+        )
+        .await;
 
         update_config(
-            web::Json(UpdateConfig { max_jobs: Some(15) }),
+            web::Json(UpdateConfig {
+                max_jobs: Some(15),
+                max_parallel_jobs: None,
+            }),
             store.clone(),
         )
         .await;

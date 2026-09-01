@@ -1,7 +1,7 @@
 'use client';
 
-import { Activity, ExternalLink, LoaderCircle, Maximize2, Minimize2, Pause } from 'lucide-react';
-import { usePathname, useRouter } from 'next/navigation';
+import { Activity, ExternalLink, LoaderCircle, Maximize2, Minimize2, Pause, X } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { parseCharacterInfo } from '@/lib/simc-parser';
 import { API_URL, fetchJson } from '../lib/api';
@@ -40,10 +40,6 @@ interface SimulationResponse {
 const ACTIVE_STATUSES = new Set<SimulationStatus>(['pending', 'running', 'paused']);
 const TERMINAL_STATUSES = new Set<SimulationStatus>(['done', 'failed', 'cancelled']);
 const SIMULATION_ACTIVITY_MINIMIZED_KEY = 'whylowdps_simulation_activity_minimized';
-
-function isSimulationResultRoute(pathname: string | null): boolean {
-  return pathname?.split('/').filter(Boolean)[0] === 'sim';
-}
 
 function simTypeLabel(simType?: string): string {
   return (
@@ -93,76 +89,121 @@ function mergeTracked(
 function CompactSimulationRow({
   simulation,
   onOpen,
+  onCancel,
+  cancelling,
 }: {
   simulation: SimulationSnapshot;
   onOpen: (id: string) => void;
+  onCancel: (id: string) => void;
+  cancelling: boolean;
 }) {
   const isPaused = simulation.status === 'paused';
+  const isQueued = simulation.status === 'pending';
   const progress = Math.min(100, Math.max(0, simulation.progress));
   const title = simulation.playerName || 'Simulation';
   const detail =
     simulation.progressDetail?.trim() ||
     simulation.progressStage ||
-    (isPaused ? 'Paused' : 'Simulating');
+    (isPaused ? 'Paused' : isQueued ? 'Queued' : 'Simulating');
 
   return (
-    <button
-      type="button"
-      onClick={() => onOpen(simulation.id)}
-      className="group hover:border-gold/30 focus-visible:ring-gold/60 w-full rounded-lg border border-white/[0.06] bg-black/20 p-3 text-left transition-colors hover:bg-white/[0.04] focus-visible:ring-2 focus-visible:outline-none"
-      aria-label={`Open ${title} ${simTypeLabel(simulation.simType)} result`}
-    >
-      <div className="flex items-start gap-2.5">
-        <span className="bg-gold/10 text-gold mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md">
-          {isPaused ? (
-            <Pause className="h-3.5 w-3.5" strokeWidth={2} />
-          ) : (
-            <LoaderCircle className="h-3.5 w-3.5 animate-spin" strokeWidth={2} />
-          )}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="flex items-center justify-between gap-2">
-            <span className="truncate text-xs font-semibold text-zinc-100">{title}</span>
-            <span className="text-gold shrink-0 font-mono text-[11px] tabular-nums">
-              {Math.round(progress)}%
+    <div className="hover:border-gold/30 flex items-stretch gap-1 rounded-lg border border-white/[0.06] bg-black/20 p-1 transition-colors hover:bg-white/[0.04]">
+      <button
+        type="button"
+        onClick={() => onOpen(simulation.id)}
+        className="focus-visible:ring-gold/60 group min-w-0 flex-1 rounded-md p-2 text-left focus-visible:ring-2 focus-visible:outline-none"
+        aria-label={`Open ${title} ${simTypeLabel(simulation.simType)} result`}
+      >
+        <div className="flex items-start gap-2.5">
+          <span className="bg-gold/10 text-gold mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md">
+            {isPaused ? (
+              <Pause className="h-3.5 w-3.5" strokeWidth={2} />
+            ) : (
+              <LoaderCircle className="h-3.5 w-3.5 animate-spin" strokeWidth={2} />
+            )}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="flex items-center justify-between gap-2">
+              <span className="truncate text-xs font-semibold text-zinc-100">{title}</span>
+              <span className="text-gold shrink-0 font-mono text-[11px] tabular-nums">
+                {Math.round(progress)}%
+              </span>
+            </span>
+            <span className="mt-0.5 block truncate text-[11px] text-zinc-500">
+              {simTypeLabel(simulation.simType)} · {detail}
+            </span>
+            <span className="mt-2 block h-1 overflow-hidden rounded-full bg-zinc-800">
+              <span
+                className="from-gold-dark to-gold block h-full rounded-full bg-gradient-to-r transition-[width] duration-700"
+                style={{ width: `${Math.max(progress, 3)}%` }}
+              />
             </span>
           </span>
-          <span className="mt-0.5 block truncate text-[11px] text-zinc-500">
-            {simTypeLabel(simulation.simType)} · {detail}
-          </span>
-          <span className="mt-2 block h-1 overflow-hidden rounded-full bg-zinc-800">
-            <span
-              className="from-gold-dark to-gold block h-full rounded-full bg-gradient-to-r transition-[width] duration-700"
-              style={{ width: `${Math.max(progress, 3)}%` }}
-            />
-          </span>
-        </span>
-        <ExternalLink
-          className="group-hover:text-gold mt-1 h-3.5 w-3.5 shrink-0 text-zinc-600 transition-colors"
-          strokeWidth={2}
-        />
-      </div>
-    </button>
+          <ExternalLink
+            className="group-hover:text-gold mt-1 h-3.5 w-3.5 shrink-0 text-zinc-600 transition-colors"
+            strokeWidth={2}
+          />
+        </div>
+      </button>
+      <button
+        type="button"
+        onClick={() => onCancel(simulation.id)}
+        disabled={cancelling}
+        className="focus-visible:ring-gold/60 self-start rounded-md p-2 text-zinc-600 transition-colors hover:bg-red-400/10 hover:text-red-300 focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50"
+        aria-label={`Cancel ${title} ${simTypeLabel(simulation.simType)}`}
+        title="Cancel simulation"
+      >
+        <X className="h-3.5 w-3.5" strokeWidth={2} />
+      </button>
+    </div>
   );
 }
 
 export default function SimulationActivity() {
-  const pathname = usePathname();
   const router = useRouter();
   const { notify } = useNotifications();
   const [simulations, setSimulations] = useState<SimulationSnapshot[]>([]);
   const [minimized, setMinimized] = useState(false);
+  const [cancellingIds, setCancellingIds] = useState<Set<string>>(() => new Set());
   const simulationsRef = useRef(simulations);
   const previousStatusesRef = useRef(new Map<string, SimulationStatus>());
 
   simulationsRef.current = simulations;
-  const isViewingSimulationResult = isSimulationResultRoute(pathname);
   const openSimulation = useCallback(
     (id: string) => {
       setMinimized(false);
       router.push(simResultHref(id));
     },
     [router]
+  );
+
+  const cancelSimulation = useCallback(
+    async (id: string) => {
+      setCancellingIds((current) => new Set(current).add(id));
+      try {
+        await fetchJson(`${API_URL}/api/sim/${encodeURIComponent(id)}/cancel`, { method: 'POST' });
+        previousStatusesRef.current.delete(id);
+        const next = simulationsRef.current.filter((simulation) => simulation.id !== id);
+        setSimulations(next);
+        saveTrackedSimulationState(next);
+      } catch {
+        notify({
+          title: 'Could not cancel simulation',
+          description:
+            'The simulation may have already finished. Refresh its status and try again.',
+          variant: 'error',
+          durationMs: 5000,
+          dedupeKey: `simulation-cancel:${id}`,
+        });
+      } finally {
+        setCancellingIds((current) => {
+          const next = new Set(current);
+          next.delete(id);
+          return next;
+        });
+      }
+    },
+    [notify]
   );
 
   useEffect(() => {
@@ -287,8 +328,6 @@ export default function SimulationActivity() {
 
   if (simulations.length === 0) return null;
 
-  if (isViewingSimulationResult) return null;
-
   if (minimized) {
     return (
       <button
@@ -299,11 +338,14 @@ export default function SimulationActivity() {
         aria-label={`Show ${simulations.length} active simulation${simulations.length === 1 ? '' : 's'}`}
       >
         <Activity className="h-3.5 w-3.5" strokeWidth={2} />
-        <span>{simulations.length} running</span>
+        <span>{simulations.length} active</span>
         <Maximize2 className="h-3.5 w-3.5" strokeWidth={2} />
       </button>
     );
   }
+
+  const queuedCount = simulations.filter((simulation) => simulation.status === 'pending').length;
+  const activeCount = simulations.length - queuedCount;
 
   return (
     <section
@@ -316,7 +358,7 @@ export default function SimulationActivity() {
           <div className="min-w-0">
             <p className="truncate text-xs font-semibold text-zinc-100">Simulation progress</p>
             <p className="text-[11px] text-zinc-500">
-              {simulations.length} active simulation{simulations.length === 1 ? '' : 's'}
+              {activeCount} active · {queuedCount} queued
             </p>
           </div>
         </div>
@@ -336,6 +378,8 @@ export default function SimulationActivity() {
             key={simulation.id}
             simulation={simulation}
             onOpen={openSimulation}
+            onCancel={cancelSimulation}
+            cancelling={cancellingIds.has(simulation.id)}
           />
         ))}
       </div>

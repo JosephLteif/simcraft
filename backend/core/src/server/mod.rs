@@ -377,6 +377,13 @@ mod tests {
     }
 
     #[test]
+    fn config_mutations_are_admin_security_paths_but_reads_are_not() {
+        assert!(!admin_security_path("/api/config", &Method::GET));
+        assert!(admin_security_path("/api/config", &Method::POST));
+        assert!(admin_security_path("/api/config", &Method::PUT));
+    }
+
+    #[test]
     fn static_cache_policy_matches_directly_served_frontend_assets() {
         assert_eq!(
             static_cache_control("/_next/static/chunks/app.js"),
@@ -658,8 +665,14 @@ mod tests {
     async fn config_handlers_read_and_update_max_jobs() {
         let store = test_store();
 
-        let update =
-            update_config(web::Json(UpdateConfig { max_jobs: Some(7) }), store.clone()).await;
+        let update = update_config(
+            web::Json(UpdateConfig {
+                max_jobs: Some(7),
+                max_parallel_jobs: None,
+            }),
+            store.clone(),
+        )
+        .await;
         assert_eq!(update.status(), 200);
 
         let config = get_config(store).await;
@@ -850,6 +863,7 @@ pub async fn start_with_storage_bind_options_and_simc_runtime(
 ) -> (actix_web::dev::Server, u16) {
     #[cfg(feature = "web")]
     {
+        crate::simc_runner::set_simulation_concurrency_limit(storage.get_max_parallel_jobs());
         let externally_reachable = !is_loopback_bind(bind_host);
         let lan_pairing = externally_reachable && security.lan_pairing;
         if externally_reachable

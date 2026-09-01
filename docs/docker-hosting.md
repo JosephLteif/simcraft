@@ -76,7 +76,9 @@ published for `linux-x64`.
      `true` only when the app is accessed through trusted HTTPS.
    - `SIMC_CHANNEL`, `MAX_CONCURRENT_SIMULATIONS`, and
      `MAX_JOBS_PER_USER` are optional tuning values; the example shows the
-     normal defaults of `weekly`, `2`, and `200`.
+     normal defaults of `weekly`, `2`, and `200`. Administrators can change
+     the parallel simulation limit later in **Settings → Simulation Performance**;
+     the saved value is kept in the data volume.
    - Blizzard application credentials are entered in the app at runtime; they
      are not stored in this environment file.
 
@@ -184,7 +186,7 @@ was recorded.
 | `WHYLOWDPS_SECURE_COOKIES` | `false` for direct LAN HTTP; set `true` only behind trusted HTTPS. |
 | `SIMC_CHANNEL` | Initial runtime channel: `weekly` or `nightly`; defaults to `weekly`. After an administrator changes the channel in Settings, the persisted setting takes precedence. |
 | `SIMC_PATH` | Legacy fixed-binary override. Leave it unset for managed runtime updates; the standard `/data/simc-runtime/simc` path remains compatible with channel switching. A different path disables managed channel updates. |
-| `MAX_CONCURRENT_SIMULATIONS` | Optional concurrency limit; the Compose example uses `2`. |
+| `MAX_CONCURRENT_SIMULATIONS` | Initial concurrency limit; the Compose example uses `2`. Administrators can change it later in **Settings → Simulation Performance**; the saved value takes precedence. |
 | `MAX_JOBS_PER_USER` | Optional unpinned job-history limit; defaults to `200`. |
 
 ## Updates and rollback
