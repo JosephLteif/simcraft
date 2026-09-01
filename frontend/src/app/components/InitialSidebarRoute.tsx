@@ -27,6 +27,7 @@ const LABEL_TO_HREF: Record<string, string> = {
   'Drop Finder': '/drop-finder',
   Wishlist: '/wishlist',
   Trinkets: '/upgrade/trinkets',
+  'Upgrade Planner': '/upgrade-compare',
   'Crest Upgrades': '/upgrade-compare',
 };
 

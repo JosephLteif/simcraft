@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import ErrorAlert from '../components/ErrorAlert';
 import { useSimContext } from '../components/SimContext';
@@ -505,6 +506,12 @@ export default function WishlistPage() {
           >
             Clear All
           </button>
+          <Link
+            href="/upgrade-compare"
+            className="rounded border border-border px-3 py-1.5 text-xs text-zinc-300 hover:border-gold/40 hover:bg-gold/10 hover:text-gold"
+          >
+            Open Upgrade Planner
+          </Link>
           <button
             onClick={() => void handleGenerateWishlistSim()}
             disabled={

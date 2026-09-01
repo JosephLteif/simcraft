@@ -7,12 +7,15 @@ import ComboSummary from '../components/ComboSummary';
 import GearItemRow from '../components/GearItemRow';
 import SimulationLaunchButton from '../components/SimulationLaunchButton';
 import StickyPageHeader from '../components/StickyPageHeader';
+import UpgradePlan from '../components/UpgradePlan';
 import { useSimContext } from '../components/SimContext';
 import SimReturnNotice from '../components/shared/SimReturnNotice';
 import { API_URL } from '../lib/api';
 import { SLOT_LABELS } from '../lib/types';
 import { getIconUrl, type ItemQuery, QUALITY_COLORS, useItemInfo } from '../lib/useItemInfo';
 import { useSimSubmit } from '../lib/useSimSubmit';
+import { buildWishlistOwnerKey } from '../lib/wishlist';
+import { parseCharacterInfo } from '@/lib/simc-parser';
 import {
   consumeSimAgainState,
   consumeSimReturnNotice,
@@ -80,6 +83,32 @@ function formatCosts(
       return name ? `${name} x${amount}` : `${cid}x${amount}`;
     })
     .join(', ');
+}
+
+function getUpgradePlanStorageKey(simcInput: string): string {
+  const character = parseCharacterInfo(simcInput);
+  if (character?.kind !== 'character') return 'whylowdps_upgrade_plan:default';
+  const identity = [character.region, character.server, character.name]
+    .map((part) =>
+      encodeURIComponent(
+        String(part || '')
+          .trim()
+          .toLowerCase()
+      )
+    )
+    .join('|');
+  return `whylowdps_upgrade_plan:${identity}`;
+}
+
+function getWishlistOwnerKey(simcInput: string): string {
+  const character = parseCharacterInfo(simcInput);
+  if (character?.kind !== 'character') return buildWishlistOwnerKey({});
+  return buildWishlistOwnerKey({
+    name: character.name,
+    realm: character.server,
+    region: character.region,
+    className: character.className,
+  });
 }
 
 // ---- Data Hook (single endpoint) ----
@@ -383,6 +412,8 @@ export default function UpgradeComparePage() {
   }, [candidates, currencies]);
 
   const hasCharacter = simcInput.trim().length >= 10;
+  const upgradePlanStorageKey = useMemo(() => getUpgradePlanStorageKey(simcInput), [simcInput]);
+  const wishlistOwnerKey = useMemo(() => getWishlistOwnerKey(simcInput), [simcInput]);
   const displayComboCount =
     selectedSlots.size > 0
       ? comboLimitReached
@@ -458,6 +489,12 @@ export default function UpgradeComparePage() {
           onDismiss={() => setReturnNotice(null)}
         />
       ) : null}
+      <div>
+        <h2 className="text-lg font-semibold text-zinc-100">Upgrade Planner</h2>
+        <p className="mt-1 text-sm text-zinc-400">
+          Turn your Wishlist targets and current gear into one upgrade roadmap.
+        </p>
+      </div>
       {/* Explainer */}
       <div className="rounded-lg border border-border/50 bg-surface-2/50 px-4 py-3">
         <p className="text-[15px] leading-relaxed text-zinc-400">
@@ -467,6 +504,16 @@ export default function UpgradeComparePage() {
           combination within your budget to find which gives the most DPS.
         </p>
       </div>
+
+      <UpgradePlan
+        storageKey={upgradePlanStorageKey}
+        wishlistOwnerKey={wishlistOwnerKey}
+        candidates={candidates}
+        selectedUids={selectedSlots}
+        itemInfo={itemInfo}
+        currencies={currencies}
+        effectiveCurrencies={effectiveCurrencies}
+      />
 
       <div data-tour="upgrade-mode" className="space-y-2">
         <p className="text-[12px] font-medium uppercase tracking-widest text-muted">Upgrade Mode</p>
@@ -562,7 +609,7 @@ export default function UpgradeComparePage() {
       )}
 
       {/* Upgradeable Items */}
-      <div data-tour="upgrade-items" className="space-y-4">
+      <div id="upgradeable-items" data-tour="upgrade-items" className="space-y-4">
         <StickyPageHeader
           left={
             <div className="flex flex-wrap items-center gap-4">

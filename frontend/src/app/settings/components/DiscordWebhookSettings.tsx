@@ -32,7 +32,7 @@ const NOTIFICATION_TYPES: Array<{
   { key: 'stat_plot', label: 'Stat Plot', description: 'DPS curves across stat ranges.' },
   {
     key: 'upgrade_compare',
-    label: 'Upgrade Compare',
+    label: 'Upgrade Planner',
     description: 'Direct item upgrade comparisons.',
   },
   { key: 'matrices', label: 'Matrices', description: 'External buff and consumable matrices.' },

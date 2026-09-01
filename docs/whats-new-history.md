@@ -17,6 +17,15 @@ Simulation runs now support a configurable parallel-job limit, with clear queue 
 - Cancel queued or running simulations directly from the activity card.
 - See the current queued-job count on the dashboard, which refreshes automatically while simulations are in flight.
 
+#### Connect Wishlist and Upgrade Planner
+
+Wishlist targets and owned-item upgrades now follow one clear gear roadmap without duplicating entries.
+
+- Use Drop Finder to save gear you still need to Wishlist, then review or simulate those targets from the Wishlist page.
+- Open Upgrade Planner to select items already present in your SimC export and add their upgrade paths to Gear Roadmap.
+- See the matching character's Wishlist count and move between Drop Finder, Wishlist, and Upgrade Planner from one Upgrades navigation group.
+- Reorder roadmap entries, mark upgrades complete, and track planned costs against available currencies.
+
 ## v5.0.1 — 2026-08-31 — Release notes for v5.0.1
 
 ### Bug fixes

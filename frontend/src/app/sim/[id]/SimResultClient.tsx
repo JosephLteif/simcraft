@@ -93,7 +93,7 @@ function simTypeLabel(simType?: string): string {
         quick: 'Quick Sim',
         top_gear: 'Top Gear',
         droptimizer: 'Drop Finder',
-        upgrade_compare: 'Upgrade Compare',
+        upgrade_compare: 'Upgrade Planner',
       } as Record<string, string>
     )[simType || ''] ||
     simType ||

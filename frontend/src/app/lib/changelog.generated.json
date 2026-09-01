@@ -1,5 +1,5 @@
 {
-  "contentRevision": "Unreleased-6dc17122e731",
+  "contentRevision": "Unreleased-1f4ea03277f1",
   "releases": [
     {
       "version": "Unreleased",
@@ -15,6 +15,17 @@
             "Monitor running and queued simulations from the global activity card, including from a simulation's own result page.",
             "Cancel queued or running simulations directly from the activity card.",
             "See the current queued-job count on the dashboard, which refreshes automatically while simulations are in flight."
+          ]
+        },
+        {
+          "category": "improvement",
+          "title": "Connect Wishlist and Upgrade Planner",
+          "summary": "Wishlist targets and owned-item upgrades now follow one clear gear roadmap without duplicating entries.",
+          "items": [
+            "Use Drop Finder to save gear you still need to Wishlist, then review or simulate those targets from the Wishlist page.",
+            "Open Upgrade Planner to select items already present in your SimC export and add their upgrade paths to Gear Roadmap.",
+            "See the matching character's Wishlist count and move between Drop Finder, Wishlist, and Upgrade Planner from one Upgrades navigation group.",
+            "Reorder roadmap entries, mark upgrades complete, and track planned costs against available currencies."
           ]
         }
       ]

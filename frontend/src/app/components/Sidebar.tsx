@@ -76,10 +76,11 @@ const baseNavItems: NavItem[] = [
     label: 'Upgrades',
     description: 'Find and sim gear upgrades.',
     icon: ArrowUp,
-    matchPaths: ['/drop-finder', '/upgrade-compare', '/upgrade'],
+    matchPaths: ['/drop-finder', '/upgrade-compare', '/upgrade', '/wishlist'],
     children: [
-      { href: '/drop-finder', label: 'Drop Finder', description: 'Sim raid & dungeon loot' },
-      { href: '/upgrade-compare', label: 'Crest Upgrades', description: 'Best upgrade path' },
+      { href: '/drop-finder', label: 'Drop Finder', description: 'Find gear to acquire' },
+      { href: '/upgrade-compare', label: 'Upgrade Planner', description: 'Plan owned upgrades' },
+      { href: '/wishlist', label: 'Wishlist', description: 'Track items to obtain' },
     ],
   },
   {
