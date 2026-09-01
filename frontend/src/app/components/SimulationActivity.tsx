@@ -59,7 +59,7 @@ function simTypeLabel(simType?: string): string {
         quick: 'Quick Sim',
         top_gear: 'Top Gear',
         droptimizer: 'Drop Finder',
-        upgrade_compare: 'Upgrade Planner',
+        upgrade_compare: 'Crest Upgrades',
         stat_weights: 'Stat Weights',
         stat_plot: 'Stat Plot',
       } as Record<string, string>

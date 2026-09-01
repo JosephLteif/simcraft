@@ -34,7 +34,7 @@ const SIM_TYPE_LABELS: Record<string, string> = {
   top_gear: 'Top Gear',
   top_gear_exact_stats: 'Stats Sim',
   droptimizer: 'Drop Finder',
-  upgrade_compare: 'Upgrade Planner',
+  upgrade_compare: 'Crest Upgrades',
   stat_weights: 'Stat Weights',
   stat_plot: 'Stat Plot',
   external_buff_matrix: 'External Buff Matrix',

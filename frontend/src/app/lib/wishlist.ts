@@ -3,7 +3,12 @@ import type { DropItem } from '../drop-finder/types';
 export const WISHLIST_STORAGE_KEY = 'whylowdps_wishlist';
 const GLOBAL_WISHLIST_OWNER_KEY = 'global';
 
+export type RoadmapSource = 'drop' | 'owned-upgrade';
+
 export interface WishlistItem extends DropItem {
+  roadmap_id?: string;
+  roadmap_source?: RoadmapSource;
+  roadmap_completed?: boolean;
   wishlist_slot?: string;
   added_at?: number;
   wishlist_ilvl?: number;
@@ -11,8 +16,8 @@ export interface WishlistItem extends DropItem {
   wishlist_upgrade_label?: string;
 }
 
-interface WishlistStorageV2 {
-  version: 2;
+interface WishlistStorageV3 {
+  version: 3;
   by_owner: Record<string, WishlistItem[]>;
 }
 
@@ -37,17 +42,55 @@ function canUseStorage(): boolean {
   return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
 }
 
+export function getWishlistItemLevel(item: Pick<WishlistItem, 'wishlist_ilvl' | 'ilevel'>): number {
+  return Number(item.wishlist_ilvl ?? item.ilevel ?? 0);
+}
+
+export function getRoadmapItemId(
+  item: Pick<
+    WishlistItem,
+    | 'item_id'
+    | 'wishlist_slot'
+    | 'wishlist_ilvl'
+    | 'ilevel'
+    | 'wishlist_bonus_id'
+    | 'bonus_ids'
+    | 'roadmap_source'
+  >
+): string {
+  const source = item.roadmap_source || 'drop';
+  const slot = (item.wishlist_slot || '').trim().toLowerCase();
+  const level = getWishlistItemLevel(item);
+  const bonusIds = [...(Array.isArray(item.bonus_ids) ? item.bonus_ids : [])];
+  if (item.wishlist_bonus_id && !bonusIds.includes(item.wishlist_bonus_id)) {
+    bonusIds.push(item.wishlist_bonus_id);
+  }
+  return `${source}:${item.item_id}:${slot}:${level}:${[...bonusIds].sort((a, b) => a - b).join('/')}`;
+}
+
 function normalizeItemList(items: unknown): WishlistItem[] {
   if (!Array.isArray(items)) return [];
-  return items.filter((item) => item && typeof item.item_id === 'number');
+  return items
+    .filter(
+      (item): item is WishlistItem =>
+        !!item && typeof item === 'object' && typeof (item as WishlistItem).item_id === 'number'
+    )
+    .map((item) => {
+      const normalized: WishlistItem = {
+        ...item,
+        roadmap_source: item.roadmap_source === 'owned-upgrade' ? 'owned-upgrade' : 'drop',
+        roadmap_completed: item.roadmap_completed === true,
+      };
+      normalized.roadmap_id = item.roadmap_id || getRoadmapItemId(normalized);
+      return normalized;
+    });
 }
 
 function dedupeItemList(items: WishlistItem[]): WishlistItem[] {
   const seen = new Set<string>();
   const out: WishlistItem[] = [];
   for (const item of items) {
-    const ilvl = Number(item.wishlist_ilvl ?? item.ilevel ?? 0);
-    const key = `${item.item_id}:${ilvl}`;
+    const key = item.roadmap_id || getRoadmapItemId(item);
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(item);
@@ -71,14 +114,14 @@ function canonicalOwnerKey(ownerKey?: string): string {
   });
 }
 
-function emptyStorage(): WishlistStorageV2 {
+function emptyStorage(): WishlistStorageV3 {
   return {
-    version: 2,
+    version: 3,
     by_owner: {},
   };
 }
 
-function readStorage(): WishlistStorageV2 {
+function readStorage(): WishlistStorageV3 {
   if (!canUseStorage()) return emptyStorage();
 
   try {
@@ -88,9 +131,9 @@ function readStorage(): WishlistStorageV2 {
 
     if (Array.isArray(parsed)) {
       return {
-        version: 2,
+        version: 3,
         by_owner: {
-          [GLOBAL_WISHLIST_OWNER_KEY]: normalizeItemList(parsed),
+          [GLOBAL_WISHLIST_OWNER_KEY]: dedupeItemList(normalizeItemList(parsed)),
         },
       };
     }
@@ -98,7 +141,7 @@ function readStorage(): WishlistStorageV2 {
     if (
       parsed &&
       typeof parsed === 'object' &&
-      parsed.version === 2 &&
+      (parsed.version === 2 || parsed.version === 3) &&
       parsed.by_owner &&
       typeof parsed.by_owner === 'object'
     ) {
@@ -117,7 +160,7 @@ function readStorage(): WishlistStorageV2 {
         ]);
       }
       return {
-        version: 2,
+        version: 3,
         by_owner: byOwner,
       };
     }
@@ -128,7 +171,7 @@ function readStorage(): WishlistStorageV2 {
   }
 }
 
-function writeStorage(storage: WishlistStorageV2): void {
+function writeStorage(storage: WishlistStorageV3): void {
   if (!canUseStorage()) return;
   localStorage.setItem(WISHLIST_STORAGE_KEY, JSON.stringify(storage));
 }
@@ -170,15 +213,62 @@ function ownerLabel(ownerKey: string): string {
 
 export function loadWishlist(ownerKey?: string): WishlistItem[] {
   const storage = readStorage();
+  if (canUseStorage()) {
+    try {
+      const raw = localStorage.getItem(WISHLIST_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (Array.isArray(parsed) || (parsed && typeof parsed === 'object' && parsed.version === 2)) {
+        writeStorage(storage);
+      }
+    } catch {
+      // Keep the normalized in-memory view when legacy storage cannot be rewritten.
+    }
+  }
   const key = canonicalOwnerKey(ownerKey);
-  return normalizeItemList(storage.by_owner[key]);
+  return dedupeItemList(normalizeItemList(storage.by_owner[key]));
+}
+
+export function loadDropWishlist(ownerKey?: string): WishlistItem[] {
+  return loadWishlist(ownerKey).filter((item) => item.roadmap_source !== 'owned-upgrade');
 }
 
 export function saveWishlist(items: WishlistItem[], ownerKey?: string): void {
   const storage = readStorage();
   const key = canonicalOwnerKey(ownerKey);
-  storage.by_owner[key] = normalizeItemList(items);
+  storage.by_owner[key] = dedupeItemList(normalizeItemList(items));
   writeStorage(storage);
+}
+
+export function saveRoadmapEntry(entry: WishlistItem, ownerKey?: string): WishlistItem[] {
+  const current = loadWishlist(ownerKey);
+  const normalized: WishlistItem = {
+    ...entry,
+    roadmap_source: entry.roadmap_source || 'drop',
+  };
+  normalized.roadmap_id = entry.roadmap_id || getRoadmapItemId(normalized);
+  const index = current.findIndex((item) => item.roadmap_id === normalized.roadmap_id);
+  if (index >= 0) current[index] = { ...current[index], ...normalized };
+  else current.push(normalized);
+  saveWishlist(current, ownerKey);
+  return current;
+}
+
+export function setRoadmapCompleted(
+  roadmapId: string,
+  completed: boolean,
+  ownerKey?: string
+): WishlistItem[] {
+  const next = loadWishlist(ownerKey).map((item) =>
+    item.roadmap_id === roadmapId ? { ...item, roadmap_completed: completed } : item
+  );
+  saveWishlist(next, ownerKey);
+  return next;
+}
+
+export function removeRoadmapEntry(roadmapId: string, ownerKey?: string): WishlistItem[] {
+  const next = loadWishlist(ownerKey).filter((item) => item.roadmap_id !== roadmapId);
+  saveWishlist(next, ownerKey);
+  return next;
 }
 
 export function clearWishlist(ownerKey?: string): void {
@@ -188,9 +278,16 @@ export function clearWishlist(ownerKey?: string): void {
   writeStorage(storage);
 }
 
+export function clearDropWishlist(ownerKey?: string): void {
+  saveWishlist(
+    loadWishlist(ownerKey).filter((item) => item.roadmap_source === 'owned-upgrade'),
+    ownerKey
+  );
+}
+
 export function isWishlisted(itemId: number, ownerKey?: string, ilvl?: number): boolean {
   const targetIlvl = Number(ilvl ?? 0);
-  return loadWishlist(ownerKey).some((item) => {
+  return loadDropWishlist(ownerKey).some((item) => {
     const itemIlvl = Number(item.wishlist_ilvl ?? item.ilevel ?? 0);
     return item.item_id === itemId && itemIlvl === targetIlvl;
   });
@@ -204,7 +301,11 @@ export function removeFromWishlist(
   const targetIlvl = Number(ilvl ?? 0);
   const next = loadWishlist(ownerKey).filter((item) => {
     const itemIlvl = Number(item.wishlist_ilvl ?? item.ilevel ?? 0);
-    return !(item.item_id === itemId && itemIlvl === targetIlvl);
+    return !(
+      item.roadmap_source !== 'owned-upgrade' &&
+      item.item_id === itemId &&
+      itemIlvl === targetIlvl
+    );
   });
   saveWishlist(next, ownerKey);
   return next;
@@ -216,10 +317,36 @@ export function toggleWishlistItem(
   ownerKey?: string
 ): WishlistItem[] {
   const current = loadWishlist(ownerKey);
-  const exists = current.some((entry) => entry.item_id === item.item_id);
+  const targetIlvl = Number(item.ilevel || 0);
+  const exists = current.some(
+    (entry) =>
+      entry.roadmap_source !== 'owned-upgrade' &&
+      entry.item_id === item.item_id &&
+      getWishlistItemLevel(entry) === targetIlvl
+  );
   const next = exists
-    ? current.filter((entry) => entry.item_id !== item.item_id)
-    : [...current, { ...item, wishlist_slot: slot, added_at: Date.now() }];
+    ? current.filter(
+        (entry) =>
+          !(
+            entry.roadmap_source !== 'owned-upgrade' &&
+            entry.item_id === item.item_id &&
+            getWishlistItemLevel(entry) === targetIlvl
+          )
+      )
+    : [
+        ...current,
+        {
+          ...item,
+          wishlist_slot: slot,
+          added_at: Date.now(),
+          roadmap_source: 'drop' as const,
+          roadmap_id: getRoadmapItemId({
+            ...item,
+            wishlist_slot: slot,
+            roadmap_source: 'drop',
+          }),
+        },
+      ];
   saveWishlist(next, ownerKey);
   return next;
 }
@@ -234,7 +361,9 @@ export function addItemsToWishlist(
 ): { items: WishlistItem[]; added: number; skipped: number } {
   const current = loadWishlist(ownerKey);
   const existingKeys = new Set(
-    current.map((entry) => `${entry.item_id}:${Number(entry.wishlist_ilvl ?? entry.ilevel ?? 0)}`)
+    current
+      .filter((entry) => entry.roadmap_source !== 'owned-upgrade')
+      .map((entry) => `${entry.item_id}:${Number(entry.wishlist_ilvl ?? entry.ilevel ?? 0)}`)
   );
   const next = [...current];
   let added = 0;
@@ -254,6 +383,14 @@ export function addItemsToWishlist(
       wishlist_ilvl: entry.meta?.ilvl,
       wishlist_bonus_id: entry.meta?.bonusId,
       wishlist_upgrade_label: entry.meta?.upgradeLabel,
+      roadmap_source: 'drop',
+      roadmap_id: getRoadmapItemId({
+        ...entry.item,
+        wishlist_slot: entry.slot,
+        wishlist_ilvl: entry.meta?.ilvl,
+        wishlist_bonus_id: entry.meta?.bonusId,
+        roadmap_source: 'drop',
+      }),
     });
     existingKeys.add(key);
     added += 1;
@@ -272,9 +409,22 @@ export function toggleWishlistEntry(
   ownerKey?: string
 ): WishlistItem[] {
   const current = loadWishlist(ownerKey);
-  const exists = current.some((it) => it.item_id === entry.item.item_id);
+  const targetIlvl = Number(entry.meta?.ilvl ?? entry.item.ilevel ?? 0);
+  const exists = current.some(
+    (it) =>
+      it.roadmap_source !== 'owned-upgrade' &&
+      it.item_id === entry.item.item_id &&
+      getWishlistItemLevel(it) === targetIlvl
+  );
   const next = exists
-    ? current.filter((it) => it.item_id !== entry.item.item_id)
+    ? current.filter(
+        (it) =>
+          !(
+            it.roadmap_source !== 'owned-upgrade' &&
+            it.item_id === entry.item.item_id &&
+            getWishlistItemLevel(it) === targetIlvl
+          )
+      )
     : [
         ...current,
         {
@@ -284,6 +434,14 @@ export function toggleWishlistEntry(
           wishlist_ilvl: entry.meta?.ilvl,
           wishlist_bonus_id: entry.meta?.bonusId,
           wishlist_upgrade_label: entry.meta?.upgradeLabel,
+          roadmap_source: 'drop' as const,
+          roadmap_id: getRoadmapItemId({
+            ...entry.item,
+            wishlist_slot: entry.slot,
+            wishlist_ilvl: entry.meta?.ilvl,
+            wishlist_bonus_id: entry.meta?.bonusId,
+            roadmap_source: 'drop',
+          }),
         },
       ];
   saveWishlist(next, ownerKey);
@@ -298,7 +456,7 @@ export function listWishlistOwners(): WishlistOwnerSummary[] {
       const parsed = parseWishlistOwnerKey(resolvedKey);
       return {
         key: resolvedKey,
-        count: normalizeItemList(items).length,
+        count: dedupeItemList(normalizeItemList(items)).length,
         name: parsed.name || undefined,
         realm: parsed.realm || undefined,
         region: parsed.region || undefined,

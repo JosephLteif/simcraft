@@ -1,7 +1,7 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import UpgradePlan, { type UpgradePlanCandidate } from './UpgradePlan';
-import { WISHLIST_STORAGE_KEY } from '../lib/wishlist';
+import { WISHLIST_STORAGE_KEY, loadWishlist } from '../lib/wishlist';
 
 const candidate: UpgradePlanCandidate = {
   uid: 'head-1',
@@ -40,6 +40,7 @@ describe('UpgradePlan', () => {
     expect(screen.getByText('Test Helm')).toBeInTheDocument();
     expect(screen.getByText('0/1 complete')).toBeInTheDocument();
     expect(screen.getByText('15 / 20')).toBeInTheDocument();
+    expect(loadWishlist(props.wishlistOwnerKey)).toHaveLength(1);
 
     fireEvent.click(screen.getByRole('button', { name: 'Mark upgrade complete' }));
 
@@ -47,7 +48,7 @@ describe('UpgradePlan', () => {
     expect(screen.getByText('1/1 complete')).toBeInTheDocument();
   });
 
-  it('restores and removes a saved plan entry', () => {
+  it('migrates a saved legacy plan entry and removes it from the legacy key', async () => {
     window.localStorage.setItem(
       props.storageKey,
       JSON.stringify([{ uid: candidate.uid, completed: true }])
@@ -55,13 +56,35 @@ describe('UpgradePlan', () => {
 
     render(<UpgradePlan {...props} />);
 
-    expect(screen.getByText('Test Helm')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Test Helm')).toBeInTheDocument());
     expect(screen.getByRole('button', { name: 'Mark upgrade incomplete' })).toBeInTheDocument();
+    expect(loadWishlist(props.wishlistOwnerKey)[0]).toMatchObject({
+      roadmap_source: 'owned-upgrade',
+      roadmap_completed: true,
+    });
+    expect(window.localStorage.getItem(props.storageKey)).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Remove upgrade from plan' }));
 
     expect(screen.queryByText('Test Helm')).not.toBeInTheDocument();
-    expect(window.localStorage.getItem(props.storageKey)).toBe('[]');
+    expect(loadWishlist(props.wishlistOwnerKey)).toHaveLength(0);
+  });
+
+  it('preserves unmatched legacy plan entries for a later candidate refresh', async () => {
+    window.localStorage.setItem(
+      props.storageKey,
+      JSON.stringify([{ uid: 'missing-uid', completed: false }])
+    );
+
+    render(<UpgradePlan {...props} />);
+
+    await waitFor(() =>
+      expect(screen.getByText('No acquisition targets saved yet.')).toBeInTheDocument()
+    );
+    expect(window.localStorage.getItem(props.storageKey)).toBe(
+      JSON.stringify([{ uid: 'missing-uid', completed: false }])
+    );
+    expect(loadWishlist(props.wishlistOwnerKey)).toHaveLength(0);
   });
 
   it('summarizes the matching character wishlist without copying it into the plan', () => {

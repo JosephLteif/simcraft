@@ -75,13 +75,13 @@ const baseNavItems: NavItem[] = [
   {
     href: '/drop-finder',
     label: 'Upgrades',
-    description: 'Find and sim gear upgrades.',
+    description: 'Plan gear drops and simulate crest upgrades.',
     icon: ArrowUp,
     matchPaths: ['/drop-finder', '/upgrade-compare', '/upgrade', '/wishlist'],
     children: [
       { href: '/drop-finder', label: 'Drop Finder', description: 'Find gear to acquire' },
-      { href: '/upgrade-compare', label: 'Upgrade Planner', description: 'Plan owned upgrades' },
-      { href: '/wishlist', label: 'Wishlist', description: 'Track items to obtain' },
+      { href: '/upgrade-compare', label: 'Crest Upgrades', description: 'Sim owned upgrades' },
+      { href: '/wishlist', label: 'Wishlist', description: 'Plan drops and owned upgrades' },
     ],
   },
   {
@@ -250,7 +250,7 @@ export default function Sidebar() {
         matchPaths: ['/characters', '/wishlist', '/talent-playground'],
         children: [
           { href: '/characters', label: 'Roster', description: 'Your Battle.net characters' },
-          { href: '/wishlist', label: 'Wishlist', description: 'Saved target drops by character' },
+          { href: '/wishlist', label: 'Wishlist', description: 'Saved gear roadmap by character' },
           {
             href: '/talent-playground',
             label: 'Talent Playground',

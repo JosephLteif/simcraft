@@ -490,9 +490,9 @@ export default function UpgradeComparePage() {
         />
       ) : null}
       <div>
-        <h2 className="text-lg font-semibold text-zinc-100">Upgrade Planner</h2>
+        <h2 className="text-lg font-semibold text-zinc-100">Crest Upgrades</h2>
         <p className="mt-1 text-sm text-zinc-400">
-          Turn your Wishlist targets and current gear into one upgrade roadmap.
+          Compare owned-item upgrade paths and find the best way to spend your crests.
         </p>
       </div>
       {/* Explainer */}

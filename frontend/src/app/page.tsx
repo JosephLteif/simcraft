@@ -198,7 +198,7 @@ const QUICK_LINK_OPTIONS: QuickLink[] = [
   { label: 'New Quick Sim', href: '/quick-sim', icon: 'zap' },
   { label: 'Top Gear', href: '/top-gear', icon: 'swords' },
   { label: 'Drop Finder', href: '/drop-finder', icon: 'search' },
-  { label: 'Upgrade Planner', href: '/upgrade-compare', icon: 'arrow-up' },
+  { label: 'Crest Upgrades', href: '/upgrade-compare', icon: 'arrow-up' },
   { label: 'Quick Weights', href: '/analysis/quick-weights', icon: 'bar-chart' },
   { label: 'Stat Plot', href: '/analysis/stat-plot', icon: 'chart' },
   { label: 'Consumable Matrix', href: '/analysis/consumable-matrix', icon: 'flask' },

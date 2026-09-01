@@ -50,7 +50,11 @@ import {
   resolveUpgrade,
 } from './types';
 import { parseCharacterInfo } from '@/lib/simc-parser';
-import { buildWishlistOwnerKey, loadWishlist, toggleWishlistEntry } from '../lib/wishlist';
+import {
+  buildWishlistOwnerKey,
+  loadDropWishlist,
+  toggleWishlistEntry,
+} from '../lib/wishlist';
 
 type Category = 'raids' | string;
 type SimDropItem = DropItem & { slot?: string };
@@ -291,7 +295,7 @@ export default function DropFinderPage() {
   }, [drops]);
 
   useEffect(() => {
-    setWishlistIds(new Set(loadWishlist(wishlistOwnerKey).map((item) => item.item_id)));
+    setWishlistIds(new Set(loadDropWishlist(wishlistOwnerKey).map((item) => item.item_id)));
   }, [wishlistOwnerKey]);
 
   const isRaid = category === 'raids';
@@ -1131,7 +1135,13 @@ export default function DropFinderPage() {
             isWishlisted={(itemId) => wishlistIds.has(itemId)}
             onToggleWishlist={(item, slotLabel, meta) => {
               const next = toggleWishlistEntry({ item, slot: slotLabel, meta }, wishlistOwnerKey);
-              setWishlistIds(new Set(next.map((entry) => entry.item_id)));
+              setWishlistIds(
+                new Set(
+                  next
+                    .filter((entry) => entry.roadmap_source !== 'owned-upgrade')
+                    .map((entry) => entry.item_id)
+                )
+              );
             }}
           />
 

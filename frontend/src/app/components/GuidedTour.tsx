@@ -314,7 +314,7 @@ export const GUIDED_TOURS: GuidedTourDefinition[] = [
   },
   {
     id: 'upgrade-compare',
-    label: 'Upgrade Planner',
+    label: 'Crest Upgrades',
     paths: ['/upgrade-compare'],
     steps: [
       {
@@ -335,9 +335,9 @@ export const GUIDED_TOURS: GuidedTourDefinition[] = [
       {
         id: 'upgrade-plan',
         target: 'upgrade-plan',
-        title: 'Follow one gear roadmap',
+        title: 'Save owned upgrades to your roadmap',
         description:
-          'Wishlist items are things you still need to obtain. Once an item is in your export, add its owned upgrade here to keep the next step in one place.',
+          'Save owned upgrade targets to your shared Wishlist roadmap, then return here whenever you want to simulate crest spending.',
         placement: 'top',
       },
       {

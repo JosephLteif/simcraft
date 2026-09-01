@@ -3,15 +3,31 @@ import { ArrowDown, ArrowUp, Check, ClipboardList, Plus, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react';
 import { SLOT_LABELS } from '../lib/types';
 import { getIconUrl } from '../lib/useItemInfo';
-import { WISHLIST_STORAGE_KEY, loadWishlist } from '../lib/wishlist';
+import {
+  buildOwnedUpgradeRoadmapEntry,
+  getCandidateRoadmapId,
+  mergeLegacyUpgradePlan,
+  readLegacyUpgradePlan,
+} from '../lib/roadmap';
+import {
+  WISHLIST_STORAGE_KEY,
+  loadDropWishlist,
+  loadWishlist,
+  removeRoadmapEntry,
+  saveWishlist,
+  setRoadmapCompleted,
+  type WishlistItem,
+} from '../lib/wishlist';
 
 export interface UpgradePlanCandidate {
   uid: string;
   slot: string;
   item_id: number;
+  bonus_ids?: number[];
   ilevel: number;
   target_ilevel: number;
   costs: Record<string, number>;
+  is_equipped?: boolean;
   discounted?: boolean;
 }
 
@@ -25,11 +41,6 @@ export interface UpgradePlanCurrency {
 interface UpgradePlanItemInfo {
   name: string;
   icon: string;
-}
-
-interface UpgradePlanEntry {
-  uid: string;
-  completed: boolean;
 }
 
 interface UpgradePlanProps {
@@ -49,22 +60,6 @@ function getCurrencyIconUrl(iconName: string): string {
   const noExt = raw.replace(/\.(jpg|jpeg|png|webp)$/i, '');
   const base = noExt.split('/').pop() || noExt;
   return `https://wow.zamimg.com/images/wow/icons/large/${base}.jpg`;
-}
-
-function readStoredPlan(raw: string | null): UpgradePlanEntry[] {
-  if (!raw) return [];
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .filter(
-        (entry): entry is { uid: string; completed?: boolean } =>
-          !!entry && typeof entry === 'object' && typeof entry.uid === 'string'
-      )
-      .map((entry) => ({ uid: entry.uid, completed: entry.completed === true }));
-  } catch {
-    return [];
-  }
 }
 
 function formatCandidateCost(
@@ -89,18 +84,24 @@ export default function UpgradePlan({
   currencies,
   effectiveCurrencies,
 }: UpgradePlanProps) {
-  const [entries, setEntries] = useState<UpgradePlanEntry[]>([]);
-  const [loadedStorageKey, setLoadedStorageKey] = useState<string | null>(null);
+  const [entries, setEntries] = useState<WishlistItem[]>([]);
   const [wishlistCount, setWishlistCount] = useState(0);
-  const candidateByUid = useMemo(
-    () => new Map(candidates.map((candidate) => [candidate.uid, candidate])),
+  const candidateByRoadmapId = useMemo(
+    () => new Map(candidates.map((candidate) => [getCandidateRoadmapId(candidate), candidate])),
     [candidates]
   );
   const planEntries = useMemo(
-    () => entries.filter((entry) => candidateByUid.has(entry.uid)),
-    [candidateByUid, entries]
+    () =>
+      entries.flatMap((entry) => {
+        const candidate = candidateByRoadmapId.get(entry.roadmap_id || '');
+        return candidate ? [{ entry, candidate }] : [];
+      }),
+    [candidateByRoadmapId, entries]
   );
-  const planUids = useMemo(() => new Set(planEntries.map((entry) => entry.uid)), [planEntries]);
+  const planUids = useMemo(
+    () => new Set(planEntries.map(({ candidate }) => candidate.uid)),
+    [planEntries]
+  );
   const selectedCandidates = useMemo(
     () => candidates.filter((candidate) => selectedUids.has(candidate.uid)),
     [candidates, selectedUids]
@@ -108,7 +109,7 @@ export default function UpgradePlan({
   const addableSelectedCount = selectedCandidates.filter(
     (candidate) => !planUids.has(candidate.uid)
   ).length;
-  const completedCount = planEntries.filter((entry) => entry.completed).length;
+  const completedCount = planEntries.filter(({ entry }) => entry.roadmap_completed).length;
   const wishlistHref = useMemo(
     () => `/wishlist?owner=${encodeURIComponent(wishlistOwnerKey)}`,
     [wishlistOwnerKey]
@@ -116,48 +117,37 @@ export default function UpgradePlan({
 
   const plannedCosts = useMemo(() => {
     const totals: Record<string, number> = {};
-    for (const entry of planEntries) {
-      const candidate = candidateByUid.get(entry.uid);
-      if (!candidate) continue;
+    for (const { candidate } of planEntries) {
       for (const [currencyId, amount] of Object.entries(candidate.costs)) {
         if (amount > 0) totals[currencyId] = (totals[currencyId] || 0) + amount;
       }
     }
     return Object.entries(totals).sort(([a], [b]) => Number(a) - Number(b));
-  }, [candidateByUid, planEntries]);
+  }, [planEntries]);
 
   useEffect(() => {
-    setLoadedStorageKey(null);
-    setEntries([]);
+    let current = loadWishlist(wishlistOwnerKey);
     try {
-      setEntries(readStoredPlan(window.localStorage.getItem(storageKey)));
+      const legacyEntries = readLegacyUpgradePlan(window.localStorage.getItem(storageKey));
+      if (legacyEntries.length > 0 && candidates.length > 0) {
+        const migration = mergeLegacyUpgradePlan(current, legacyEntries, candidates, itemInfo);
+        if (migration.migratedCount > 0) {
+          saveWishlist(migration.items, wishlistOwnerKey);
+          current = migration.items;
+        }
+        if (migration.unmatched.length === 0) {
+          window.localStorage.removeItem(storageKey);
+        }
+      }
     } catch {
-      setEntries([]);
+      // The roadmap remains usable for this session if storage is unavailable.
     }
-    setLoadedStorageKey(storageKey);
-  }, [storageKey]);
-
-  useEffect(() => {
-    if (loadedStorageKey !== storageKey) return;
-    try {
-      window.localStorage.setItem(storageKey, JSON.stringify(entries));
-    } catch {
-      // The plan remains usable for this session if storage is unavailable.
-    }
-  }, [entries, loadedStorageKey, storageKey]);
-
-  useEffect(() => {
-    if (candidates.length === 0) return;
-    const validUids = new Set(candidates.map((candidate) => candidate.uid));
-    setEntries((current) => {
-      const next = current.filter((entry) => validUids.has(entry.uid));
-      return next.length === current.length ? current : next;
-    });
-  }, [candidates]);
+    setEntries(current.filter((entry) => entry.roadmap_source === 'owned-upgrade'));
+  }, [candidates, itemInfo, storageKey, wishlistOwnerKey]);
 
   useEffect(() => {
     const refreshWishlistCount = () => {
-      setWishlistCount(loadWishlist(wishlistOwnerKey).length);
+      setWishlistCount(loadDropWishlist(wishlistOwnerKey).length);
     };
     refreshWishlistCount();
     const onStorage = (event: StorageEvent) => {
@@ -169,39 +159,72 @@ export default function UpgradePlan({
 
   const addSelected = () => {
     if (addableSelectedCount === 0) return;
-    setEntries((current) => [
-      ...current,
-      ...selectedCandidates
-        .filter((candidate) => !current.some((entry) => entry.uid === candidate.uid))
-        .map((candidate) => ({ uid: candidate.uid, completed: false })),
-    ]);
+    const current = loadWishlist(wishlistOwnerKey);
+    const existingIds = new Set(
+      current
+        .filter((entry) => entry.roadmap_source === 'owned-upgrade')
+        .map((entry) => entry.roadmap_id)
+    );
+    const next = [...current];
+    for (const candidate of selectedCandidates) {
+      const entry = buildOwnedUpgradeRoadmapEntry(candidate, itemInfo[candidate.item_id]);
+      if (!existingIds.has(entry.roadmap_id)) next.push(entry);
+    }
+    saveWishlist(next, wishlistOwnerKey);
+    setEntries(next.filter((entry) => entry.roadmap_source === 'owned-upgrade'));
   };
 
   const toggleCompleted = (uid: string) => {
-    setEntries((current) =>
-      current.map((entry) =>
-        entry.uid === uid ? { ...entry, completed: !entry.completed } : entry
-      )
-    );
+    const entry = planEntries.find(({ candidate }) => candidate.uid === uid)?.entry;
+    if (!entry?.roadmap_id) return;
+    const next = setRoadmapCompleted(entry.roadmap_id, !entry.roadmap_completed, wishlistOwnerKey);
+    setEntries(next.filter((item) => item.roadmap_source === 'owned-upgrade'));
   };
 
   const removeEntry = (uid: string) => {
-    setEntries((current) => current.filter((entry) => entry.uid !== uid));
+    const entry = planEntries.find(({ candidate }) => candidate.uid === uid)?.entry;
+    if (!entry?.roadmap_id) return;
+    const next = removeRoadmapEntry(entry.roadmap_id, wishlistOwnerKey);
+    setEntries(next.filter((item) => item.roadmap_source === 'owned-upgrade'));
   };
 
   const moveEntry = (uid: string, direction: -1 | 1) => {
-    setEntries((current) => {
-      const index = current.findIndex((entry) => entry.uid === uid);
-      const nextIndex = index + direction;
-      if (index < 0 || nextIndex < 0 || nextIndex >= current.length) return current;
-      const next = [...current];
-      [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
-      return next;
+    const index = entries.findIndex((entry) => {
+      const candidate = candidateByRoadmapId.get(entry.roadmap_id || '');
+      return candidate?.uid === uid;
     });
+    const nextIndex = index + direction;
+    if (index < 0 || nextIndex < 0 || nextIndex >= entries.length) return;
+    const orderedEntries = [...entries];
+    [orderedEntries[index], orderedEntries[nextIndex]] = [
+      orderedEntries[nextIndex],
+      orderedEntries[index],
+    ];
+    const current = loadWishlist(wishlistOwnerKey);
+    let entryIndex = 0;
+    const next = current.map((item) => {
+      if (item.roadmap_source !== 'owned-upgrade') return item;
+      return orderedEntries[entryIndex++] || item;
+    });
+    saveWishlist(next, wishlistOwnerKey);
+    setEntries(next.filter((item) => item.roadmap_source === 'owned-upgrade'));
   };
 
   const clearCompleted = () => {
-    setEntries((current) => current.filter((entry) => !entry.completed));
+    const current = loadWishlist(wishlistOwnerKey);
+    const next = current.filter(
+      (entry) => entry.roadmap_source !== 'owned-upgrade' || !entry.roadmap_completed
+    );
+    saveWishlist(next, wishlistOwnerKey);
+    setEntries(next.filter((entry) => entry.roadmap_source === 'owned-upgrade'));
+  };
+
+  const clearPlan = () => {
+    const next = loadWishlist(wishlistOwnerKey).filter(
+      (entry) => entry.roadmap_source !== 'owned-upgrade'
+    );
+    saveWishlist(next, wishlistOwnerKey);
+    setEntries([]);
   };
 
   return (
@@ -216,7 +239,7 @@ export default function UpgradePlan({
           <div>
             <div className="flex items-center gap-2">
               <h2 id="upgrade-plan-title" className="text-sm font-semibold text-zinc-100">
-                Gear Roadmap
+                Saved upgrade targets
               </h2>
               {planEntries.length > 0 && (
                 <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-medium text-zinc-300">
@@ -225,7 +248,7 @@ export default function UpgradePlan({
               )}
             </div>
             <p className="mt-0.5 text-[11px] text-zinc-500">
-              Wishlist targets first, owned-item upgrades next.
+              Save owned upgrade targets to your shared Wishlist roadmap; simulate them here.
             </p>
           </div>
         </div>
@@ -256,7 +279,7 @@ export default function UpgradePlan({
           {planEntries.length > 0 && (
             <button
               type="button"
-              onClick={() => setEntries([])}
+              onClick={clearPlan}
               className="rounded-md px-2 py-1.5 text-[11px] text-zinc-500 transition-colors hover:bg-red-500/10 hover:text-red-300"
             >
               Clear plan
@@ -268,7 +291,9 @@ export default function UpgradePlan({
       <div className="space-y-3 px-4 py-3">
         <div className="border-border bg-surface-2/40 flex flex-col gap-2 rounded-md border px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
-            <p className="text-muted text-[11px] font-medium tracking-widest uppercase">Wishlist</p>
+            <p className="text-muted text-[11px] font-medium tracking-widest uppercase">
+              Gear Roadmap
+            </p>
             <p className="mt-0.5 text-[13px] text-zinc-300">
               {wishlistCount > 0
                 ? `${wishlistCount} item${wishlistCount === 1 ? '' : 's'} to acquire before upgrading.`
@@ -307,8 +332,8 @@ export default function UpgradePlan({
               and add them here to build your prioritized upgrade list.
             </p>
             <p className="mt-1 text-[11px] text-zinc-500">
-              Wishlist handles items you still need; this list handles the upgrades you are ready to
-              make.
+              Wishlist is the shared roadmap for drops and upgrades; this page is where you simulate
+              crest spending.
             </p>
           </div>
         ) : (
@@ -355,28 +380,28 @@ export default function UpgradePlan({
             </div>
 
             <ol className="space-y-2">
-              {planEntries.map((entry, index) => {
-                const candidate = candidateByUid.get(entry.uid);
-                if (!candidate) return null;
+              {planEntries.map(({ entry, candidate }, index) => {
                 const info = itemInfo[candidate.item_id];
                 return (
                   <li
-                    key={entry.uid}
+                    key={entry.roadmap_id}
                     className={`flex items-start gap-2 rounded-md border px-2.5 py-2 transition-colors ${
-                      entry.completed
+                      entry.roadmap_completed
                         ? 'border-emerald-400/20 bg-emerald-500/[0.04]'
                         : 'border-border bg-surface-2/50'
                     }`}
                   >
                     <button
                       type="button"
-                      onClick={() => toggleCompleted(entry.uid)}
+                      onClick={() => toggleCompleted(candidate.uid)}
                       aria-label={
-                        entry.completed ? 'Mark upgrade incomplete' : 'Mark upgrade complete'
+                        entry.roadmap_completed
+                          ? 'Mark upgrade incomplete'
+                          : 'Mark upgrade complete'
                       }
-                      aria-pressed={entry.completed}
+                      aria-pressed={entry.roadmap_completed}
                       className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors ${
-                        entry.completed
+                        entry.roadmap_completed
                           ? 'border-emerald-400/60 bg-emerald-400/80 text-black'
                           : 'border-zinc-600 text-transparent hover:border-zinc-400'
                       }`}
@@ -393,7 +418,7 @@ export default function UpgradePlan({
                       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                         <span
                           className={`text-[13px] font-medium ${
-                            entry.completed ? 'text-zinc-500 line-through' : 'text-zinc-200'
+                            entry.roadmap_completed ? 'text-zinc-500 line-through' : 'text-zinc-200'
                           }`}
                         >
                           {info?.name || `Item ${candidate.item_id}`}
@@ -412,7 +437,7 @@ export default function UpgradePlan({
                     <div className="flex shrink-0 items-center gap-0.5">
                       <button
                         type="button"
-                        onClick={() => moveEntry(entry.uid, -1)}
+                        onClick={() => moveEntry(candidate.uid, -1)}
                         disabled={index === 0}
                         aria-label="Move upgrade earlier"
                         className="rounded p-1 text-zinc-500 transition-colors hover:bg-white/5 hover:text-zinc-200 disabled:cursor-not-allowed disabled:text-zinc-700"
@@ -421,7 +446,7 @@ export default function UpgradePlan({
                       </button>
                       <button
                         type="button"
-                        onClick={() => moveEntry(entry.uid, 1)}
+                        onClick={() => moveEntry(candidate.uid, 1)}
                         disabled={index === planEntries.length - 1}
                         aria-label="Move upgrade later"
                         className="rounded p-1 text-zinc-500 transition-colors hover:bg-white/5 hover:text-zinc-200 disabled:cursor-not-allowed disabled:text-zinc-700"
@@ -430,7 +455,7 @@ export default function UpgradePlan({
                       </button>
                       <button
                         type="button"
-                        onClick={() => removeEntry(entry.uid)}
+                        onClick={() => removeEntry(candidate.uid)}
                         aria-label="Remove upgrade from plan"
                         className="rounded p-1 text-zinc-600 transition-colors hover:bg-red-500/10 hover:text-red-300"
                       >
