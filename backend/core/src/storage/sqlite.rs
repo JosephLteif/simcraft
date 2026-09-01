@@ -1,4 +1,5 @@
 use rusqlite::{params, Connection};
+use std::collections::HashSet;
 use std::sync::Mutex;
 
 use super::JobStorage;
@@ -53,7 +54,7 @@ impl SqliteStorage {
     }
 }
 
-const SQLITE_SCHEMA_VERSION: i64 = 3;
+const SQLITE_SCHEMA_VERSION: i64 = 4;
 
 fn initialize_schema(conn: &mut Connection) -> rusqlite::Result<()> {
     let tx = conn.transaction()?;
@@ -80,7 +81,8 @@ fn initialize_schema(conn: &mut Connection) -> rusqlite::Result<()> {
                 fight_style TEXT NOT NULL,
                 target_error REAL NOT NULL,
                 created_at TEXT NOT NULL,
-                pinned INTEGER NOT NULL DEFAULT 0
+                pinned INTEGER NOT NULL DEFAULT 0,
+                queue_order INTEGER NOT NULL DEFAULT 0
             );
             CREATE TABLE IF NOT EXISTS settings (
                 key TEXT PRIMARY KEY,
@@ -152,6 +154,7 @@ fn initialize_schema(conn: &mut Connection) -> rusqlite::Result<()> {
             ("jobs", "stage_timings", "TEXT NOT NULL DEFAULT '[]'"),
             ("jobs", "active_stage_elapsed", "REAL NOT NULL DEFAULT 0"),
             ("jobs", "active_stage_started_at", "TEXT"),
+            ("jobs", "queue_order", "INTEGER NOT NULL DEFAULT 0"),
             ("dungeon_routes", "level", "INTEGER"),
             ("dungeon_routes", "pull_count", "INTEGER"),
             ("dungeon_routes", "timer_seconds", "INTEGER"),
@@ -179,11 +182,31 @@ fn initialize_schema(conn: &mut Connection) -> rusqlite::Result<()> {
                 ))?;
             }
         }
+
+        let mut pending_ids = tx
+            .prepare("SELECT id FROM jobs WHERE queue_order = 0 ORDER BY created_at ASC, id ASC")?;
+        let ids: Vec<String> = pending_ids
+            .query_map([], |row| row.get(0))?
+            .collect::<rusqlite::Result<Vec<String>>>()?;
+        drop(pending_ids);
+        let mut next_order: i64 = tx.query_row(
+            "SELECT COALESCE(MAX(queue_order), 0) FROM jobs",
+            [],
+            |row| row.get(0),
+        )?;
+        for id in ids {
+            next_order = next_order.saturating_add(1);
+            tx.execute(
+                "UPDATE jobs SET queue_order = ?1 WHERE id = ?2 AND queue_order = 0",
+                params![next_order, id],
+            )?;
+        }
     }
 
     tx.execute_batch(
         "CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_id ON auth_sessions(user_id);
          CREATE INDEX IF NOT EXISTS idx_jobs_owner_created_at ON jobs(owner_id, created_at DESC);
+         CREATE INDEX IF NOT EXISTS idx_jobs_queue_order ON jobs(status, queue_order);
          CREATE INDEX IF NOT EXISTS idx_routes_owner_created_at ON dungeon_routes(owner_id, created_at DESC);
          CREATE INDEX IF NOT EXISTS idx_profiles_owner_created_at ON character_profiles(owner_id, created_at DESC);",
     )?;
@@ -255,13 +278,41 @@ impl SqliteStorage {
             linked_realm: row.get(21).ok().flatten(),
             linked_name: row.get(22).ok().flatten(),
             pinned: row.get::<_, i64>(23).unwrap_or(0) != 0,
+            queue_order: row.get::<_, i64>(28).unwrap_or(0).max(0) as u64,
         })
     }
 }
 
+fn query_pending_queue(
+    conn: &Connection,
+    owner_id: Option<&str>,
+) -> rusqlite::Result<Vec<(String, u64)>> {
+    let owner = owner_id.unwrap_or("");
+    let mut stmt = conn.prepare(
+        "SELECT id, queue_order FROM jobs
+         WHERE status = 'pending' AND (?1 = '' OR owner_id = ?1)
+         ORDER BY queue_order ASC, created_at ASC, id ASC",
+    )?;
+    let rows = stmt.query_map(params![owner], |row| {
+        Ok((row.get(0)?, row.get::<_, i64>(1)?.max(0) as u64))
+    })?;
+    rows.collect()
+}
+
 impl JobStorage for SqliteStorage {
     fn insert(&self, job: Job) {
+        let mut job = job;
         let conn = self.conn.lock().unwrap();
+        if job.queue_order == 0 {
+            let next_order: i64 = conn
+                .query_row(
+                    "SELECT COALESCE(MAX(queue_order), 0) + 1 FROM jobs",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap_or(1);
+            job.queue_order = next_order.max(1) as u64;
+        }
         let owner_id = job.owner_id.clone();
         let stages_json = serde_json::to_string(&job.stages_completed).unwrap();
         let options_json = job
@@ -272,8 +323,8 @@ impl JobStorage for SqliteStorage {
             "INSERT INTO jobs (id, status, sim_type, simc_input, options, result_json, combo_metadata_json,
              error_message, progress_pct, progress_stage, progress_detail, stages_completed,
              iterations, fight_style, target_error, created_at, batch_id, raw_json, html_report, text_output, linked_region, linked_realm, linked_name, pinned, owner_id,
-             stage_timings, active_stage_elapsed, active_stage_started_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28)",
+             stage_timings, active_stage_elapsed, active_stage_started_at, queue_order)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29)",
             params![
                 job.id,
                 Self::status_to_str(&job.status),
@@ -303,6 +354,7 @@ impl JobStorage for SqliteStorage {
                 serde_json::to_string(&job.stage_timings).unwrap(),
                 job.active_stage_elapsed,
                 job.active_stage_started_at,
+                job.queue_order as i64,
             ],
         )
         .expect("Failed to insert job");
@@ -321,7 +373,7 @@ impl JobStorage for SqliteStorage {
             "SELECT id, status, sim_type, simc_input, options, result_json, combo_metadata_json,
              error_message, progress_pct, progress_stage, progress_detail, stages_completed,
              iterations, fight_style, target_error, created_at, raw_json, html_report, text_output, batch_id, linked_region, linked_realm, linked_name, pinned, owner_id,
-             stage_timings, active_stage_elapsed, active_stage_started_at
+             stage_timings, active_stage_elapsed, active_stage_started_at, queue_order
              FROM jobs WHERE id = ?1",
             params![id],
             Self::row_to_job,
@@ -347,7 +399,7 @@ impl JobStorage for SqliteStorage {
         };
         let mut stmt = conn.prepare(
             "SELECT id, status, sim_type, created_at, fight_style, iterations, error_message, result_json, simc_input, batch_id,
-             raw_json, html_report, text_output, combo_metadata_json, linked_region, linked_realm, linked_name, pinned
+             raw_json, html_report, text_output, combo_metadata_json, linked_region, linked_realm, linked_name, pinned, queue_order
              FROM jobs WHERE owner_id = ?1 ORDER BY created_at DESC LIMIT ?2"
         ).unwrap();
         let all: Vec<JobSummary> = stmt
@@ -390,6 +442,7 @@ impl JobStorage for SqliteStorage {
                     status: Self::str_to_status(&status_str),
                     sim_type: row.get(2)?,
                     created_at: row.get(3)?,
+                    queue_order: row.get::<_, i64>(18).unwrap_or(0).max(0) as u64,
                     fight_style: row.get(4)?,
                     iterations: row.get::<_, u32>(5)?,
                     error_message: row.get(6)?,
@@ -454,6 +507,125 @@ impl JobStorage for SqliteStorage {
             })
             .take(limit)
             .collect()
+    }
+
+    fn list_queue(&self, owner_id: Option<&str>) -> Vec<JobSummary> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, status, sim_type, created_at, fight_style, iterations, error_message,
+                 result_json, simc_input, batch_id, raw_json, html_report, text_output,
+                 combo_metadata_json, linked_region, linked_realm, linked_name, pinned, queue_order
+                 FROM jobs
+                 WHERE status IN ('pending', 'running', 'paused')
+                   AND (?1 = '' OR owner_id = ?1)
+                 ORDER BY CASE status WHEN 'pending' THEN 0 WHEN 'running' THEN 1 ELSE 2 END,
+                          queue_order ASC, created_at ASC, id ASC",
+            )
+            .unwrap();
+        stmt.query_map(params![owner_id.unwrap_or("")], |row| {
+            let status_str: String = row.get(1)?;
+            let result_json: Option<String> = row.get(7)?;
+            let simc_input: String = row.get::<_, String>(8).unwrap_or_default();
+            let summary = extract_result_summary(&result_json, &simc_input);
+            let linked_region: Option<String> = row.get(14).ok().flatten();
+            let linked_realm: Option<String> = row.get(15).ok().flatten();
+            let linked_name: Option<String> = row.get(16).ok().flatten();
+            let mut size_bytes = simc_input.len() as u64;
+            for index in [7, 10, 11, 12, 13] {
+                size_bytes += row
+                    .get::<_, Option<String>>(index)?
+                    .as_ref()
+                    .map(String::len)
+                    .unwrap_or(0) as u64;
+            }
+
+            Ok(JobSummary {
+                id: row.get(0)?,
+                status: Self::str_to_status(&status_str),
+                sim_type: row.get(2)?,
+                created_at: row.get(3)?,
+                queue_order: row.get::<_, i64>(18).unwrap_or(0).max(0) as u64,
+                fight_style: row.get(4)?,
+                iterations: row.get::<_, u32>(5)?,
+                error_message: row.get(6)?,
+                player_name: linked_name.clone().or(summary.player_name),
+                player_class: summary.player_class,
+                realm: linked_realm.clone().or(summary.realm),
+                dps: summary.dps,
+                batch_id: row.get(9).ok().flatten(),
+                size_bytes,
+                upgrades: summary.upgrades,
+                downgrades: summary.downgrades,
+                linked_region,
+                linked_realm,
+                linked_name,
+                pinned: row.get::<_, i64>(17).unwrap_or(0) != 0,
+            })
+        })
+        .map(|rows| rows.filter_map(Result::ok).collect())
+        .unwrap_or_default()
+    }
+
+    fn reorder_queue(&self, owner_id: Option<&str>, ordered_ids: &[String]) -> Result<(), String> {
+        let conn = self.conn.lock().unwrap();
+        let current = query_pending_queue(&conn, owner_id)
+            .map_err(|_| "Unable to read the current queue.".to_string())?;
+        let expected: HashSet<&str> = current.iter().map(|(id, _)| id.as_str()).collect();
+        let received: HashSet<&str> = ordered_ids.iter().map(String::as_str).collect();
+        if expected != received || ordered_ids.len() != current.len() {
+            return Err("The queue changed. Refresh and try again.".to_string());
+        }
+
+        let tx = conn
+            .unchecked_transaction()
+            .map_err(|_| "Unable to update the queue.".to_string())?;
+        for ((_, order), ordered_id) in current.iter().zip(ordered_ids) {
+            tx.execute(
+                "UPDATE jobs SET queue_order = ?1 WHERE id = ?2 AND status = 'pending'",
+                params![*order as i64, ordered_id],
+            )
+            .map_err(|_| "Unable to update the queue.".to_string())?;
+        }
+        tx.commit()
+            .map_err(|_| "Unable to commit the queue update.".to_string())
+    }
+
+    fn run_next(&self, owner_id: Option<&str>, job_id: &str) -> Result<(), String> {
+        let current = {
+            let conn = self.conn.lock().unwrap();
+            query_pending_queue(&conn, owner_id)
+                .map_err(|_| "Unable to read the current queue.".to_string())?
+        };
+        let target_index = current
+            .iter()
+            .position(|(id, _)| id == job_id)
+            .ok_or_else(|| "Queued job not found.".to_string())?;
+        if target_index == 0 {
+            return Ok(());
+        }
+        let mut ordered_ids: Vec<String> = current.into_iter().map(|(id, _)| id).collect();
+        let id = ordered_ids.remove(target_index);
+        ordered_ids.insert(0, id);
+        self.reorder_queue(owner_id, &ordered_ids)
+    }
+
+    fn list_pending_jobs(&self) -> Vec<Job> {
+        let ids = {
+            let conn = self.conn.lock().unwrap();
+            let mut stmt = match conn.prepare(
+                "SELECT id FROM jobs WHERE status = 'pending'
+                 ORDER BY queue_order ASC, created_at ASC, id ASC",
+            ) {
+                Ok(stmt) => stmt,
+                Err(_) => return Vec::new(),
+            };
+            stmt.query_map([], |row| row.get::<_, String>(0))
+                .ok()
+                .map(|rows| rows.filter_map(Result::ok).collect::<Vec<_>>())
+                .unwrap_or_default()
+        };
+        ids.into_iter().filter_map(|id| self.get(&id)).collect()
     }
 
     fn update_status(&self, id: &str, status: JobStatus) {
@@ -1063,8 +1235,16 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("migrated html column");
+        let queue_order_column: String = conn
+            .query_row(
+                "SELECT name FROM pragma_table_info('jobs') WHERE name = 'queue_order'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("migrated queue order column");
         assert_eq!(version, SQLITE_SCHEMA_VERSION);
         assert_eq!(html_column, "html_report");
+        assert_eq!(queue_order_column, "queue_order");
     }
 
     fn make_job(
@@ -1096,6 +1276,7 @@ mod tests {
             fight_style: "Patchwerk".to_string(),
             target_error: 0.1,
             created_at: created_at.to_string(),
+            queue_order: 0,
             html_report: None,
             text_output: None,
             batch_id: None,
@@ -1104,6 +1285,44 @@ mod tests {
             linked_name: None,
             pinned,
         }
+    }
+
+    fn pending_job(id: &str, owner_id: &str) -> Job {
+        let mut job = make_job(id, "2026-01-01T00:00:00Z", "mage=\"Tester\"\n", None, false);
+        job.owner_id = owner_id.to_string();
+        job
+    }
+
+    #[test]
+    fn sqlite_queue_order_is_persisted_and_scoped() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let path = dir.path().join("queue.db");
+        let storage = SqliteStorage::new(path.to_string_lossy().as_ref());
+        storage.insert(pending_job("alice-1", "alice"));
+        storage.insert(pending_job("bob-1", "bob"));
+        storage.insert(pending_job("alice-2", "alice"));
+
+        storage
+            .reorder_queue(
+                Some("alice"),
+                &["alice-2".to_string(), "alice-1".to_string()],
+            )
+            .expect("member reorder should succeed");
+        let ids: Vec<String> = storage
+            .list_queue(None)
+            .into_iter()
+            .map(|job| job.id)
+            .collect();
+        assert_eq!(ids, vec!["alice-2", "bob-1", "alice-1"]);
+
+        drop(storage);
+        let reopened = SqliteStorage::new(path.to_string_lossy().as_ref());
+        let ids: Vec<String> = reopened
+            .list_pending_jobs()
+            .into_iter()
+            .map(|job| job.id)
+            .collect();
+        assert_eq!(ids, vec!["alice-2", "bob-1", "alice-1"]);
     }
 
     #[test]

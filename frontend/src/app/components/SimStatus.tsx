@@ -1,7 +1,8 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
-import { Check, Pause, Play, ScrollText } from 'lucide-react';
+import { Check, Clock3, ListOrdered, Pause, Play, ScrollText } from 'lucide-react';
 import { API_URL, pauseSim, resumeSim } from '../lib/api';
 import { formatElapsedCompact, formatEta, formatMegabytes } from '../lib/format';
 
@@ -13,6 +14,7 @@ interface StageTiming {
 interface SimStatusProps {
   status: string;
   progress: number;
+  queuePosition?: number | null;
   progressStage?: string;
   progressDetail?: string;
   createdAt?: string;
@@ -142,22 +144,22 @@ function LogConsole({ lines }: { lines: string[] }) {
 
   return (
     <div className="w-full">
-      <div className="flex items-center justify-between rounded-t-lg border border-b-0 border-border bg-surface px-3 py-1.5">
+      <div className="border-border bg-surface flex items-center justify-between rounded-t-lg border border-b-0 px-3 py-1.5">
         <div className="flex items-center gap-2">
-          <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-gold/60" />
-          <span className="text-sm font-medium uppercase tracking-wider text-zinc-200">
+          <div className="bg-gold/60 h-1.5 w-1.5 animate-pulse rounded-full" />
+          <span className="text-sm font-medium tracking-wider text-zinc-200 uppercase">
             SimC Output
           </span>
         </div>
-        <span className="font-mono text-sm tabular-nums text-zinc-300">{lines.length} lines</span>
+        <span className="font-mono text-sm text-zinc-300 tabular-nums">{lines.length} lines</span>
       </div>
       <div
         ref={containerRef}
         onScroll={handleScroll}
-        className="max-h-[320px] overflow-y-auto rounded-b-lg border border-border bg-[#0c0c0e] p-3 font-mono text-sm leading-[1.7]"
+        className="border-border max-h-[320px] overflow-y-auto rounded-b-lg border bg-[#0c0c0e] p-3 font-mono text-sm leading-[1.7]"
       >
         {lines.map((line, i) => (
-          <div key={i} className={`whitespace-pre-wrap break-all ${classifyLine(line)}`}>
+          <div key={i} className={`break-all whitespace-pre-wrap ${classifyLine(line)}`}>
             {line || '\u00A0'}
           </div>
         ))}
@@ -169,6 +171,7 @@ function LogConsole({ lines }: { lines: string[] }) {
 export default function SimStatus({
   status,
   progress,
+  queuePosition,
   progressStage,
   progressDetail,
   createdAt,
@@ -203,7 +206,9 @@ export default function SimStatus({
   const [displayedStageElapsed, setDisplayedStageElapsed] = useState(activeStageElapsed ?? 0);
   const previousStageRef = useRef(progressStage);
   const displayProgress = useSmoothedProgress(progress);
-  const title = isPaused ? 'Paused' : progressStage || (isPending ? 'Queued' : 'Simulating');
+  const title = isPaused
+    ? 'Paused'
+    : progressStage || (isPending ? 'Queued for simulation' : 'Simulating');
   const hasStages = stagesCompleted && stagesCompleted.length > 0;
   const phaseLogInfo = parseLatestPhaseLog(logLines);
   const remainingSeconds = phaseLogInfo?.remainingSeconds ?? null;
@@ -298,61 +303,96 @@ export default function SimStatus({
     }
   }
 
-  const runningStageElapsed =
-    activeStageElapsed != null ? displayedStageElapsed : elapsedSeconds;
+  const runningStageElapsed = activeStageElapsed != null ? displayedStageElapsed : elapsedSeconds;
 
   return (
     <div className="flex w-full flex-col items-center space-y-6 py-16">
       <div className="relative">
         <div
-          className={`h-12 w-12 rounded-full border-2 border-zinc-800 border-t-gold ${isPaused ? '' : 'animate-spin'}`}
+          className={`flex h-12 w-12 items-center justify-center rounded-full border-2 ${
+            isPending ? 'border-gold/30 bg-gold/[0.06]' : 'border-t-gold border-zinc-800'
+          } ${isPaused ? '' : isPending ? '' : 'animate-spin'}`}
         />
         <div className="absolute inset-0 flex items-center justify-center">
           {isPaused ? (
-            <Pause className="h-4 w-4 text-gold" />
+            <Pause className="text-gold h-4 w-4" />
+          ) : isPending ? (
+            <Clock3 className="text-gold h-4 w-4" strokeWidth={2} />
           ) : (
-            <div className="h-2 w-2 animate-pulse rounded-full bg-gold/60" />
+            <div className="bg-gold/60 h-2 w-2 animate-pulse rounded-full" />
           )}
         </div>
       </div>
 
       <div className="text-center">
         <p className="text-sm font-semibold text-zinc-100">{title}</p>
-        {displayedProgressDetail && (
+        {!isPending && displayedProgressDetail && (
           <p className="mt-1 text-sm text-zinc-300">{displayedProgressDetail}</p>
         )}
       </div>
 
-      <div className="w-full max-w-2xl px-4 sm:px-6">
-        <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-800">
-          <div
-            className="h-full rounded-full bg-gradient-to-r from-gold-dark to-gold transition-all duration-700"
-            style={{ width: `${Math.max(displayProgress, status === 'pending' ? 2 : 5)}%` }}
-          />
+      {isPending ? (
+        <div
+          className="border-gold/25 bg-gold/[0.06] w-full max-w-2xl rounded-2xl border px-4 py-4 sm:px-5"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="flex items-start gap-3">
+            <span className="border-gold/25 bg-gold/10 text-gold mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border">
+              <ListOrdered className="h-4 w-4" strokeWidth={2} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-zinc-100">
+                Waiting for an available SimC slot
+              </p>
+              <p className="mt-1 text-xs leading-5 text-zinc-400">
+                The simulation has not started yet and will begin automatically when its turn
+                arrives.
+              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs">
+                <span className="text-gold font-mono font-semibold">
+                  {queuePosition ? `Queue position #${queuePosition}` : 'Queue position pending'}
+                </span>
+                <span className="text-zinc-600">·</span>
+                <Link href="/queue" className="text-gold font-semibold hover:underline">
+                  Manage queue
+                </Link>
+              </div>
+            </div>
+          </div>
         </div>
-        <div className="mt-3 flex items-center justify-between">
-          <p className="font-mono text-[13px] font-medium text-gold">{displayProgress}%</p>
-          {displayedProfilesetsTotal ? (
-            <p className="text-[12px] text-zinc-400">
-              <span className="font-medium text-zinc-200">
-                {displayedProfilesetsCompleted || 0}
-              </span>{' '}
-              / {displayedProfilesetsTotal} profilesets
-            </p>
-          ) : displayedIterationsTotal && displayedIterationsCompleted !== undefined ? (
-            <p className="text-[12px] text-zinc-400">
-              <span className="font-medium text-zinc-200">{displayedIterationsCompleted}</span> /{' '}
-              {displayedIterationsTotal} iterations
-            </p>
-          ) : null}
+      ) : (
+        <div className="w-full max-w-2xl px-4 sm:px-6">
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-800">
+            <div
+              className="from-gold-dark to-gold h-full rounded-full bg-gradient-to-r transition-all duration-700"
+              style={{ width: `${Math.max(displayProgress, 5)}%` }}
+            />
+          </div>
+          <div className="mt-3 flex items-center justify-between">
+            <p className="text-gold font-mono text-[13px] font-medium">{displayProgress}%</p>
+            {displayedProfilesetsTotal ? (
+              <p className="text-[12px] text-zinc-400">
+                <span className="font-medium text-zinc-200">
+                  {displayedProfilesetsCompleted || 0}
+                </span>{' '}
+                / {displayedProfilesetsTotal} profilesets
+              </p>
+            ) : displayedIterationsTotal && displayedIterationsCompleted !== undefined ? (
+              <p className="text-[12px] text-zinc-400">
+                <span className="font-medium text-zinc-200">{displayedIterationsCompleted}</span> /{' '}
+                {displayedIterationsTotal} iterations
+              </p>
+            ) : null}
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="grid w-full max-w-4xl gap-4 px-4 sm:px-6 md:grid-cols-2">
         {phaseLogInfo && (
-          <div className="min-w-0 rounded-xl border border-border bg-surface p-4 shadow-sm">
+          <div className="border-border bg-surface min-w-0 rounded-xl border p-4 shadow-sm">
             <div className="flex items-center justify-between gap-3">
-              <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+              <span className="text-[10px] font-semibold tracking-widest text-zinc-500 uppercase">
                 Current {phaseLogInfo.phase}
               </span>
               <span
@@ -367,17 +407,17 @@ export default function SimStatus({
                 phaseLogInfo.simulationTotal !== undefined &&
                 phaseLogInfo.simulationPercent !== undefined && (
                   <div className="col-span-2 flex flex-col items-center">
-                    <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+                    <span className="text-[10px] font-semibold tracking-widest text-zinc-500 uppercase">
                       SimC Progress
                     </span>
-                    <span className="mt-1 whitespace-nowrap font-mono text-[12px] text-zinc-200">
+                    <span className="mt-1 font-mono text-[12px] whitespace-nowrap text-zinc-200">
                       {`${phaseLogInfo.simulationCompleted}/${phaseLogInfo.simulationTotal} (${phaseLogInfo.simulationPercent.toFixed(3)}%)`}
                     </span>
                   </div>
                 )}
               {phaseLogInfo.mean !== undefined && (
                 <div className="flex flex-col items-center">
-                  <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+                  <span className="text-[10px] font-semibold tracking-widest text-zinc-500 uppercase">
                     Mean
                   </span>
                   <span className="mt-1 font-mono text-[13px] text-zinc-200">
@@ -387,7 +427,7 @@ export default function SimStatus({
               )}
               {phaseLogInfo.errorPercent !== undefined && (
                 <div className="flex flex-col items-center">
-                  <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+                  <span className="text-[10px] font-semibold tracking-widest text-zinc-500 uppercase">
                     Error
                   </span>
                   <span className="mt-1 font-mono text-[13px] text-zinc-200">
@@ -401,10 +441,10 @@ export default function SimStatus({
 
         {isRunning && (
           <div
-            className={`flex w-full min-w-0 flex-wrap justify-center gap-x-6 gap-y-3 rounded-xl border border-border bg-surface p-4 shadow-sm ${phaseLogInfo ? '' : 'md:col-span-2'}`}
+            className={`border-border bg-surface flex w-full min-w-0 flex-wrap justify-center gap-x-6 gap-y-3 rounded-xl border p-4 shadow-sm ${phaseLogInfo ? '' : 'md:col-span-2'}`}
           >
             <div className="flex flex-col items-center">
-              <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+              <span className="text-[10px] font-semibold tracking-widest text-zinc-500 uppercase">
                 Elapsed
               </span>
               <span className="mt-1 font-mono text-[13px] text-zinc-200">
@@ -413,7 +453,7 @@ export default function SimStatus({
             </div>
             {remainingSeconds !== null && (
               <div className="flex flex-col items-center">
-                <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+                <span className="text-[10px] font-semibold tracking-widest text-zinc-500 uppercase">
                   Remaining
                 </span>
                 <span className="mt-1 font-mono text-[13px] text-zinc-200">
@@ -423,7 +463,7 @@ export default function SimStatus({
             )}
             {cpuPct !== undefined && cpuPct > 0 && (
               <div className="flex flex-col items-center">
-                <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+                <span className="text-[10px] font-semibold tracking-widest text-zinc-500 uppercase">
                   CPU Usage
                 </span>
                 <span className="mt-1 font-mono text-[13px] text-zinc-200">
@@ -433,7 +473,7 @@ export default function SimStatus({
             )}
             {cpuCores !== undefined && cpuCores > 0 && (
               <div className="flex flex-col items-center">
-                <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+                <span className="text-[10px] font-semibold tracking-widest text-zinc-500 uppercase">
                   Cores
                 </span>
                 <span className="mt-1 font-mono text-[13px] text-zinc-200">{cpuCores}</span>
@@ -441,7 +481,7 @@ export default function SimStatus({
             )}
             {memBytes !== undefined && memBytes > 0 && (
               <div className="flex flex-col items-center">
-                <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+                <span className="text-[10px] font-semibold tracking-widest text-zinc-500 uppercase">
                   Memory
                 </span>
                 <span className="mt-1 font-mono text-[13px] text-zinc-200">
@@ -451,7 +491,7 @@ export default function SimStatus({
             )}
             {displayedIterationsTotal && (
               <div className="flex flex-col items-center">
-                <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+                <span className="text-[10px] font-semibold tracking-widest text-zinc-500 uppercase">
                   Iterations
                 </span>
                 <span className="mt-1 font-mono text-[13px] text-zinc-200">
@@ -463,7 +503,7 @@ export default function SimStatus({
             )}
             {fightStyle && (
               <div className="flex flex-col items-center">
-                <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+                <span className="text-[10px] font-semibold tracking-widest text-zinc-500 uppercase">
                   Style
                 </span>
                 <span className="mt-1 text-[13px] text-zinc-200">{fightStyle}</span>
@@ -557,7 +597,7 @@ export default function SimStatus({
             <div className="flex items-center gap-2">
               <div className="flex h-3 w-3 shrink-0 items-center justify-center">
                 <div
-                  className={`h-1.5 w-1.5 rounded-full bg-gold ${isPaused ? '' : 'animate-pulse'}`}
+                  className={`bg-gold h-1.5 w-1.5 rounded-full ${isPaused ? '' : 'animate-pulse'}`}
                 />
               </div>
               <span className="text-sm text-zinc-300">

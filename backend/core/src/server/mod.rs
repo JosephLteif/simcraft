@@ -929,6 +929,13 @@ pub async fn start_with_storage_bind_options_and_simc_runtime(
             jwt_secret,
         )));
 
+        helpers::recover_pending_jobs(
+            store_data.get_ref().clone(),
+            auth_state.get_ref().clone(),
+            simc_data.get_ref().clone(),
+            log_data.get_ref().clone(),
+        );
+
         let sync_state = web::Data::new(Arc::new(data_sync::DataSyncState::new()));
 
         // For historical/trait reasons, we still provide a web::Data<Option<Arc<BlizzardAuthState>>>
@@ -1224,6 +1231,10 @@ pub async fn start_with_storage_bind_options_and_simc_runtime(
                     web::post().to(job_handlers::cancel_sim),
                 )
                 .route(
+                    "/api/sim/{id}/run-next",
+                    web::post().to(job_handlers::run_next),
+                )
+                .route(
                     "/api/sim/{id}/pause",
                     web::post().to(job_handlers::pause_sim),
                 )
@@ -1413,6 +1424,11 @@ pub async fn start_with_storage_bind_options_and_simc_runtime(
                     web::get().to(game_data_handlers::get_talent_tree),
                 )
                 .route("/api/sims", web::get().to(job_handlers::list_sims))
+                .route("/api/queue", web::get().to(job_handlers::get_queue))
+                .route(
+                    "/api/queue/reorder",
+                    web::post().to(job_handlers::reorder_queue),
+                )
                 .route("/api/config", web::get().to(get_config))
                 .route("/api/config", web::post().to(update_config))
                 .route(

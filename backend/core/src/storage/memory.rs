@@ -42,8 +42,17 @@ impl MemoryStorage {
 
 impl JobStorage for MemoryStorage {
     fn insert(&self, job: Job) {
+        let mut job = job;
         let owner_id = job.owner_id.clone();
         let mut jobs = self.jobs.lock().unwrap();
+        if job.queue_order == 0 {
+            job.queue_order = jobs
+                .values()
+                .map(|existing| existing.queue_order)
+                .max()
+                .unwrap_or(0)
+                .saturating_add(1);
+        }
         jobs.insert(job.id.clone(), job);
         let limit = *self.max_jobs.lock().unwrap();
         if jobs.values().filter(|job| job.owner_id == owner_id).count() > limit {
@@ -132,6 +141,7 @@ impl JobStorage for MemoryStorage {
                 status: j.status.clone(),
                 sim_type: j.sim_type.clone(),
                 created_at: j.created_at.clone(),
+                queue_order: j.queue_order,
                 fight_style: j.fight_style.clone(),
                 iterations: j.iterations,
                 error_message: j.error_message.clone(),
@@ -150,6 +160,164 @@ impl JobStorage for MemoryStorage {
             });
         }
         results
+    }
+
+    fn list_queue(&self, owner_id: Option<&str>) -> Vec<JobSummary> {
+        let jobs = self.jobs.lock().unwrap();
+        let mut entries: Vec<&Job> = jobs
+            .values()
+            .filter(|job| {
+                owner_id.is_none_or(|owner| job.owner_id == owner)
+                    && matches!(
+                        job.status,
+                        JobStatus::Pending | JobStatus::Running | JobStatus::Paused
+                    )
+            })
+            .collect();
+        entries.sort_by(|a, b| {
+            let status_rank = |job: &Job| match job.status {
+                JobStatus::Pending => 0,
+                JobStatus::Running => 1,
+                JobStatus::Paused => 2,
+                _ => 3,
+            };
+            status_rank(a)
+                .cmp(&status_rank(b))
+                .then_with(|| a.queue_order.cmp(&b.queue_order))
+                .then_with(|| a.created_at.cmp(&b.created_at))
+                .then_with(|| a.id.cmp(&b.id))
+        });
+
+        entries
+            .into_iter()
+            .map(|job| {
+                let summary = extract_result_summary(&job.result_json, &job.simc_input);
+                let linked_region = job.linked_region.clone();
+                let linked_realm = job.linked_realm.clone();
+                let linked_name = job.linked_name.clone();
+                JobSummary {
+                    id: job.id.clone(),
+                    status: job.status.clone(),
+                    sim_type: job.sim_type.clone(),
+                    created_at: job.created_at.clone(),
+                    queue_order: job.queue_order,
+                    fight_style: job.fight_style.clone(),
+                    iterations: job.iterations,
+                    error_message: job.error_message.clone(),
+                    player_name: linked_name.clone().or(summary.player_name),
+                    player_class: summary.player_class,
+                    realm: linked_realm.clone().or(summary.realm),
+                    dps: summary.dps,
+                    batch_id: job.batch_id.clone(),
+                    size_bytes: job.estimate_size(),
+                    upgrades: summary.upgrades,
+                    downgrades: summary.downgrades,
+                    linked_region,
+                    linked_realm,
+                    linked_name,
+                    pinned: job.pinned,
+                }
+            })
+            .collect()
+    }
+
+    fn reorder_queue(&self, owner_id: Option<&str>, ordered_ids: &[String]) -> Result<(), String> {
+        let mut jobs = self.jobs.lock().unwrap();
+        let mut current: Vec<(String, u64, String)> = jobs
+            .values()
+            .filter(|job| {
+                owner_id.is_none_or(|owner| job.owner_id == owner)
+                    && job.status == JobStatus::Pending
+            })
+            .map(|job| (job.id.clone(), job.queue_order, job.created_at.clone()))
+            .collect();
+        current.sort_by(|a, b| {
+            a.1.cmp(&b.1)
+                .then_with(|| a.2.cmp(&b.2))
+                .then_with(|| a.0.cmp(&b.0))
+        });
+        let expected: std::collections::HashSet<&str> =
+            current.iter().map(|(id, _, _)| id.as_str()).collect();
+        let received: std::collections::HashSet<&str> =
+            ordered_ids.iter().map(String::as_str).collect();
+        if expected != received || ordered_ids.len() != current.len() {
+            return Err("The queue changed. Refresh and try again.".to_string());
+        }
+
+        let slots: Vec<u64> = current.iter().map(|(_, order, _)| *order).collect();
+        for (id, order) in ordered_ids.iter().zip(slots) {
+            jobs.get_mut(id)
+                .ok_or_else(|| "A queued job no longer exists.".to_string())?
+                .queue_order = order;
+        }
+        Ok(())
+    }
+
+    fn run_next(&self, owner_id: Option<&str>, job_id: &str) -> Result<(), String> {
+        let mut jobs = self.jobs.lock().unwrap();
+        jobs.get(job_id)
+            .filter(|job| {
+                job.status == JobStatus::Pending
+                    && owner_id.is_none_or(|owner| job.owner_id == owner)
+            })
+            .map(|job| job.queue_order)
+            .ok_or_else(|| "Queued job not found.".to_string())?;
+        let mut current: Vec<(String, u64, String)> = jobs
+            .values()
+            .filter(|job| {
+                job.status == JobStatus::Pending
+                    && owner_id.is_none_or(|owner| job.owner_id == owner)
+            })
+            .map(|job| (job.id.clone(), job.queue_order, job.created_at.clone()))
+            .collect();
+        current.sort_by(|a, b| {
+            a.1.cmp(&b.1)
+                .then_with(|| a.2.cmp(&b.2))
+                .then_with(|| a.0.cmp(&b.0))
+        });
+        let target_index = current
+            .iter()
+            .position(|(id, _, _)| id == job_id)
+            .ok_or_else(|| "Queued job not found.".to_string())?;
+        if target_index == 0 {
+            return Ok(());
+        }
+        let mut ordered_ids: Vec<String> = current.into_iter().map(|(id, _, _)| id).collect();
+        let id = ordered_ids.remove(target_index);
+        ordered_ids.insert(0, id);
+        let mut slots: Vec<u64> = jobs
+            .values()
+            .filter(|job| {
+                job.status == JobStatus::Pending
+                    && owner_id.is_none_or(|owner| job.owner_id == owner)
+            })
+            .map(|job| job.queue_order)
+            .collect();
+        slots.sort_unstable();
+        for (id, order) in ordered_ids.iter().zip(slots) {
+            jobs.get_mut(id)
+                .ok_or_else(|| "A queued job no longer exists.".to_string())?
+                .queue_order = order;
+        }
+        Ok(())
+    }
+
+    fn list_pending_jobs(&self) -> Vec<Job> {
+        let mut jobs: Vec<Job> = self
+            .jobs
+            .lock()
+            .unwrap()
+            .values()
+            .filter(|job| job.status == JobStatus::Pending)
+            .cloned()
+            .collect();
+        jobs.sort_by(|a, b| {
+            a.queue_order
+                .cmp(&b.queue_order)
+                .then_with(|| a.created_at.cmp(&b.created_at))
+                .then_with(|| a.id.cmp(&b.id))
+        });
+        jobs
     }
 
     fn update_status(&self, id: &str, status: JobStatus) {
@@ -530,6 +698,7 @@ mod tests {
             fight_style: "Patchwerk".to_string(),
             target_error: 0.1,
             created_at: created_at.to_string(),
+            queue_order: 0,
             html_report: None,
             text_output: None,
             batch_id: None,
@@ -538,6 +707,103 @@ mod tests {
             linked_name,
             pinned,
         }
+    }
+
+    fn pending_job(id: &str, owner_id: &str) -> Job {
+        let mut job = Job::new(
+            format!("mage=\"{id}\"\nserver=illidan\n"),
+            "quick".to_string(),
+            1000,
+            "Patchwerk".to_string(),
+            0.1,
+        );
+        job.id = id.to_string();
+        job.owner_id = owner_id.to_string();
+        job
+    }
+
+    #[test]
+    fn queue_reorder_preserves_other_owners_and_run_next_scope() {
+        let storage = MemoryStorage::new();
+        storage.insert(pending_job("alice-1", "alice"));
+        storage.insert(pending_job("bob-1", "bob"));
+        storage.insert(pending_job("alice-2", "alice"));
+
+        storage
+            .reorder_queue(
+                Some("alice"),
+                &["alice-2".to_string(), "alice-1".to_string()],
+            )
+            .expect("member reorder should succeed");
+        let all_ids: Vec<String> = storage
+            .list_queue(None)
+            .into_iter()
+            .map(|job| job.id)
+            .collect();
+        assert_eq!(all_ids, vec!["alice-2", "bob-1", "alice-1"]);
+
+        storage
+            .run_next(Some("alice"), "alice-1")
+            .expect("member run-next should succeed");
+        let all_ids: Vec<String> = storage
+            .list_queue(None)
+            .into_iter()
+            .map(|job| job.id)
+            .collect();
+        assert_eq!(all_ids, vec!["alice-1", "bob-1", "alice-2"]);
+
+        storage
+            .run_next(None, "bob-1")
+            .expect("admin run-next should succeed");
+        let all_ids: Vec<String> = storage
+            .list_queue(None)
+            .into_iter()
+            .map(|job| job.id)
+            .collect();
+        assert_eq!(all_ids, vec!["bob-1", "alice-1", "alice-2"]);
+    }
+
+    #[test]
+    fn queue_ties_use_creation_time_and_id_as_stable_tiebreakers() {
+        let storage = MemoryStorage::new();
+        let mut later = pending_job("z-job", "alice");
+        later.queue_order = 10;
+        later.created_at = "2026-01-02T00:00:00Z".to_string();
+        storage.insert(later);
+
+        let mut earlier = pending_job("a-job", "alice");
+        earlier.queue_order = 10;
+        earlier.created_at = "2026-01-01T00:00:00Z".to_string();
+        storage.insert(earlier);
+
+        let ids: Vec<String> = storage
+            .list_queue(Some("alice"))
+            .into_iter()
+            .map(|job| job.id)
+            .collect();
+        assert_eq!(ids, vec!["a-job", "z-job"]);
+    }
+
+    #[test]
+    fn paused_jobs_keep_their_queue_order_when_resumed() {
+        let storage = MemoryStorage::new();
+        storage.insert(pending_job("first", "alice"));
+        storage.insert(pending_job("second", "alice"));
+        let original_order = storage.get("first").expect("first job").queue_order;
+
+        storage.update_status("first", JobStatus::Paused);
+        storage.update_status("first", JobStatus::Pending);
+
+        let resumed = storage.get("first").expect("resumed job");
+        assert_eq!(resumed.queue_order, original_order);
+        assert_eq!(
+            storage
+                .list_queue(Some("alice"))
+                .into_iter()
+                .map(|job| job.id)
+                .collect::<Vec<_>>(),
+            vec!["first", "second"]
+        );
     }
 
     #[test]

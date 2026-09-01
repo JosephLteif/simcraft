@@ -31,6 +31,13 @@ static SYSINFO: Lazy<Mutex<System>> = Lazy::new(|| Mutex::new(System::new_all())
 struct AdmissionState {
     limit: usize,
     active: usize,
+    waiting: HashMap<String, AdmissionWaiter>,
+    next_sequence: u64,
+}
+
+struct AdmissionWaiter {
+    queue_order: u64,
+    sequence: u64,
 }
 
 struct SimulationAdmission {
@@ -44,6 +51,8 @@ impl SimulationAdmission {
             state: Mutex::new(AdmissionState {
                 limit: limit.max(1),
                 active: 0,
+                waiting: HashMap::new(),
+                next_sequence: 0,
             }),
             notify: tokio::sync::Notify::new(),
         }
@@ -58,23 +67,88 @@ impl SimulationAdmission {
         self.notify.notify_waiters();
     }
 
-    async fn acquire(self: &Arc<Self>) -> SimulationAdmissionGuard {
+    async fn acquire_job(
+        self: &Arc<Self>,
+        job_id: &str,
+        queue_order: u64,
+    ) -> SimulationAdmissionGuard {
         loop {
             let notified = self.notify.notified();
             tokio::pin!(notified);
             notified.as_mut().enable();
 
-            {
+            let granted = {
                 let mut state = self.state.lock().unwrap();
-                if state.active < state.limit {
-                    state.active += 1;
-                    return SimulationAdmissionGuard {
-                        admission: self.clone(),
-                    };
-                }
-            }
+                let sequence = state.next_sequence;
+                state.next_sequence = state.next_sequence.saturating_add(1);
+                state
+                    .waiting
+                    .entry(job_id.to_string())
+                    .and_modify(|waiter| waiter.queue_order = queue_order)
+                    .or_insert(AdmissionWaiter {
+                        queue_order,
+                        sequence,
+                    });
 
+                let next_job = state
+                    .waiting
+                    .iter()
+                    .min_by_key(|(_, waiter)| (waiter.queue_order, waiter.sequence))
+                    .map(|(id, _)| id.as_str());
+                if state.active < state.limit && next_job == Some(job_id) {
+                    state.waiting.remove(job_id);
+                    state.active += 1;
+                    true
+                } else {
+                    false
+                }
+            };
+            if granted {
+                return SimulationAdmissionGuard {
+                    admission: self.clone(),
+                };
+            }
             notified.await;
+        }
+    }
+
+    async fn acquire_job_cancellable(
+        self: &Arc<Self>,
+        job_id: &str,
+        queue_order: u64,
+        control: Arc<SimulationControl>,
+    ) -> std::result::Result<SimulationAdmissionGuard, String> {
+        let admission = self.acquire_job(job_id, queue_order);
+        tokio::pin!(admission);
+        tokio::select! {
+            guard = &mut admission => Ok(guard),
+            _ = control.wait_until_cancelled() => {
+                self.remove_waiter(job_id);
+                Err("Job cancelled".to_string())
+            }
+        }
+    }
+
+    fn remove_waiter(&self, job_id: &str) {
+        let removed = self.state.lock().unwrap().waiting.remove(job_id).is_some();
+        if removed {
+            self.notify.notify_waiters();
+        }
+    }
+
+    fn update_waiter_order(&self, job_id: &str, queue_order: u64) {
+        let updated = self
+            .state
+            .lock()
+            .unwrap()
+            .waiting
+            .get_mut(job_id)
+            .map(|waiter| {
+                waiter.queue_order = queue_order;
+            })
+            .is_some();
+        if updated {
+            self.notify.notify_waiters();
         }
     }
 
@@ -105,6 +179,14 @@ pub fn simulation_concurrency_limit() -> usize {
 
 pub fn set_simulation_concurrency_limit(limit: usize) {
     SIMC_ADMISSION.set_limit(limit);
+}
+
+pub fn update_simulation_queue_order(job_id: &str, queue_order: u64) {
+    SIMC_ADMISSION.update_waiter_order(job_id, queue_order);
+}
+
+pub fn remove_simulation_queue_waiter(job_id: &str) {
+    SIMC_ADMISSION.remove_waiter(job_id);
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -309,6 +391,16 @@ impl SimulationControl {
             }
         }
     }
+
+    async fn wait_until_cancelled(&self) {
+        loop {
+            let notified = self.notify.notified();
+            if self.is_cancelled() {
+                return;
+            }
+            notified.await;
+        }
+    }
 }
 
 enum ProcessAttachAction {
@@ -421,6 +513,7 @@ pub fn cleanup_cancelled_job(job_id: &str) {
 
 pub fn kill_job(job_id: &str) -> bool {
     CANCELLED_JOBS.lock().unwrap().insert(job_id.to_string());
+    SIMC_ADMISSION.remove_waiter(job_id);
     if let Some(control) = JOB_CONTROLS.lock().unwrap().get(job_id).cloned() {
         control.cancel();
     }
@@ -627,15 +720,24 @@ fn timeout_for_next_output_with_idle(
 
 pub async fn acquire_simulation_slot(
     job_id: &str,
+    queue_order: u64,
 ) -> std::result::Result<SimulationAdmissionGuard, String> {
     let control = get_or_register_job_control(job_id);
     loop {
         control.wait_until_runnable().await?;
 
-        let guard =
-            tokio::time::timeout(Duration::from_millis(250), SIMC_ADMISSION.acquire()).await;
-        let Ok(guard) = guard else {
-            continue;
+        let guard = tokio::time::timeout(
+            Duration::from_millis(250),
+            SIMC_ADMISSION.acquire_job_cancellable(job_id, queue_order, control.clone()),
+        )
+        .await;
+        let guard = match guard {
+            Ok(Ok(guard)) => guard,
+            Ok(Err(error)) => return Err(error),
+            Err(_) => {
+                SIMC_ADMISSION.remove_waiter(job_id);
+                continue;
+            }
         };
 
         if control.is_paused() {
@@ -1475,12 +1577,12 @@ mod tests {
     #[tokio::test]
     async fn simulation_admission_limit_can_be_increased_while_a_job_is_running() {
         let admission = Arc::new(SimulationAdmission::new(1));
-        let first = admission.acquire().await;
+        let first = admission.acquire_job("limit-first", 1).await;
         let (acquired_tx, acquired_rx) = tokio::sync::oneshot::channel();
         let waiting_admission = admission.clone();
 
         let waiting = tokio::spawn(async move {
-            let _second = waiting_admission.acquire().await;
+            let _second = waiting_admission.acquire_job("limit-second", 2).await;
             acquired_tx
                 .send(())
                 .expect("acquisition receiver should exist");
@@ -1495,6 +1597,73 @@ mod tests {
 
         drop(first);
         waiting.await.expect("waiting job should finish");
+    }
+
+    #[tokio::test]
+    async fn simulation_admission_uses_persisted_queue_order() {
+        let admission = Arc::new(SimulationAdmission::new(1));
+        let first = admission.acquire_job("queue-first", 100).await;
+        let (low_started_tx, low_started_rx) = tokio::sync::oneshot::channel();
+        let (release_tx, release_rx) = tokio::sync::oneshot::channel();
+        let low_admission = admission.clone();
+        let low = tokio::spawn(async move {
+            let _guard = low_admission.acquire_job("queue-low", 1).await;
+            low_started_tx.send(()).expect("low-priority test receiver");
+            release_rx.await.expect("low-priority release signal");
+        });
+
+        let (high_started_tx, high_started_rx) = tokio::sync::oneshot::channel();
+        let high_admission = admission.clone();
+        let high = tokio::spawn(async move {
+            let _guard = high_admission.acquire_job("queue-high", 50).await;
+            let _ = high_started_tx.send(());
+        });
+
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        drop(first);
+        tokio::time::timeout(Duration::from_secs(1), low_started_rx)
+            .await
+            .expect("the lowest queue order should acquire first")
+            .expect("low-order job should start");
+        assert!(
+            tokio::time::timeout(Duration::from_millis(50), high_started_rx)
+                .await
+                .is_err()
+        );
+        release_tx.send(()).expect("release signal receiver");
+        high.await.expect("high-order job should finish");
+        low.await.expect("low-order job should finish");
+    }
+
+    #[tokio::test]
+    async fn cancelling_a_waiting_job_does_not_block_following_jobs() {
+        let admission = Arc::new(SimulationAdmission::new(1));
+        let first = admission.acquire_job("cancel-first", 1).await;
+        let cancelled_control = Arc::new(SimulationControl::new("cancel-waiting"));
+        let waiting_admission = admission.clone();
+        let waiting_control = cancelled_control.clone();
+        let waiting = tokio::spawn(async move {
+            waiting_admission
+                .acquire_job_cancellable("cancel-waiting", 2, waiting_control)
+                .await
+        });
+
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        cancelled_control.cancel();
+        assert!(waiting.await.expect("cancelled waiter should finish").is_err());
+
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let next_admission = admission.clone();
+        let next = tokio::spawn(async move {
+            let _guard = next_admission.acquire_job("cancel-next", 3).await;
+            started_tx.send(()).expect("next job receiver");
+        });
+        drop(first);
+        tokio::time::timeout(Duration::from_secs(1), started_rx)
+            .await
+            .expect("a cancelled waiter must not block the next job")
+            .expect("next job should start");
+        next.await.expect("next job should finish");
     }
 
     #[tokio::test]

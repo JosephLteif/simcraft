@@ -14,6 +14,7 @@ Simulation runs now support a configurable parallel-job limit, with clear queue 
 
 - Set the number of parallel simulations from Settings > Simulation Performance; Docker-hosted changes are restricted to administrators.
 - Monitor running and queued simulations from the global activity card, including from a simulation's own result page.
+- Queued simulations now clearly explain that SimC has not started, show the current queue position, and link directly to queue management instead of displaying misleading zero-progress details.
 - Cancel queued or running simulations directly from the activity card.
 - See the current queued-job count on the dashboard, which refreshes automatically while simulations are in flight.
 

@@ -498,6 +498,53 @@ export async function listSims(params?: {
   return fetchJson<SimSummary[]>(`${API_URL}/api/sims${qs ? '?' + qs : ''}`);
 }
 
+export type QueueScope = 'mine' | 'all';
+
+export interface QueueJob {
+  id: string;
+  status: 'pending' | 'running' | 'paused';
+  sim_type: string;
+  created_at: string;
+  fight_style: string;
+  iterations: number;
+  player_name?: string | null;
+  player_class?: string | null;
+  realm?: string | null;
+  batch_id?: string | null;
+  queue_position: number | null;
+  progress: number;
+  progress_stage?: string | null;
+  progress_detail?: string | null;
+  owner?: string | null;
+}
+
+export interface QueueResponse {
+  jobs: QueueJob[];
+  queued_count: number;
+  running_count: number;
+  max_parallel_jobs: number;
+  scope: QueueScope;
+  can_manage_all: boolean;
+}
+
+export async function getQueue(scope?: QueueScope): Promise<QueueResponse> {
+  const query = scope ? `?scope=${scope}` : '';
+  return fetchJson<QueueResponse>(`${API_URL}/api/queue${query}`);
+}
+
+export async function reorderQueue(jobIds: string[], scope: QueueScope): Promise<void> {
+  await fetchJson(`${API_URL}/api/queue/reorder`, {
+    method: 'POST',
+    body: JSON.stringify({ job_ids: jobIds, scope }),
+  });
+}
+
+export async function runNextSimulation(id: string, scope: QueueScope): Promise<void> {
+  await fetchJson(`${API_URL}/api/sim/${encodeURIComponent(id)}/run-next?scope=${scope}`, {
+    method: 'POST',
+  });
+}
+
 /** Get current system CPU usage (Desktop only) */
 export async function getSystemStats(): Promise<SystemStats> {
   return fetchJson<SystemStats>(`${API_URL}/api/system-stats`);

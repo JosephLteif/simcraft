@@ -17,6 +17,7 @@ The format is based on Keep a Changelog and this project uses semantic versionin
 
 ### Changed
 
+- Queued simulations now clearly explain that SimC has not started, show the current queue position, and link directly to queue management instead of displaying misleading zero-progress details.
 - Result pages now place a clearer analysis section at the bottom with an estimated DPS distribution, percentile markers, confidence intervals, and uncertainty-aware comparison guidance.
 - Top Gear deltas now show whether their difference is meaningful, within simulation noise, or needs more data; stat plots include a baseline and stat weights show ranked relative values.
 - Result Insights starts collapsed by default so the primary result content stays focused until deeper analysis is requested.

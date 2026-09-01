@@ -173,6 +173,159 @@ pub(super) async fn list_sims(
     HttpResponse::Ok().json(summaries)
 }
 
+#[derive(Debug, Deserialize, Default)]
+pub struct QueueScopeQuery {
+    pub scope: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ReorderQueueRequest {
+    pub job_ids: Vec<String>,
+    #[serde(default)]
+    pub scope: Option<String>,
+}
+
+fn request_is_admin(
+    req: &HttpRequest,
+    auth: &crate::server::auth_handlers::BlizzardAuthState,
+    store: &dyn JobStorage,
+) -> bool {
+    crate::server::auth_handlers::verify_active_session(req, auth, store)
+        .is_some_and(|claims| claims.role == "admin")
+}
+
+fn queue_item_status(status: &JobStatus) -> &'static str {
+    match status {
+        JobStatus::Pending => "pending",
+        JobStatus::Running => "running",
+        JobStatus::Paused => "paused",
+        JobStatus::Done => "done",
+        JobStatus::Failed => "failed",
+        JobStatus::Cancelled => "cancelled",
+    }
+}
+
+pub(super) async fn get_queue(
+    req: HttpRequest,
+    auth: web::Data<Arc<crate::server::auth_handlers::BlizzardAuthState>>,
+    query: web::Query<QueueScopeQuery>,
+    store: web::Data<Arc<dyn JobStorage>>,
+) -> HttpResponse {
+    let owner_id = owner_id(&req, &auth);
+    let admin = request_is_admin(&req, auth.get_ref(), store.get_ref().as_ref());
+    let all = admin && query.scope.as_deref() != Some("mine");
+    let summaries = store.list_queue(if all { None } else { Some(owner_id.as_str()) });
+    let mut queue_position = 0usize;
+    let jobs: Vec<Value> = summaries
+        .into_iter()
+        .map(|summary| {
+            let job = store.get(&summary.id);
+            let position = if summary.status == JobStatus::Pending {
+                queue_position += 1;
+                Some(queue_position)
+            } else {
+                None
+            };
+            let owner = if all {
+                job.as_ref().and_then(|job| {
+                    if job.owner_id == crate::server::auth_handlers::LOCAL_GUEST_USER_ID {
+                        Some("Local Guest".to_string())
+                    } else {
+                        store.get_user(&job.owner_id).map(|user| user.battletag)
+                    }
+                })
+            } else {
+                None
+            };
+            json!({
+                "id": summary.id,
+                "status": queue_item_status(&summary.status),
+                "sim_type": summary.sim_type,
+                "created_at": summary.created_at,
+                "fight_style": summary.fight_style,
+                "iterations": summary.iterations,
+                "player_name": summary.player_name,
+                "player_class": summary.player_class,
+                "realm": summary.realm,
+                "batch_id": summary.batch_id,
+                "queue_position": position,
+                "progress": job.as_ref().map(|job| job.progress_pct).unwrap_or(0),
+                "progress_stage": job.as_ref().and_then(|job| job.progress_stage.clone()),
+                "progress_detail": job.as_ref().and_then(|job| job.progress_detail.clone()),
+                "owner": owner,
+            })
+        })
+        .collect();
+    let queued_count = jobs
+        .iter()
+        .filter(|job| job.get("status").and_then(Value::as_str) == Some("pending"))
+        .count();
+    let running_count = jobs
+        .iter()
+        .filter(|job| job.get("status").and_then(Value::as_str) == Some("running"))
+        .count();
+
+    HttpResponse::Ok().json(json!({
+        "jobs": jobs,
+        "queued_count": queued_count,
+        "running_count": running_count,
+        "max_parallel_jobs": store.get_max_parallel_jobs(),
+        "scope": if all { "all" } else { "mine" },
+        "can_manage_all": admin,
+    }))
+}
+
+pub(super) async fn reorder_queue(
+    req: HttpRequest,
+    auth: web::Data<Arc<crate::server::auth_handlers::BlizzardAuthState>>,
+    payload: web::Json<ReorderQueueRequest>,
+    store: web::Data<Arc<dyn JobStorage>>,
+) -> HttpResponse {
+    let owner_id = owner_id(&req, &auth);
+    let admin = request_is_admin(&req, auth.get_ref(), store.get_ref().as_ref());
+    let all = admin && payload.scope.as_deref() != Some("mine");
+    let scope = if all { None } else { Some(owner_id.as_str()) };
+    match store.reorder_queue(scope, &payload.job_ids) {
+        Ok(()) => {
+            for job in store.list_queue(scope) {
+                if job.status == JobStatus::Pending {
+                    simc_runner::update_simulation_queue_order(&job.id, job.queue_order);
+                }
+            }
+            HttpResponse::Ok().json(json!({ "status": "ok" }))
+        }
+        Err(detail) if detail.starts_with("The queue changed") => {
+            HttpResponse::Conflict().json(json!({ "detail": detail }))
+        }
+        Err(detail) => HttpResponse::BadRequest().json(json!({ "detail": detail })),
+    }
+}
+
+pub(super) async fn run_next(
+    req: HttpRequest,
+    auth: web::Data<Arc<crate::server::auth_handlers::BlizzardAuthState>>,
+    path: web::Path<String>,
+    query: web::Query<QueueScopeQuery>,
+    store: web::Data<Arc<dyn JobStorage>>,
+) -> HttpResponse {
+    let owner_id = owner_id(&req, &auth);
+    let admin = request_is_admin(&req, auth.get_ref(), store.get_ref().as_ref());
+    let all = admin && query.scope.as_deref() != Some("mine");
+    let scope = if all { None } else { Some(owner_id.as_str()) };
+    let job_id = path.into_inner();
+    match store.run_next(scope, &job_id) {
+        Ok(()) => {
+            for job in store.list_queue(scope) {
+                if job.status == JobStatus::Pending {
+                    simc_runner::update_simulation_queue_order(&job.id, job.queue_order);
+                }
+            }
+            HttpResponse::Ok().json(json!({ "status": "ok" }))
+        }
+        Err(detail) => HttpResponse::NotFound().json(json!({ "detail": detail })),
+    }
+}
+
 pub(super) async fn list_related_sims(
     req: HttpRequest,
     auth: web::Data<Arc<crate::server::auth_handlers::BlizzardAuthState>>,
@@ -297,6 +450,16 @@ pub(super) async fn get_sim_status(
 
     let control_available = simc_runner::control_status(&job_id).is_some();
     let active_stage_elapsed = job.active_stage_elapsed_seconds();
+    let queue_position = if job.status == JobStatus::Pending {
+        store
+            .list_queue(Some(&job.owner_id))
+            .into_iter()
+            .filter(|summary| summary.status == JobStatus::Pending)
+            .position(|summary| summary.id == job.id)
+            .map(|position| position + 1)
+    } else {
+        None
+    };
 
     HttpResponse::Ok().json(json!({
         "id": job.id,
@@ -311,6 +474,7 @@ pub(super) async fn get_sim_status(
         "stages_completed": job.stages_completed,
         "stage_timings": job.stage_timings,
         "active_stage_elapsed": active_stage_elapsed,
+        "queue_position": queue_position,
         "result": parsed_result,
         "error": job.error_message,
         "iterations": job.iterations,
@@ -434,7 +598,11 @@ pub(super) async fn cancel_sim(
 ) -> HttpResponse {
     let owner_id = owner_id(&req, &auth);
     let job_id = path.into_inner();
-    let job = match store.get_owned(&owner_id, &job_id) {
+    let job = match request_is_admin(&req, auth.get_ref(), store.get_ref().as_ref()) {
+        true => store.get(&job_id),
+        false => store.get_owned(&owner_id, &job_id),
+    };
+    let job = match job {
         Some(j) => j,
         None => return HttpResponse::NotFound().json(json!({"detail": "Job not found"})),
     };
@@ -1019,6 +1187,15 @@ mod tests {
                 .get("profilesets_total")
                 .and_then(Value::as_u64),
             Some(30)
+        );
+
+        let pending = make_job("pending", JobStatus::Pending, "2026-01-04T00:00:00Z");
+        store.insert(pending);
+        let pending_resp = get_sim_status(web::Path::from("pending".to_string()), store.clone()).await;
+        let pending_payload = json_body(pending_resp).await;
+        assert_eq!(
+            pending_payload.get("queue_position").and_then(Value::as_u64),
+            Some(1)
         );
 
         let missing = get_sim_status(web::Path::from("missing".to_string()), store).await;

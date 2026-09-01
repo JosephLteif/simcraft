@@ -58,6 +58,7 @@ import {
   API_URL,
   fetchJson,
   getHistoryStats,
+  getQueue,
   getSystemStats,
   type HistoryStats,
   isDesktop,
@@ -508,6 +509,7 @@ export default function Home() {
   const { lightMode } = useAuth();
   const { setCharacter: setActiveCharacter } = useActiveCharacter();
   const [sims, setSims] = useState<SimSummary[]>([]);
+  const [queuedSims, setQueuedSims] = useState(0);
   const [historyStats, setHistoryStats] = useState<HistoryStats | null>(null);
   const [cpuUsage, setCpuUsage] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -616,12 +618,14 @@ export default function Home() {
 
   const loadAll = useCallback(async () => {
     try {
-      const [simData, statData, systemStats] = await Promise.all([
+      const [simData, statData, systemStats, queueData] = await Promise.all([
         listSims(),
         getHistoryStats(),
         isDesktop ? getSystemStats().catch(() => null) : Promise.resolve(null),
+        getQueue('mine').catch(() => null),
       ]);
       setSims(simData || []);
+      setQueuedSims(queueData?.queued_count ?? 0);
       setHistoryStats(statData);
       setCpuUsage(systemStats?.cpu_usage ?? null);
       setError(null);
@@ -1432,13 +1436,13 @@ export default function Home() {
   const euNextResetMs = useMemo(() => getNextWeeklyResetMs('eu', new Date(nowMs)), [nowMs]);
 
   const activeSims = useMemo(() => sims.filter((sim) => sim.status === 'running').length, [sims]);
-  const queuedSims = useMemo(() => sims.filter((sim) => sim.status === 'pending').length, [sims]);
   const hasInFlightSims = useMemo(
     () =>
+      queuedSims > 0 ||
       sims.some(
         (sim) => sim.status === 'pending' || sim.status === 'running' || sim.status === 'paused'
       ),
-    [sims]
+    [queuedSims, sims]
   );
 
   useEffect(() => {
@@ -1703,7 +1707,7 @@ export default function Home() {
                                     : 'N/A',
                                   icon: <CpuIcon />,
                                 };
-                    return (
+                    const card = (
                       <div
                         key={`stat-card-${id}`}
                         className={`card ${statsCompact ? 'p-3' : 'p-4'}`}
@@ -1736,6 +1740,18 @@ export default function Home() {
                           </div>
                         </div>
                       </div>
+                    );
+                    return id === 'queued' && !dashboardEditMode ? (
+                      <Link
+                        key={`stat-card-link-${id}`}
+                        href="/queue"
+                        className="block rounded-xl focus-visible:ring-gold/60 focus-visible:ring-2 focus-visible:outline-none"
+                        aria-label="Open simulation queue"
+                      >
+                        {card}
+                      </Link>
+                    ) : (
+                      card
                     );
                   })}
                 </div>

@@ -5,6 +5,7 @@ import { trackSimulations } from '../lib/sim-tracking';
 
 const mocks = vi.hoisted(() => ({
   fetchJson: vi.fn(),
+  getQueue: vi.fn(),
   notify: vi.fn(),
   pathname: '/history',
   push: vi.fn(),
@@ -18,6 +19,7 @@ vi.mock('next/navigation', () => ({
 vi.mock('../lib/api', () => ({
   API_URL: '',
   fetchJson: mocks.fetchJson,
+  getQueue: mocks.getQueue,
 }));
 
 vi.mock('./shared/NotificationSystem', () => ({
@@ -29,6 +31,7 @@ describe('SimulationActivity', () => {
     vi.useRealTimers();
     window.sessionStorage.clear();
     mocks.fetchJson.mockReset();
+    mocks.getQueue.mockReset().mockRejectedValue(new Error('queue unavailable'));
     mocks.notify.mockReset();
     mocks.pathname = '/history';
     mocks.push.mockReset();
@@ -117,7 +120,7 @@ describe('SimulationActivity', () => {
     render(<SimulationActivity />);
     trackSimulations([{ id: 'sim-queued', simType: 'quick', playerName: 'Alice' }]);
 
-    expect(await screen.findByText('Quick Sim · Queued')).toBeInTheDocument();
+    expect(await screen.findByText('Quick Sim · Queued · waiting for a slot')).toBeInTheDocument();
     const cancelButton = screen.getByRole('button', { name: 'Cancel Alice Quick Sim' });
 
     await act(async () => {

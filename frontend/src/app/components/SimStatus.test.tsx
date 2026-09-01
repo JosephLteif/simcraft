@@ -130,3 +130,23 @@ describe('SimStatus pause and resume controls', () => {
     expect(onRerun).toHaveBeenCalledOnce();
   });
 });
+
+describe('SimStatus queued treatment', () => {
+  it('explains that a pending simulation has not started and shows its queue position', () => {
+    render(
+      <SimStatus
+        status="pending"
+        progress={0}
+        queuePosition={3}
+        jobId="queued-job"
+        iterations={10000}
+      />
+    );
+
+    expect(screen.getByText('Queued for simulation')).toBeInTheDocument();
+    expect(screen.getByText('Waiting for an available SimC slot')).toBeInTheDocument();
+    expect(screen.getByText('Queue position #3')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Manage queue' })).toHaveAttribute('href', '/queue');
+    expect(screen.queryByText('0%')).not.toBeInTheDocument();
+  });
+});

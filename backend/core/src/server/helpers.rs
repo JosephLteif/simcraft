@@ -5,11 +5,22 @@ use std::sync::Arc;
 
 use super::types::SimOptions;
 use crate::log_buffer::LogBuffer;
-use crate::models::JobStatus;
+use crate::models::{Job, JobStatus};
 use crate::result_parser;
 use crate::simc_runner;
 use crate::storage::{self, JobStorage};
 use crate::types::ResolveGearResponse;
+
+fn is_staged_sim_type(sim_type: &str) -> bool {
+    matches!(
+        sim_type,
+        "top_gear"
+            | "droptimizer"
+            | "external_buff_matrix"
+            | "consumable_matrix"
+            | "trinket_tier_heatmap"
+    )
+}
 
 pub(super) fn resolve_simc_binary_for_request(simc_path: &Path) -> Result<PathBuf, String> {
     #[cfg(feature = "desktop")]
@@ -425,10 +436,11 @@ pub(super) async fn prepare_job_run(
 
         match job.status {
             JobStatus::Pending => {
-                let admission = match simc_runner::acquire_simulation_slot(job_id).await {
-                    Ok(admission) => admission,
-                    Err(_) => return None,
-                };
+                let admission =
+                    match simc_runner::acquire_simulation_slot(job_id, job.queue_order).await {
+                        Ok(admission) => admission,
+                        Err(_) => return None,
+                    };
                 if store.transition_status(job_id, JobStatus::Pending, JobStatus::Running) {
                     simc_runner::start_job_control(job_id);
                     return Some(admission);
@@ -441,9 +453,65 @@ pub(super) async fn prepare_job_run(
                 }
             }
             JobStatus::Running => {
-                return simc_runner::acquire_simulation_slot(job_id).await.ok();
+                return simc_runner::acquire_simulation_slot(job_id, job.queue_order)
+                    .await
+                    .ok();
             }
             JobStatus::Done | JobStatus::Failed | JobStatus::Cancelled => return None,
+        }
+    }
+}
+
+fn recovered_combo_count(job: &Job) -> usize {
+    job.combo_metadata_json
+        .as_deref()
+        .and_then(|raw| serde_json::from_str::<Value>(raw).ok())
+        .and_then(|metadata| metadata.get("_combo_count").and_then(Value::as_u64))
+        .and_then(|count| usize::try_from(count).ok())
+        .filter(|count| *count > 0)
+        .or_else(|| {
+            let count = job
+                .simc_input
+                .lines()
+                .filter(|line| line.trim_start().starts_with("### "))
+                .count();
+            (count > 0).then_some(count)
+        })
+        .unwrap_or(1)
+}
+
+/// Recreate runner tasks for pending jobs that survived a backend restart.
+pub(super) fn recover_pending_jobs(
+    store: Arc<dyn JobStorage>,
+    auth: Arc<crate::server::auth_handlers::BlizzardAuthState>,
+    simc: PathBuf,
+    log_buffer: Arc<LogBuffer>,
+) {
+    for job in store.list_pending_jobs() {
+        let job_id = job.id.clone();
+        let options = job.options.clone().unwrap_or_else(|| json!({}));
+        let combo_count = recovered_combo_count(&job);
+        if is_staged_sim_type(&job.sim_type) {
+            spawn_staged_sim(
+                store.clone(),
+                auth.clone(),
+                simc.clone(),
+                options,
+                job_id,
+                job.simc_input,
+                combo_count,
+                log_buffer.clone(),
+            );
+        } else {
+            spawn_direct_sim(
+                store.clone(),
+                auth.clone(),
+                simc.clone(),
+                options,
+                job_id,
+                job.simc_input,
+                log_buffer.clone(),
+            );
         }
     }
 }

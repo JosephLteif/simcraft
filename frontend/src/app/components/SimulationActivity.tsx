@@ -1,10 +1,20 @@
 'use client';
 
-import { Activity, ExternalLink, LoaderCircle, Maximize2, Minimize2, Pause, X } from 'lucide-react';
+import {
+  Activity,
+  Clock3,
+  ExternalLink,
+  LoaderCircle,
+  Maximize2,
+  Minimize2,
+  Pause,
+  X,
+} from 'lucide-react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { parseCharacterInfo } from '@/lib/simc-parser';
-import { API_URL, fetchJson } from '../lib/api';
+import { API_URL, fetchJson, getQueue } from '../lib/api';
 import { simResultHref } from '../lib/routes';
 import {
   loadTrackedSimulations,
@@ -19,6 +29,7 @@ type SimulationStatus = 'pending' | 'running' | 'paused' | 'done' | 'failed' | '
 interface SimulationSnapshot extends TrackedSimulation {
   status: SimulationStatus;
   progress: number;
+  queuePosition?: number | null;
   progressStage?: string;
   progressDetail?: string;
   createdAt?: string;
@@ -104,7 +115,13 @@ function CompactSimulationRow({
   const detail =
     simulation.progressDetail?.trim() ||
     simulation.progressStage ||
-    (isPaused ? 'Paused' : isQueued ? 'Queued' : 'Simulating');
+    (isPaused
+      ? 'Paused'
+      : isQueued
+        ? simulation.queuePosition
+          ? `Queued · position #${simulation.queuePosition}`
+          : 'Queued · waiting for a slot'
+        : 'Simulating');
 
   return (
     <div className="hover:border-gold/30 flex items-stretch gap-1 rounded-lg border border-white/[0.06] bg-black/20 p-1 transition-colors hover:bg-white/[0.04]">
@@ -118,6 +135,8 @@ function CompactSimulationRow({
           <span className="bg-gold/10 text-gold mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md">
             {isPaused ? (
               <Pause className="h-3.5 w-3.5" strokeWidth={2} />
+            ) : isQueued ? (
+              <Clock3 className="h-3.5 w-3.5" strokeWidth={2} />
             ) : (
               <LoaderCircle className="h-3.5 w-3.5 animate-spin" strokeWidth={2} />
             )}
@@ -125,18 +144,29 @@ function CompactSimulationRow({
           <span className="min-w-0 flex-1">
             <span className="flex items-center justify-between gap-2">
               <span className="truncate text-xs font-semibold text-zinc-100">{title}</span>
-              <span className="text-gold shrink-0 font-mono text-[11px] tabular-nums">
-                {Math.round(progress)}%
-              </span>
+              {isQueued ? (
+                <span className="text-gold border-gold/20 bg-gold/[0.08] inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold">
+                  <Clock3 className="h-3 w-3" strokeWidth={2} />
+                  Queued
+                </span>
+              ) : (
+                <span className="text-gold shrink-0 font-mono text-[11px] tabular-nums">
+                  {Math.round(progress)}%
+                </span>
+              )}
             </span>
             <span className="mt-0.5 block truncate text-[11px] text-zinc-500">
               {simTypeLabel(simulation.simType)} · {detail}
             </span>
             <span className="mt-2 block h-1 overflow-hidden rounded-full bg-zinc-800">
-              <span
-                className="from-gold-dark to-gold block h-full rounded-full bg-gradient-to-r transition-[width] duration-700"
-                style={{ width: `${Math.max(progress, 3)}%` }}
-              />
+              {isQueued ? (
+                <span className="bg-gold/70 block h-full w-1/3 animate-pulse rounded-full" />
+              ) : (
+                <span
+                  className="from-gold-dark to-gold block h-full rounded-full bg-gradient-to-r transition-[width] duration-700"
+                  style={{ width: `${Math.max(progress, 3)}%` }}
+                />
+              )}
             </span>
           </span>
           <ExternalLink
@@ -228,6 +258,46 @@ export default function SimulationActivity() {
     };
     window.addEventListener(SIMULATION_TRACKED_EVENT, handleTracked);
     return () => window.removeEventListener(SIMULATION_TRACKED_EVENT, handleTracked);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    const syncQueue = async () => {
+      try {
+        const data = await getQueue('mine');
+        if (!active) return;
+        const queued = data.jobs
+          .filter((job) => ACTIVE_STATUSES.has(job.status))
+          .map((job) => ({
+            id: job.id,
+            status: job.status,
+            progress: job.progress,
+            queuePosition: job.queue_position,
+            simType: job.sim_type,
+            playerName: job.player_name || undefined,
+            createdAt: job.created_at,
+            progressStage: job.progress_stage || undefined,
+            progressDetail: job.progress_detail || undefined,
+          }));
+        queued.forEach((job) => {
+          if (!previousStatusesRef.current.has(job.id)) {
+            previousStatusesRef.current.set(job.id, job.status);
+          }
+        });
+        setSimulations(queued);
+        saveTrackedSimulationState(queued);
+      } catch {
+        // The tracked polling path remains available while the queue endpoint is unavailable.
+      }
+    };
+
+    void syncQueue();
+    const timer = window.setInterval(() => void syncQueue(), 2500);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
   }, []);
 
   useEffect(() => {
@@ -326,6 +396,9 @@ export default function SimulationActivity() {
     };
   }, [notify, router, simulations.length]);
 
+  const queuedCount = simulations.filter((simulation) => simulation.status === 'pending').length;
+  const activeCount = simulations.length - queuedCount;
+
   if (simulations.length === 0) return null;
 
   if (minimized) {
@@ -338,14 +411,13 @@ export default function SimulationActivity() {
         aria-label={`Show ${simulations.length} active simulation${simulations.length === 1 ? '' : 's'}`}
       >
         <Activity className="h-3.5 w-3.5" strokeWidth={2} />
-        <span>{simulations.length} active</span>
+        <span>
+          {activeCount} active · {queuedCount} queued
+        </span>
         <Maximize2 className="h-3.5 w-3.5" strokeWidth={2} />
       </button>
     );
   }
-
-  const queuedCount = simulations.filter((simulation) => simulation.status === 'pending').length;
-  const activeCount = simulations.length - queuedCount;
 
   return (
     <section
@@ -362,15 +434,23 @@ export default function SimulationActivity() {
             </p>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => setMinimized(true)}
-          className="focus-visible:ring-gold/60 rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-white/10 hover:text-zinc-200 focus-visible:ring-2 focus-visible:outline-none"
-          title="Minimize simulation progress"
-          aria-label="Minimize simulation progress"
-        >
-          <Minimize2 className="h-3.5 w-3.5" strokeWidth={2} />
-        </button>
+        <div className="flex items-center gap-1">
+          <Link
+            href="/queue"
+            className="text-gold hover:bg-gold/10 rounded-md px-2 py-1 text-[11px] font-semibold"
+          >
+            Manage queue
+          </Link>
+          <button
+            type="button"
+            onClick={() => setMinimized(true)}
+            className="focus-visible:ring-gold/60 rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-white/10 hover:text-zinc-200 focus-visible:ring-2 focus-visible:outline-none"
+            title="Minimize simulation progress"
+            aria-label="Minimize simulation progress"
+          >
+            <Minimize2 className="h-3.5 w-3.5" strokeWidth={2} />
+          </button>
+        </div>
       </header>
       <div className="space-y-2">
         {simulations.map((simulation) => (

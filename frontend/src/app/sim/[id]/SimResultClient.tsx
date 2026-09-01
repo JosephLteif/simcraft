@@ -37,10 +37,18 @@ import { useWowheadTooltips } from '../../lib/useWowheadTooltips';
 import { useNotifications } from '../../components/shared/NotificationSystem';
 
 import { API_URL, fetchJson } from '../../lib/api';
-import { formatScenarioLabel, getScenarioSiblings, type ScenarioSibling } from '../../lib/scenario-siblings';
+import {
+  formatScenarioLabel,
+  getScenarioSiblings,
+  type ScenarioSibling,
+} from '../../lib/scenario-siblings';
 import { simResultHref } from '../../lib/routes';
 import { trackSimulations } from '../../lib/sim-tracking';
-import { getSimReturnTarget, resolveSimAgainNavigation, setSimReturnNotice } from '../../lib/sim-return';
+import {
+  getSimReturnTarget,
+  resolveSimAgainNavigation,
+  setSimReturnNotice,
+} from '../../lib/sim-return';
 import {
   createSharedResultArtifact,
   downloadSharedResultArtifact,
@@ -346,9 +354,9 @@ function CollapsibleSection({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between border-b border-border/60 bg-white/[0.01] px-5 py-3.5 text-left transition-colors hover:bg-white/[0.03]"
+        className="border-border/60 flex w-full items-center justify-between border-b bg-white/[0.01] px-5 py-3.5 text-left transition-colors hover:bg-white/[0.03]"
       >
-        <span className="text-xs font-medium uppercase tracking-widest text-muted">{title}</span>
+        <span className="text-muted text-xs font-medium tracking-widest uppercase">{title}</span>
         <ChevronDown
           className={`h-3.5 w-3.5 text-zinc-500 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
           strokeWidth={2}
@@ -952,7 +960,7 @@ export default function SimResultClient({ initialJob, shared = false }: SimResul
   if (!job) {
     return (
       <div className="flex flex-col items-center justify-center py-20">
-        <div className="h-10 w-10 animate-spin rounded-full border-2 border-zinc-800 border-t-gold" />
+        <div className="border-t-gold h-10 w-10 animate-spin rounded-full border-2 border-zinc-800" />
       </div>
     );
   }
@@ -969,7 +977,7 @@ export default function SimResultClient({ initialJob, shared = false }: SimResul
     return (
       <div className="card border-red-500/20 bg-red-500/[0.03] p-6">
         <p className="mb-2 text-sm font-semibold text-red-400">Simulation Failed</p>
-        <p className="whitespace-pre-wrap font-mono text-[13px] leading-relaxed text-red-400/60">
+        <p className="font-mono text-[13px] leading-relaxed whitespace-pre-wrap text-red-400/60">
           {job.error || 'Unknown error'}
         </p>
       </div>
@@ -979,12 +987,12 @@ export default function SimResultClient({ initialJob, shared = false }: SimResul
   const scenarioToolbar = (
     <div className="sticky top-[var(--app-header-height)] z-40 flex flex-col items-stretch gap-2 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
       {toolbarScenarios.length > 1 ? (
-        <div className="w-full overflow-x-auto rounded-xl border border-border/70 bg-surface/90 p-3 shadow-lg backdrop-blur sm:w-auto">
+        <div className="border-border/70 bg-surface/90 w-full overflow-x-auto rounded-xl border p-3 shadow-lg backdrop-blur sm:w-auto">
           <div className="flex min-w-max items-center gap-2">
-            <span className="shrink-0 text-[13px] uppercase tracking-wider text-muted">
+            <span className="text-muted shrink-0 text-[13px] tracking-wider uppercase">
               Scenarios
             </span>
-            <span className="h-4 w-px shrink-0 bg-border" />
+            <span className="bg-border h-4 w-px shrink-0" />
             {toolbarScenarios.map((s) => {
               const isCurrent = s.id === activeScenarioId;
               const status = siblingStatuses[s.id] || (isCurrent ? job.status : 'pending');
@@ -1026,9 +1034,11 @@ export default function SimResultClient({ initialJob, shared = false }: SimResul
         <div />
       )}
       {job.status === 'done' ? (
-        <div className="flex w-full flex-wrap items-center gap-2 rounded-2xl border border-border bg-surface-2/90 px-3 py-2 shadow-[0_10px_30px_rgba(0,0,0,0.35)] backdrop-blur-md sm:w-auto sm:gap-3">
+        <div className="border-border bg-surface-2/90 flex w-full flex-wrap items-center gap-2 rounded-2xl border px-3 py-2 shadow-[0_10px_30px_rgba(0,0,0,0.35)] backdrop-blur-md sm:w-auto sm:gap-3">
           {shared ? (
-            <span className="px-2 text-xs font-medium text-sky-200/80">Shared result · read-only</span>
+            <span className="px-2 text-xs font-medium text-sky-200/80">
+              Shared result · read-only
+            </span>
           ) : (
             <>
               <button
@@ -1083,6 +1093,7 @@ export default function SimResultClient({ initialJob, shared = false }: SimResul
         <SimStatus
           status={job.status}
           progress={job.progress}
+          queuePosition={job.queue_position}
           progressStage={job.progress_stage}
           progressDetail={job.progress_detail}
           createdAt={job.created_at}
@@ -1116,7 +1127,7 @@ export default function SimResultClient({ initialJob, shared = false }: SimResul
   }
 
   if (!job.result) {
-    return <p className="text-sm text-muted">No result data available.</p>;
+    return <p className="text-muted text-sm">No result data available.</p>;
   }
 
   const hasTopGearLikeResults =
@@ -1293,7 +1304,7 @@ export default function SimResultClient({ initialJob, shared = false }: SimResul
             {info?.kind === 'dungeon' && (
               <div className="mt-6 grid grid-cols-1 gap-3 border-t border-white/5 pt-6 sm:grid-cols-3 sm:gap-4">
                 <div className="text-center">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                  <p className="text-[10px] font-black tracking-widest text-zinc-500 uppercase">
                     Route HP
                   </p>
                   <p className="mt-1 text-lg font-bold text-emerald-400">
@@ -1307,7 +1318,7 @@ export default function SimResultClient({ initialJob, shared = false }: SimResul
                   </p>
                 </div>
                 <div className="text-center">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                  <p className="text-[10px] font-black tracking-widest text-zinc-500 uppercase">
                     Timer
                   </p>
                   <p className="mt-1 text-lg font-bold text-amber-400">
@@ -1321,7 +1332,7 @@ export default function SimResultClient({ initialJob, shared = false }: SimResul
                   </p>
                 </div>
                 <div className="text-center">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                  <p className="text-[10px] font-black tracking-widest text-zinc-500 uppercase">
                     Min. Per DPS
                   </p>
                   <p className="mt-1 text-lg font-bold text-sky-400">
@@ -1390,7 +1401,7 @@ export default function SimResultClient({ initialJob, shared = false }: SimResul
 
                   return (
                     <div key={group.title}>
-                      <h3 className="mb-3 text-[11px] font-black uppercase tracking-[0.2em] text-zinc-500">
+                      <h3 className="mb-3 text-[11px] font-black tracking-[0.2em] text-zinc-500 uppercase">
                         {group.title}
                       </h3>
                       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -1425,7 +1436,8 @@ export default function SimResultClient({ initialJob, shared = false }: SimResul
                                     rel="noopener noreferrer"
                                     onClick={(e) => {
                                       e.preventDefault();
-                                      if (wowheadHref) window.open(wowheadHref, '_blank', 'noopener,noreferrer');
+                                      if (wowheadHref)
+                                        window.open(wowheadHref, '_blank', 'noopener,noreferrer');
                                     }}
                                   >
                                     {iconUrl ? (
@@ -1436,7 +1448,10 @@ export default function SimResultClient({ initialJob, shared = false }: SimResul
                                       />
                                     ) : (
                                       <div className="flex h-7 w-7 items-center justify-center rounded-[4px] bg-white/10">
-                                        <CircleAlert className="h-4 w-4 text-zinc-600" strokeWidth={2} />
+                                        <CircleAlert
+                                          className="h-4 w-4 text-zinc-600"
+                                          strokeWidth={2}
+                                        />
                                       </div>
                                     )}
                                   </a>
@@ -1448,7 +1463,10 @@ export default function SimResultClient({ initialJob, shared = false }: SimResul
                                   />
                                 ) : (
                                   <div className="flex h-7 w-7 items-center justify-center rounded-[4px] bg-white/10">
-                                    <CircleAlert className="h-4 w-4 text-zinc-600" strokeWidth={2} />
+                                    <CircleAlert
+                                      className="h-4 w-4 text-zinc-600"
+                                      strokeWidth={2}
+                                    />
                                   </div>
                                 )}
                               </div>
@@ -1460,10 +1478,11 @@ export default function SimResultClient({ initialJob, shared = false }: SimResul
                                       data-wowhead={`${buff.spellId ? 'spell' : 'item'}=${buff.spellId || buff.itemId}`}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="truncate text-[14px] font-bold capitalize leading-tight hover:underline"
+                                      className="truncate text-[14px] leading-tight font-bold capitalize hover:underline"
                                       onClick={(e) => {
                                         e.preventDefault();
-                                        if (wowheadHref) window.open(wowheadHref, '_blank', 'noopener,noreferrer');
+                                        if (wowheadHref)
+                                          window.open(wowheadHref, '_blank', 'noopener,noreferrer');
                                       }}
                                     >
                                       {(() => {
@@ -1474,7 +1493,7 @@ export default function SimResultClient({ initialJob, shared = false }: SimResul
                                       })()}
                                     </a>
                                   ) : (
-                                    <p className="truncate text-[14px] font-bold capitalize leading-tight">
+                                    <p className="truncate text-[14px] leading-tight font-bold capitalize">
                                       {(() => {
                                         const rawName = buff.name.replace(/_/g, ' ');
                                         return rawName
@@ -1559,7 +1578,7 @@ export default function SimResultClient({ initialJob, shared = false }: SimResul
       )}
 
       {/* Footer links */}
-      <div className="flex items-center justify-center gap-3 pb-4 text-xs text-muted">
+      <div className="text-muted flex items-center justify-center gap-3 pb-4 text-xs">
         {shared ? (
           <span>All displayed result data is included in the shared file.</span>
         ) : (
@@ -1572,7 +1591,7 @@ export default function SimResultClient({ initialJob, shared = false }: SimResul
             >
               Raw JSON
             </a>
-            <span className="h-3 w-px bg-border" />
+            <span className="bg-border h-3 w-px" />
             <a
               href={`${API_URL}/api/sim/${id}/input`}
               target="_blank"
@@ -1581,14 +1600,14 @@ export default function SimResultClient({ initialJob, shared = false }: SimResul
             >
               Raw Input
             </a>
-            <span className="h-3 w-px bg-border" />
+            <span className="bg-border h-3 w-px" />
             <a
               href={`${API_URL}/api/sim/${id}/data.csv`}
               className="transition-colors hover:text-white"
             >
               CSV
             </a>
-            <span className="h-3 w-px bg-border" />
+            <span className="bg-border h-3 w-px" />
             <a
               href={`${API_URL}/api/sim/${id}/html`}
               target="_blank"
@@ -1597,7 +1616,7 @@ export default function SimResultClient({ initialJob, shared = false }: SimResul
             >
               HTML Report
             </a>
-            <span className="h-3 w-px bg-border" />
+            <span className="bg-border h-3 w-px" />
             <a
               href={`${API_URL}/api/sim/${id}/output.txt`}
               target="_blank"

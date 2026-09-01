@@ -21,6 +21,7 @@ export interface SharedResultJob {
   options?: Record<string, unknown> | null;
   created_at?: string;
   progress: number;
+  queue_position?: number | null;
   progress_stage?: string;
   progress_detail?: string;
   stages_completed?: string[];

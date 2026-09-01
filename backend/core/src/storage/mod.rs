@@ -85,6 +85,15 @@ pub trait JobStorage: Send + Sync {
         unlinked_only: bool,
         pinned_only: bool,
     ) -> Vec<JobSummary>;
+    /// List active queue jobs. `None` returns all owners for administrator views.
+    fn list_queue(&self, owner_id: Option<&str>) -> Vec<JobSummary>;
+    /// Reorder all pending jobs in the supplied scope. An owner scope only
+    /// rearranges that owner's existing queue slots.
+    fn reorder_queue(&self, owner_id: Option<&str>, ordered_ids: &[String]) -> Result<(), String>;
+    /// Move one pending job to the front of its queue scope.
+    fn run_next(&self, owner_id: Option<&str>, job_id: &str) -> Result<(), String>;
+    /// Return pending jobs that should be recreated as runner tasks at startup.
+    fn list_pending_jobs(&self) -> Vec<Job>;
     fn update_status(&self, id: &str, status: JobStatus);
     fn transition_status(&self, id: &str, from: JobStatus, to: JobStatus) -> bool;
     fn update_progress(&self, id: &str, pct: u8, stage: &str, detail: &str);

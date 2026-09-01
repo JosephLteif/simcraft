@@ -10,6 +10,7 @@ import {
   Globe,
   GripVertical,
   LineChart,
+  ListOrdered,
   Map as MapIcon,
   MessageCircle,
   Pencil,
@@ -137,6 +138,13 @@ const baseNavItems: NavItem[] = [
     description: 'View recent simulation results.',
     icon: ScrollText,
     matchPaths: ['/history'],
+  },
+  {
+    href: '/queue',
+    label: 'Queue',
+    description: 'Manage pending simulations.',
+    icon: ListOrdered,
+    matchPaths: ['/queue'],
   },
 ];
 
