@@ -193,6 +193,50 @@ fn enrich_mythic_profile_member_links(value: &mut Value) {
     }
 }
 
+fn has_mythic_best_runs(value: &Value) -> bool {
+    value
+        .get("current_period")
+        .and_then(|period| period.get("best_runs"))
+        .and_then(Value::as_array)
+        .is_some_and(|runs| !runs.is_empty())
+}
+
+fn latest_mythic_season_id(value: &Value) -> Option<u64> {
+    value
+        .get("seasons")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|season| season.get("id").and_then(Value::as_u64))
+        .max()
+}
+
+fn merge_mythic_season_best_runs(profile: &mut Value, season_details: &Value) {
+    let Some(best_runs) = season_details
+        .get("best_runs")
+        .filter(|runs| runs.as_array().is_some_and(|entries| !entries.is_empty()))
+    else {
+        return;
+    };
+
+    let Some(profile_object) = profile.as_object_mut() else {
+        return;
+    };
+    let current_period = profile_object
+        .entry("current_period".to_string())
+        .or_insert_with(|| serde_json::json!({}));
+    let Some(period_object) = current_period.as_object_mut() else {
+        return;
+    };
+    let has_existing_runs = period_object
+        .get("best_runs")
+        .and_then(Value::as_array)
+        .is_some_and(|entries| !entries.is_empty());
+    if !has_existing_runs {
+        period_object.insert("best_runs".to_string(), best_runs.clone());
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::items_after_test_module)]
 mod tests {
@@ -308,6 +352,55 @@ mod tests {
         assert_eq!(payload["nested"]["members"][0]["linked_region"], "us");
         assert_eq!(payload["nested"]["members"][0]["linked_realm"], "area-52");
         assert_eq!(payload["nested"]["members"][0]["linked_name"], "dps");
+    }
+
+    #[test]
+    fn mythic_profile_fallback_uses_latest_season_best_runs_when_period_is_empty() {
+        let mut profile = json!({
+            "current_mythic_rating": { "rating": 2410.0 },
+            "current_period": { "period": { "id": 12 }, "best_runs": [] },
+            "seasons": [{ "id": 10 }, { "id": 11 }]
+        });
+        let season_details = json!({
+            "best_runs": [{
+                "keystone_level": 14,
+                "dungeon": { "name": "The Dawnbreaker" }
+            }]
+        });
+
+        assert_eq!(latest_mythic_season_id(&profile), Some(11));
+        assert!(!has_mythic_best_runs(&profile));
+        merge_mythic_season_best_runs(&mut profile, &season_details);
+
+        assert!(has_mythic_best_runs(&profile));
+        assert_eq!(
+            profile["current_period"]["best_runs"][0]["keystone_level"],
+            14
+        );
+        assert_eq!(profile["current_mythic_rating"]["rating"], 2410.0);
+    }
+
+    #[test]
+    fn mythic_profile_fallback_does_not_replace_existing_period_runs() {
+        let mut profile = json!({
+            "current_period": {
+                "best_runs": [{ "keystone_level": 12, "dungeon": { "name": "Ara-Kara" } }]
+            }
+        });
+        let season_details = json!({
+            "best_runs": [{ "keystone_level": 14, "dungeon": { "name": "The Dawnbreaker" } }]
+        });
+
+        merge_mythic_season_best_runs(&mut profile, &season_details);
+
+        assert_eq!(
+            profile["current_period"]["best_runs"][0]["keystone_level"],
+            12
+        );
+        assert_eq!(
+            profile["current_period"]["best_runs"][0]["dungeon"]["name"],
+            "Ara-Kara"
+        );
     }
 
     #[test]
@@ -1083,7 +1176,35 @@ pub async fn proxy_character_mythic_keystone_profile(
 
     match res {
         Ok(r) if r.status().is_success() => {
-            let data: serde_json::Value = r.json().await.unwrap_or(serde_json::json!({}));
+            let mut data: serde_json::Value = r.json().await.unwrap_or(serde_json::json!({}));
+            if !has_mythic_best_runs(&data) {
+                if let Some(season_id) = latest_mythic_season_id(&data) {
+                    let season_url = format!(
+                        "https://{}.api.blizzard.com/profile/wow/character/{}/{}/mythic-keystone-profile/season/{}?namespace={}&locale=en_US",
+                        region,
+                        realm_slug,
+                        name.to_lowercase(),
+                        season_id,
+                        namespace
+                    );
+                    if let Ok(season_response) = state
+                        .client
+                        .get(&season_url)
+                        .header("Authorization", format!("Bearer {}", token))
+                        .send()
+                        .await
+                    {
+                        if season_response.status().is_success() {
+                            if let Ok(season_details) =
+                                season_response.json::<serde_json::Value>().await
+                            {
+                                merge_mythic_season_best_runs(&mut data, &season_details);
+                            }
+                        }
+                    }
+                }
+            }
+            enrich_mythic_profile_member_links(&mut data);
             store.set_cache(&cache_key, data.to_string());
             HttpResponse::Ok().json(data)
         }

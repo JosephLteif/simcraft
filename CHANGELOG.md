@@ -22,6 +22,7 @@ The format is based on Keep a Changelog and this project uses semantic versionin
 - Top Gear deltas now show whether their difference is meaningful, within simulation noise, or needs more data; stat plots include a baseline and stat weights show ranked relative values.
 - Result Insights starts collapsed by default so the primary result content stays focused until deeper analysis is requested.
 - Upgrade Trinket results now support searching specific trinkets or combinations, saving eligible pairs directly to the character's Wishlist, and showing the legacy-trinket filter only when it was enabled at launch.
+- Character detail pages now show profile, Mythic+, raid, vault, profession, and external-profile information in the Profile tab, with 15-minute visible-page refreshes that retain the last successful snapshot if a background refresh fails.
 
 ### Fixed
 

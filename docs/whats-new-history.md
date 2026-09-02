@@ -53,6 +53,16 @@ Result pages now place a clearer analysis section at the bottom, helping you int
 - Read stat plots against a visible baseline and compare stat weights using ranked relative bars.
 - The Result Insights section starts collapsed so the primary result remains the first thing you see.
 
+#### Enrich character detail pages
+
+Character detail pages now bring profile, progression, profession, and external character information together in the Profile tab.
+
+- See active specialization, faction, guild, achievement points, item levels, Mythic+ score, highest key, top dungeon, weekly vault progress, and current-season raid progress when Blizzard provides the data.
+- Review primary and secondary professions with their available skill-point progress in a card styled with the character attributes.
+- Open consistent Armory, Warcraft Logs, and Raider.IO links for characters with spaces, apostrophes, and realm slugs.
+- Character data refreshes in the background after 15 minutes while the page is visible, keeps the last successful snapshot during failures, and recovers when the page becomes visible again.
+- Mythic+ summaries use current-season best runs when the profile index does not include period best-run entries.
+
 ### Bug fixes
 
 #### Show current raid progression

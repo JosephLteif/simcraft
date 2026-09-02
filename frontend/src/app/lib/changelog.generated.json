@@ -1,5 +1,5 @@
 {
-  "contentRevision": "Unreleased-74419019da90",
+  "contentRevision": "Unreleased-3183516ce484",
   "releases": [
     {
       "version": "Unreleased",
@@ -59,6 +59,18 @@
             "Compare Top Gear deltas against an uncertainty threshold labeled Meaningful, Within noise, or Needs more data.",
             "Read stat plots against a visible baseline and compare stat weights using ranked relative bars.",
             "The Result Insights section starts collapsed so the primary result remains the first thing you see."
+          ]
+        },
+        {
+          "category": "improvement",
+          "title": "Enrich character detail pages",
+          "summary": "Character detail pages now bring profile, progression, profession, and external character information together in the Profile tab.",
+          "items": [
+            "See active specialization, faction, guild, achievement points, item levels, Mythic+ score, highest key, top dungeon, weekly vault progress, and current-season raid progress when Blizzard provides the data.",
+            "Review primary and secondary professions with their available skill-point progress in a card styled with the character attributes.",
+            "Open consistent Armory, Warcraft Logs, and Raider.IO links for characters with spaces, apostrophes, and realm slugs.",
+            "Character data refreshes in the background after 15 minutes while the page is visible, keeps the last successful snapshot during failures, and recovers when the page becomes visible again.",
+            "Mythic+ summaries use current-season best runs when the profile index does not include period best-run entries."
           ]
         },
         {

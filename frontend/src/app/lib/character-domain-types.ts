@@ -1,11 +1,47 @@
 import type { BlizzardItem } from './simc-generator';
 
+export type CharacterNamedValue = {
+  id?: number | null;
+  name?: string | null;
+  type?: string | null;
+  [key: string]: unknown;
+};
+
+export type CharacterProfilePayload = {
+  name?: string | null;
+  level?: number | null;
+  race?: CharacterNamedValue | string | null;
+  character_class?: CharacterNamedValue | string | null;
+  faction?: CharacterNamedValue | string | null;
+  guild?: CharacterNamedValue | string | null;
+  realm?: CharacterNamedValue | string | null;
+  active_spec?: CharacterNamedValue | string | null;
+  equipped_item_level?: number | null;
+  average_item_level?: number | null;
+  achievement_points?: number | null;
+  last_login_timestamp?: number | null;
+  [key: string]: unknown;
+};
+
 export type CharacterStatisticsPayload = Record<string, unknown> | null;
 export type MythicPlusPayload = Record<string, unknown> | null;
 
 export type CharacterPanelEquipment = {
   equipped_items: BlizzardItem[];
 };
+
+export type CharacterProfession = {
+  profession?: CharacterNamedValue | string | null;
+  skill_points?: number | null;
+  max_skill_points?: number | null;
+  [key: string]: unknown;
+};
+
+export type CharacterProfessionsPayload = {
+  primaries?: CharacterProfession[];
+  secondaries?: CharacterProfession[];
+  [key: string]: unknown;
+} | null;
 
 export type CharacterTalentSelection = {
   id?: number;
@@ -41,6 +77,7 @@ export type CharacterSpecialization = {
 export type CharacterSpecializationsPayload = {
   active_specialization?: {
     id?: number;
+    name?: string;
   };
   specializations?: CharacterSpecialization[];
 };
@@ -84,20 +121,30 @@ export type CharacterRunMember = {
   character_class?: {
     name?: string;
   };
-  class?: {
-    name?: string;
-  } | string;
+  class?:
+    | {
+        name?: string;
+      }
+    | string;
 };
 
 export type MythicRun = {
-  keystone_level?: number;
-  keystoneLevel?: number;
-  keystone_dungeon?: { name?: string };
-  dungeon?: { name?: string };
-  completed_challenge_mode?: { name?: string };
+  keystone_level?: number | string;
+  keystoneLevel?: number | string;
+  key_level?: number | string;
+  keyLevel?: number | string;
+  mythic_plus_level?: number | string;
+  mythicLevel?: number | string;
+  level?: number | string;
+  keystone_dungeon?: { name?: string } | string;
+  dungeon?: { name?: string } | string;
+  dungeon_name?: string;
+  dungeonName?: string;
+  completed_challenge_mode?: { name?: string } | string;
   name?: string;
   duration?: number;
   run_duration?: number;
+  is_completed_within_time?: boolean;
   is_completed_within_timeout?: boolean;
   completed_in_time?: boolean;
   completedWithinTime?: boolean;
@@ -113,7 +160,19 @@ export type MythicRun = {
 };
 
 export type RaidEncounterProgress = {
+  id?: number;
+  name?: string;
+  encounter_name?: string;
+  completed_count?: number;
   last_kill_timestamp?: number;
+  lastKillTimestamp?: number;
+  display_order?: number;
+  order_index?: number;
+  encounter?: {
+    id?: number;
+    name?: string;
+  };
+  [key: string]: unknown;
 };
 
 export type RaidModeProgress = {
@@ -122,17 +181,22 @@ export type RaidModeProgress = {
   total_encounters?: number;
   total_count?: number;
   encounters?: RaidEncounterProgress[];
+  [key: string]: unknown;
 };
 
 export type RaidMode = {
-  difficulty?: { type?: string };
+  difficulty?: { type?: string; name?: string } | string;
   progress?: RaidModeProgress;
+  encounters?: RaidEncounterProgress[];
+  [key: string]: unknown;
 };
 
 export type RaidInstance = {
-  instance?: { name?: string };
+  id?: number;
+  instance?: { id?: number; name?: string };
   name?: string;
   modes?: RaidMode[];
+  [key: string]: unknown;
 };
 
 export type RaidExpansion = {
@@ -141,6 +205,7 @@ export type RaidExpansion = {
   label?: string;
   name?: string;
   instances?: RaidInstance[];
+  [key: string]: unknown;
 };
 
 export type RaidEncountersPayload = {
