@@ -21,6 +21,7 @@ The format is based on Keep a Changelog and this project uses semantic versionin
 - Result pages now place a clearer analysis section at the bottom with an estimated DPS distribution, percentile markers, confidence intervals, and uncertainty-aware comparison guidance.
 - Top Gear deltas now show whether their difference is meaningful, within simulation noise, or needs more data; stat plots include a baseline and stat weights show ranked relative values.
 - Result Insights starts collapsed by default so the primary result content stays focused until deeper analysis is requested.
+- Upgrade Trinket results now support searching specific trinkets or combinations, saving eligible pairs directly to the character's Wishlist, and showing the legacy-trinket filter only when it was enabled at launch.
 
 ### Fixed
 

@@ -1191,6 +1191,10 @@ export default function SimResultClient({ initialJob, shared = false }: SimResul
         <TrinketTierHeatmap
           baseDps={(r.base_dps as number) || 0}
           elapsedSeconds={(r.elapsed_time_seconds as number) || 0}
+          allowLegacyToggle={job.options?.heatmap_include_legacy_trinkets === true}
+          playerName={r.player_name as string | undefined}
+          playerRealm={r.realm as string | undefined}
+          playerRegion={r.region as string | undefined}
           results={
             (r.results as Array<{ name: string; dps: number; delta: number; items: any[] }>) || []
           }

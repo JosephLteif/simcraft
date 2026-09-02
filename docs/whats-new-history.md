@@ -27,6 +27,14 @@ Wishlist targets and owned-item upgrades now follow one clear gear roadmap witho
 - See the matching character's Wishlist count and move between Drop Finder, Wishlist, and Upgrade Planner from one Upgrades navigation group.
 - Reorder roadmap entries, mark upgrades complete, and track planned costs against available currencies.
 
+#### Search and save Trinket result combinations
+
+Upgrade Trinket results are now easier to scan and turn into Wishlist plans.
+
+- Search by a specific trinket name or combination to narrow the result matrix.
+- Save a trinket pair directly to the matching character's Wishlist; eligible upgrade trinkets are added together.
+- The old-season and Turbulent trinket filter appears in results only when those candidates were included when the simulation was launched.
+
 #### Share and open simulation results anywhere
 
 Completed simulation results can now travel as portable `.wldps` files and open in another WhyLowDps app with the same result view.

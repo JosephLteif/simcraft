@@ -1,5 +1,5 @@
 {
-  "contentRevision": "Unreleased-e78a4b002676",
+  "contentRevision": "Unreleased-74419019da90",
   "releases": [
     {
       "version": "Unreleased",
@@ -27,6 +27,16 @@
             "Open Upgrade Planner to select items already present in your SimC export and add their upgrade paths to Gear Roadmap.",
             "See the matching character's Wishlist count and move between Drop Finder, Wishlist, and Upgrade Planner from one Upgrades navigation group.",
             "Reorder roadmap entries, mark upgrades complete, and track planned costs against available currencies."
+          ]
+        },
+        {
+          "category": "improvement",
+          "title": "Search and save Trinket result combinations",
+          "summary": "Upgrade Trinket results are now easier to scan and turn into Wishlist plans.",
+          "items": [
+            "Search by a specific trinket name or combination to narrow the result matrix.",
+            "Save a trinket pair directly to the matching character's Wishlist; eligible upgrade trinkets are added together.",
+            "The old-season and Turbulent trinket filter appears in results only when those candidates were included when the simulation was launched."
           ]
         },
         {
