@@ -1,5 +1,6 @@
 import { ExternalLink, RefreshCw } from 'lucide-react';
 import type { IntegrationEnvelope, RaiderIoData, WarcraftLogsData } from '../../lib/api';
+import { normalizeEncounterName } from '../../lib/warcraft-logs-guides';
 
 export type CharacterIntegrationState<T> = {
   enabled: boolean;
@@ -160,10 +161,12 @@ export function RaiderIoMythicPlusCard({
 export function RaidIntegrationCards({
   raiderIo,
   warcraftLogs,
+  currentRaidNames,
   onRefresh,
 }: {
   raiderIo: CharacterIntegrationState<RaiderIoData> | null;
   warcraftLogs: CharacterIntegrationState<WarcraftLogsData> | null;
+  currentRaidNames?: string[];
   onRefresh?: () => void;
 }) {
   if (!raiderIo?.enabled && !warcraftLogs?.enabled) return null;
@@ -172,21 +175,25 @@ export function RaidIntegrationCards({
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
       <ProviderCard
         title="Raider.IO raid progression"
-        description="Public progression from the current character profile"
+        description="Current-season public progression"
         state={raiderIo}
         onRefresh={onRefresh}
         profileUrl={(data) => data.profile_url}
       >
-        {(data) =>
-          data.raid_progression.length > 0 ? (
+        {(data) => {
+          const currentProgression = filterCurrentRaidProgression(
+            data.raid_progression,
+            currentRaidNames
+          );
+          return currentProgression.length > 0 ? (
             <div className="space-y-1.5">
-              {data.raid_progression.slice(0, 4).map((raid) => (
+              {currentProgression.slice(0, 4).map((raid) => (
                 <div
                   key={raid.raid}
-                  className="flex items-center justify-between gap-3 rounded border border-white/5 bg-black/20 px-2.5 py-2 text-[11px]"
+                  className="flex items-center justify-between gap-3 rounded border border-white/10 bg-black/20 px-2.5 py-2 text-[12px]"
                 >
-                  <span className="truncate text-zinc-200">{raid.raid}</span>
-                  <span className="shrink-0 font-mono text-zinc-400">
+                  <span className="truncate font-medium text-zinc-100">{raid.raid}</span>
+                  <span className="shrink-0 font-mono font-semibold text-zinc-200">
                     {raid.summary ||
                       (raid.killed !== null && raid.total !== null
                         ? `${raid.killed}/${raid.total}`
@@ -196,9 +203,9 @@ export function RaidIntegrationCards({
               ))}
             </div>
           ) : (
-            <p className="text-[11px] text-zinc-500">No raid progression found.</p>
-          )
-        }
+            <p className="text-[11px] text-zinc-500">No current-season raid progression found.</p>
+          );
+        }}
       </ProviderCard>
 
       <ProviderCard
@@ -214,11 +221,11 @@ export function RaidIntegrationCards({
               <div className="grid grid-cols-2 gap-2 text-[11px] sm:grid-cols-4">
                 <RankingStat
                   label="Best parse"
-                  value={formatMetric(data.ranking.best_performance_average)}
+                  value={formatPercentMetric(data.ranking.best_performance_average)}
                 />
                 <RankingStat
                   label="Median parse"
-                  value={formatMetric(data.ranking.median_performance_average)}
+                  value={formatPercentMetric(data.ranking.median_performance_average)}
                 />
                 <RankingStat label="All Stars" value={formatMetric(data.ranking.all_stars)} />
                 <RankingStat
@@ -227,8 +234,15 @@ export function RaidIntegrationCards({
                 />
               </div>
             )}
+            {data.ranking && (
+              <p className="text-[11px] text-zinc-400">
+                Public Warcraft Logs percentiles for the latest available zone.
+              </p>
+            )}
             {data.ranking?.zone_name && (
-              <p className="text-[10px] text-zinc-500">Latest zone: {data.ranking.zone_name}</p>
+              <p className="text-[11px] font-medium text-zinc-300">
+                Latest zone: {data.ranking.zone_name}
+              </p>
             )}
             {data.reports.length > 0 ? (
               <div className="space-y-1.5">
@@ -245,16 +259,16 @@ export function RaidIntegrationCards({
                       <span className="block truncate text-zinc-200">
                         {report.title || report.code}
                       </span>
-                      <span className="mt-0.5 block truncate text-[10px] text-zinc-500">
+                      <span className="mt-0.5 block truncate text-[11px] text-zinc-400">
                         {report.zone_name || 'Public report'}
                       </span>
                       {formatReportTimes(report) ? (
-                        <span className="mt-0.5 block text-[10px] text-zinc-600">
+                        <span className="mt-0.5 block text-[11px] text-zinc-300">
                           {formatReportTimes(report)}
                         </span>
                       ) : null}
                     </span>
-                    <span className="shrink-0 text-zinc-500">{report.code}</span>
+                    <span className="shrink-0 font-mono text-zinc-300">{report.code}</span>
                   </a>
                 ))}
               </div>
@@ -270,15 +284,28 @@ export function RaidIntegrationCards({
 
 function RankingStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded border border-white/5 bg-black/20 px-2 py-1.5">
-      <p className="text-zinc-500">{label}</p>
-      <p className="mt-0.5 font-mono text-zinc-200">{value}</p>
+    <div className="min-h-16 rounded border border-white/15 bg-black/30 px-2.5 py-2">
+      <p className="text-[11px] font-semibold tracking-wide text-zinc-300 uppercase">{label}</p>
+      <p className="mt-1 font-mono text-base font-bold text-white">{value}</p>
     </div>
   );
 }
 
+function filterCurrentRaidProgression(
+  progression: RaiderIoData['raid_progression'],
+  currentRaidNames?: string[]
+): RaiderIoData['raid_progression'] {
+  if (!currentRaidNames || currentRaidNames.length === 0) return progression;
+  const currentNames = new Set(currentRaidNames.map(normalizeEncounterName));
+  return progression.filter((raid) => currentNames.has(normalizeEncounterName(raid.raid)));
+}
+
 function formatMetric(value: number | null): string {
   return value === null ? '—' : Number.isInteger(value) ? value.toLocaleString() : value.toFixed(1);
+}
+
+function formatPercentMetric(value: number | null): string {
+  return value === null ? '—' : `${value.toFixed(1)}%`;
 }
 
 function formatReportTimes(report: WarcraftLogsData['reports'][number]): string | null {

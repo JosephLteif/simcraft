@@ -151,11 +151,18 @@ describe('RaidProgressionGrid', () => {
       />
     );
 
-    expect(screen.getByText('Best parse 95.4%')).toBeInTheDocument();
-    expect(screen.getByText('Median parse 88.2%')).toBeInTheDocument();
+    expect(screen.getByText('Best parse')).toBeInTheDocument();
+    expect(screen.getByText('95.4%')).toBeInTheDocument();
+    expect(screen.getByText('Median parse')).toBeInTheDocument();
+    expect(screen.getByText('88.2%')).toBeInTheDocument();
     expect(screen.getByText('3 public kills')).toBeInTheDocument();
-    expect(screen.getByText('Best 12.3k DPS')).toBeInTheDocument();
-    expect(screen.getByText('Arcane')).toBeInTheDocument();
+    const parse = document.querySelector(
+      '[aria-label="Warcraft Logs parses for Fallen King Salhadaar"]'
+    );
+    expect(parse).toHaveTextContent('Best amount');
+    expect(parse).toHaveTextContent('12.3k');
+    expect(parse).toHaveTextContent('DPS');
+    expect(parse).toHaveTextContent('Arcane');
     expect(
       document.querySelector('[aria-label="Warcraft Logs parses for Unknown Boss"]')
     ).not.toBeInTheDocument();

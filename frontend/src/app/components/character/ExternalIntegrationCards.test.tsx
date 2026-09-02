@@ -68,7 +68,10 @@ describe('ExternalIntegrationCards', () => {
 
     expect(screen.getByText('6/8 H')).toBeInTheDocument();
     expect(screen.getByText('Raid night')).toBeInTheDocument();
-    expect(screen.getByText('97.2')).toBeInTheDocument();
+    expect(screen.getByText('97.2%')).toBeInTheDocument();
+    expect(screen.getByText('91.1%')).toBeInTheDocument();
+    expect(screen.getByText('Best parse')).toBeInTheDocument();
+    expect(screen.getByText('Median parse')).toBeInTheDocument();
     expect(screen.getByText(/2023/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Raid night/ })).toHaveAttribute(
       'href',
@@ -103,5 +106,26 @@ describe('ExternalIntegrationCards', () => {
 
     expect(screen.getByText('Current Raid')).toBeInTheDocument();
     expect(screen.getByText('Data unavailable.')).toBeInTheDocument();
+  });
+
+  it('limits Raider.IO raid progression to the active season raids', () => {
+    render(
+      <RaidIntegrationCards
+        raiderIo={state({
+          ...raiderIo,
+          raid_progression: [
+            { raid: 'sporefall', summary: '0/1', killed: 0, total: 1 },
+            { raid: 'The Tidebound Grotto', summary: '1/1', killed: 1, total: 1 },
+            { raid: 'tier mn 1', summary: '0/9', killed: 0, total: 9 },
+          ],
+        })}
+        warcraftLogs={null}
+        currentRaidNames={['the tidebound grotto']}
+      />
+    );
+
+    expect(screen.getByText('The Tidebound Grotto')).toBeInTheDocument();
+    expect(screen.queryByText('sporefall')).not.toBeInTheDocument();
+    expect(screen.queryByText('tier mn 1')).not.toBeInTheDocument();
   });
 });

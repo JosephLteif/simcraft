@@ -36,6 +36,7 @@ import {
   getMemberProfileHref,
   isCurrentExpansionPlaceholder,
   parseVaultRewardsFromSimcInput,
+  parseRaidProgressionData,
   raidMatchesActiveIds,
   summarizeMythicPlus,
 } from '../lib/character-panel-utils';
@@ -635,6 +636,19 @@ function RaidSectionCard({
 
   const expansionOptions = useMemo(() => getRaidExpansionOptions(raidEncounters), [raidEncounters]);
 
+  const currentRaidNames = useMemo(() => {
+    const parsed = parseRaidProgressionData(raidEncounters, activeRaidInstanceIds);
+    const hasActiveRaidIds = (activeRaidInstanceIds?.length ?? 0) > 0;
+    const latestExpansionKey = [...parsed.expansionOrder]
+      .reverse()
+      .find((key) => parsed.raids.some((raid) => raid.expansionKey === key));
+
+    return parsed.raids
+      .filter((raid) => hasActiveRaidIds || raid.expansionKey === latestExpansionKey)
+      .map((raid) => raid.name)
+      .filter(Boolean);
+  }, [activeRaidInstanceIds, raidEncounters]);
+
   useEffect(() => {
     const latestExpansion = [...expansionOptions].reverse().find((opt) => opt.key !== 'all');
     if (!latestExpansion) {
@@ -689,6 +703,7 @@ function RaidSectionCard({
       <RaidIntegrationCards
         raiderIo={raiderIo}
         warcraftLogs={warcraftLogs}
+        currentRaidNames={currentRaidNames}
         onRefresh={onRefreshIntegrations}
       />
     </div>

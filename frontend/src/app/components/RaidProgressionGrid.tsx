@@ -327,27 +327,42 @@ function WarcraftLogsBossParse({ ranking }: { ranking: WarcraftLogsBossRanking }
 
   return (
     <p
-      className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-zinc-500"
+      className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-300"
       aria-label={`Warcraft Logs parses for ${ranking.encounter_name}`}
     >
-      <span className="font-semibold text-sky-300/80">WCL</span>
+      <span className="rounded bg-sky-400/15 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-sky-200">
+        WCL
+      </span>
       {hasPercentiles ? (
         <>
-          <span>Best parse {formatParsePercent(ranking.rank_percent)}</span>
-          <span>Median parse {formatParsePercent(ranking.median_percent)}</span>
+          <span className="rounded border border-white/10 bg-white/[0.04] px-1.5 py-0.5">
+            <span className="text-zinc-400">Best parse</span>{' '}
+            <strong className="font-semibold text-amber-200">
+              {formatParsePercent(ranking.rank_percent)}
+            </strong>
+          </span>
+          <span className="rounded border border-white/10 bg-white/[0.04] px-1.5 py-0.5">
+            <span className="text-zinc-400">Median parse</span>{' '}
+            <strong className="font-semibold text-white">
+              {formatParsePercent(ranking.median_percent)}
+            </strong>
+          </span>
         </>
       ) : (
-        <span>No public parse</span>
+        <span className="rounded border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-zinc-400">
+          No public parse
+        </span>
       )}
       {ranking.total_kills !== null ? (
-        <span>{formatParseCount(ranking.total_kills)} public kills</span>
+        <span className="text-zinc-400">{formatParseCount(ranking.total_kills)} public kills</span>
       ) : null}
       {amount !== null ? (
-        <span>
-          Best {amount} {metric || 'amount'}
+        <span className="text-zinc-400">
+          Best amount <strong className="font-semibold text-zinc-200">{amount}</strong>{' '}
+          {metric || 'amount'}
         </span>
       ) : null}
-      {ranking.spec ? <span>{ranking.spec}</span> : null}
+      {ranking.spec ? <span className="text-zinc-400">Spec: {ranking.spec}</span> : null}
     </p>
   );
 }
