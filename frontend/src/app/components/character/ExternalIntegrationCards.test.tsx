@@ -34,8 +34,8 @@ const warcraftLogs: WarcraftLogsData = {
       code: 'abc123',
       title: 'Raid night',
       zone_name: 'Current Raid',
-      start_time: 1,
-      end_time: 2,
+      start_time: 1700000000000,
+      end_time: 1700003600000,
       url: 'https://www.warcraftlogs.com/reports/abc123',
     },
   ],
@@ -48,6 +48,7 @@ const warcraftLogs: WarcraftLogsData = {
     all_stars: 1234,
     average_item_level: 720,
   },
+  boss_rankings: [],
 };
 
 describe('ExternalIntegrationCards', () => {
@@ -68,6 +69,7 @@ describe('ExternalIntegrationCards', () => {
     expect(screen.getByText('6/8 H')).toBeInTheDocument();
     expect(screen.getByText('Raid night')).toBeInTheDocument();
     expect(screen.getByText('97.2')).toBeInTheDocument();
+    expect(screen.getByText(/2023/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Raid night/ })).toHaveAttribute(
       'href',
       'https://www.warcraftlogs.com/reports/abc123'
@@ -83,5 +85,23 @@ describe('ExternalIntegrationCards', () => {
 
     expect(screen.getByText('Ara-Kara')).toBeInTheDocument();
     expect(screen.getByText(/showing the last successful snapshot/i)).toBeInTheDocument();
+  });
+
+  it('keeps Raider.IO visible when Warcraft Logs is unavailable', () => {
+    render(
+      <RaidIntegrationCards
+        raiderIo={state(raiderIo)}
+        warcraftLogs={{
+          enabled: true,
+          loading: false,
+          refreshing: false,
+          snapshot: { status: 'unavailable', data: null, fetched_at: 1 },
+          error: null,
+        }}
+      />
+    );
+
+    expect(screen.getByText('Current Raid')).toBeInTheDocument();
+    expect(screen.getByText('Data unavailable.')).toBeInTheDocument();
   });
 });

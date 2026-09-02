@@ -1,7 +1,15 @@
 import guideMappings from '../../../../backend/resources/wow/warcraft-logs-guides.json';
 
-function normalizeEncounterName(name: string): string {
-  return name.trim().toLowerCase().replace(/\s+/g, ' ');
+export function normalizeEncounterName(name: string): string {
+  return name
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[’‘`]/g, "'")
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/gi, ' ')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
 }
 
 type GuideMapping = {

@@ -680,6 +680,9 @@ function RaidSectionCard({
             activeRaidInstanceIds={activeRaidInstanceIds}
             selectedExpansion={selectedExpansion}
             selectedRaidName="all"
+            warcraftLogs={
+              warcraftLogs?.snapshot?.status === 'ok' ? warcraftLogs.snapshot.data : null
+            }
           />
         </div>
       </div>
@@ -701,6 +704,7 @@ function RaidProgressCard({
   selectedExpansion = 'all',
   selectedRaidName = 'all',
   onActiveRaidNameChange,
+  warcraftLogs,
 }: {
   raidEncounters: RaidEncountersPayload;
   embedded?: boolean;
@@ -710,6 +714,7 @@ function RaidProgressCard({
   selectedExpansion?: string;
   selectedRaidName?: string;
   onActiveRaidNameChange?: (raidName: string | null) => void;
+  warcraftLogs?: WarcraftLogsData | null;
 }) {
   const raids = useMemo(() => {
     if (!raidEncounters || typeof raidEncounters !== 'object') return [];
@@ -870,6 +875,7 @@ function RaidProgressCard({
           selectedExpansion={selectedExpansion}
           selectedRaidName={selectedRaidName}
           onActiveRaidNameChange={onActiveRaidNameChange}
+          warcraftLogs={warcraftLogs}
         />
       ) : (
         <p className="text-[11px] text-zinc-600 italic">

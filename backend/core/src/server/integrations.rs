@@ -192,6 +192,7 @@ pub struct WarcraftLogsData {
     pub region: String,
     pub reports: Vec<WarcraftLogsReport>,
     pub ranking: Option<WarcraftLogsRanking>,
+    pub boss_rankings: Vec<WarcraftLogsBossRanking>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -213,6 +214,18 @@ pub struct WarcraftLogsRanking {
     pub median_performance_average: Option<f64>,
     pub all_stars: Option<f64>,
     pub average_item_level: Option<f64>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct WarcraftLogsBossRanking {
+    pub encounter_id: Option<f64>,
+    pub encounter_name: String,
+    pub rank_percent: Option<f64>,
+    pub median_percent: Option<f64>,
+    pub total_kills: Option<f64>,
+    pub best_amount: Option<f64>,
+    pub metric: Option<String>,
+    pub spec: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -740,6 +753,14 @@ impl IntegrationState {
             }
 
             let payload: Value = response.json().await.map_err(|_| WclError::Upstream)?;
+            if let Some(character) = payload
+                .pointer("/data/characterData/character")
+                .filter(|value| !value.is_null())
+            {
+                return normalize_warcraft_logs(character, region, realm, name)
+                    .map(Some)
+                    .ok_or(WclError::Upstream);
+            }
             if payload
                 .get("errors")
                 .and_then(Value::as_array)
@@ -747,12 +768,7 @@ impl IntegrationState {
             {
                 return Err(WclError::Upstream);
             }
-            let character = payload
-                .pointer("/data/characterData/character")
-                .filter(|value| !value.is_null());
-            return Ok(
-                character.and_then(|value| normalize_warcraft_logs(value, region, realm, name))
-            );
+            return Ok(None);
         }
         Err(WclError::Upstream)
     }
@@ -768,6 +784,10 @@ fn value_number(value: Option<&Value>) -> Option<f64> {
                 .or_else(|| object.get("points"))
                 .or_else(|| object.get("score")),
         ),
+        Value::Array(values) => values
+            .iter()
+            .filter_map(|value| value_number(Some(value)))
+            .max_by(|left, right| left.partial_cmp(right).unwrap_or(std::cmp::Ordering::Equal)),
         _ => None,
     })
 }
@@ -933,13 +953,12 @@ fn normalize_warcraft_logs(
         .and_then(|value| value.get("data").or(Some(value)))
         .and_then(Value::as_array)
         .map(|reports| {
-            reports
+            let mut reports = reports
                 .iter()
                 .filter(|report| {
                     value_string(report.get("visibility"))
                         .is_none_or(|visibility| visibility.eq_ignore_ascii_case("public"))
                 })
-                .take(5)
                 .filter_map(|report| {
                     let code = value_string(report.get("code"))?;
                     let zone = report.get("zone");
@@ -952,7 +971,16 @@ fn normalize_warcraft_logs(
                         end_time: value_number(report.get("endTime")),
                     })
                 })
-                .collect::<Vec<_>>()
+                .collect::<Vec<_>>();
+            reports.sort_by(|left, right| {
+                right
+                    .start_time
+                    .zip(left.start_time)
+                    .and_then(|(right, left)| right.partial_cmp(&left))
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+            reports.truncate(5);
+            reports
         })
         .unwrap_or_default();
 
@@ -962,8 +990,14 @@ fn normalize_warcraft_logs(
         .and_then(|ranking| {
             let ranking = ranking
                 .as_array()
-                .and_then(|entries| entries.first())
+                .and_then(|entries| {
+                    entries
+                        .iter()
+                        .find(|entry| entry.get("rankings").is_some())
+                        .or_else(|| entries.first())
+                })
                 .unwrap_or(ranking);
+            let metric = value_string(ranking.get("metric"));
             Some(WarcraftLogsRanking {
                 zone_id: value_number(
                     ranking
@@ -979,13 +1013,34 @@ fn normalize_warcraft_logs(
                         .and_then(|zone| zone.get("name"))
                         .or_else(|| ranking.get("zoneName")),
                 ),
-                metric: value_string(ranking.get("metric")),
+                metric,
                 best_performance_average: value_number(ranking.get("bestPerformanceAverage")),
                 median_performance_average: value_number(ranking.get("medianPerformanceAverage")),
                 all_stars: value_number(ranking.get("allStars")),
                 average_item_level: value_number(ranking.get("averageItemLevel")),
             })
         });
+
+    let boss_rankings = character_object
+        .get("zoneRankings")
+        .filter(|value| !value.is_null())
+        .and_then(|ranking| {
+            let ranking = ranking
+                .as_array()
+                .and_then(|entries| {
+                    entries
+                        .iter()
+                        .find(|entry| entry.get("rankings").is_some())
+                        .or_else(|| entries.first())
+                })
+                .unwrap_or(ranking);
+            let metric = value_string(ranking.get("metric"));
+            ranking
+                .get("rankings")
+                .and_then(Value::as_array)
+                .map(|rankings| normalize_warcraft_logs_boss_rankings(rankings, metric.as_deref()))
+        })
+        .unwrap_or_default();
 
     Some(WarcraftLogsData {
         profile_url: format!("https://www.warcraftlogs.com/character/{region}/{realm}/{name}"),
@@ -997,7 +1052,44 @@ fn normalize_warcraft_logs(
             .unwrap_or_else(|| region.to_string()),
         reports,
         ranking,
+        boss_rankings,
     })
+}
+
+fn normalize_warcraft_logs_boss_rankings(
+    rankings: &[Value],
+    metric: Option<&str>,
+) -> Vec<WarcraftLogsBossRanking> {
+    rankings
+        .iter()
+        .filter_map(|entry| {
+            let encounter = entry.get("encounter");
+            let encounter_name = value_string(encounter.and_then(|value| value.get("name")))
+                .or_else(|| value_string(entry.get("encounterName")))?;
+            let best_amount = value_number(entry.get("bestAmount")).or_else(|| {
+                entry
+                    .get("bestRank")
+                    .and_then(|rank| rank.get("per_second_amount"))
+                    .and_then(|value| value_number(Some(value)))
+            });
+            Some(WarcraftLogsBossRanking {
+                encounter_id: value_number(
+                    encounter
+                        .and_then(|value| value.get("id"))
+                        .or_else(|| entry.get("encounterID"))
+                        .or_else(|| entry.get("encounterId")),
+                ),
+                encounter_name,
+                rank_percent: value_number(entry.get("rankPercent")),
+                median_percent: value_number(entry.get("medianPercent")),
+                total_kills: value_number(entry.get("totalKills")),
+                best_amount,
+                metric: value_string(entry.get("metric")).or_else(|| metric.map(str::to_string)),
+                spec: value_string(entry.get("bestSpec"))
+                    .or_else(|| value_string(entry.get("spec"))),
+            })
+        })
+        .collect()
 }
 
 pub async fn test_warcraft_logs_credentials(
@@ -1219,8 +1311,16 @@ mod tests {
                 "metric": "dps",
                 "bestPerformanceAverage": 97.2,
                 "medianPerformanceAverage": 91.1,
-                "allStars": {"points": 1234},
-                "averageItemLevel": 720
+                "allStars": [{"points": 1234}, {"points": 876}],
+                "averageItemLevel": 720,
+                "rankings": [{
+                    "encounter": {"id": 3470, "name": "Nek'zali the Soulcoiler"},
+                    "rankPercent": 18.5777,
+                    "medianPercent": 17.4,
+                    "totalKills": 1,
+                    "bestAmount": 85654.45,
+                    "bestSpec": "Arcane"
+                }]
             }
         });
         let normalized = normalize_warcraft_logs(&payload, "us", "aerie-peak", "hero").unwrap();
@@ -1228,7 +1328,40 @@ mod tests {
             normalized.reports[0].url,
             "https://www.warcraftlogs.com/reports/abc123"
         );
-        assert_eq!(normalized.ranking.unwrap().all_stars, Some(1234.0));
+        assert_eq!(normalized.ranking.as_ref().unwrap().all_stars, Some(1234.0));
+        assert_eq!(normalized.boss_rankings.len(), 1);
+        assert_eq!(normalized.boss_rankings[0].encounter_id, Some(3470.0));
+        assert_eq!(
+            normalized.boss_rankings[0].encounter_name,
+            "Nek'zali the Soulcoiler"
+        );
+        assert_eq!(normalized.boss_rankings[0].rank_percent, Some(18.5777));
+        assert_eq!(normalized.boss_rankings[0].median_percent, Some(17.4));
+        assert_eq!(normalized.boss_rankings[0].total_kills, Some(1.0));
+        assert_eq!(normalized.boss_rankings[0].best_amount, Some(85654.45));
+        assert_eq!(normalized.boss_rankings[0].metric.as_deref(), Some("dps"));
+        assert_eq!(normalized.boss_rankings[0].spec.as_deref(), Some("Arcane"));
+    }
+
+    #[test]
+    fn normalizes_recent_public_reports_in_descending_start_order() {
+        let payload = json!({
+            "recentReports": {"data": [
+                {"code": "old", "visibility": "public", "startTime": 1000},
+                {"code": "private", "visibility": "private", "startTime": 3000},
+                {"code": "new", "visibility": "public", "startTime": 2000}
+            ]}
+        });
+        let normalized = normalize_warcraft_logs(&payload, "us", "aerie-peak", "hero").unwrap();
+        assert_eq!(
+            normalized
+                .reports
+                .iter()
+                .map(|report| report.code.as_str())
+                .collect::<Vec<_>>(),
+            vec!["new", "old"]
+        );
+        assert_eq!(normalized.reports[0].start_time, Some(2000.0));
     }
 
     #[test]

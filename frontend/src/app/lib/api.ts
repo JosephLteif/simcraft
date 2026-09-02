@@ -221,6 +221,17 @@ export type WarcraftLogsRanking = {
   average_item_level: number | null;
 };
 
+export type WarcraftLogsBossRanking = {
+  encounter_id: number | null;
+  encounter_name: string;
+  rank_percent: number | null;
+  median_percent: number | null;
+  total_kills: number | null;
+  best_amount: number | null;
+  metric: string | null;
+  spec: string | null;
+};
+
 export type WarcraftLogsData = {
   profile_url: string;
   name: string;
@@ -228,6 +239,7 @@ export type WarcraftLogsData = {
   region: string;
   reports: WarcraftLogsReport[];
   ranking: WarcraftLogsRanking | null;
+  boss_rankings: WarcraftLogsBossRanking[];
 };
 
 export type IntegrationSettings = {

@@ -213,11 +213,11 @@ export function RaidIntegrationCards({
             {data.ranking && (
               <div className="grid grid-cols-2 gap-2 text-[11px] sm:grid-cols-4">
                 <RankingStat
-                  label="Best"
+                  label="Best parse"
                   value={formatMetric(data.ranking.best_performance_average)}
                 />
                 <RankingStat
-                  label="Median"
+                  label="Median parse"
                   value={formatMetric(data.ranking.median_performance_average)}
                 />
                 <RankingStat label="All Stars" value={formatMetric(data.ranking.all_stars)} />
@@ -241,10 +241,20 @@ export function RaidIntegrationCards({
                     rel="noopener noreferrer"
                     className="hover:border-gold/30 flex items-center justify-between gap-3 rounded border border-white/5 bg-black/20 px-2.5 py-2 text-[11px] transition-colors"
                   >
-                    <span className="min-w-0 truncate text-zinc-200">
-                      {report.title || report.code}
+                    <span className="min-w-0">
+                      <span className="block truncate text-zinc-200">
+                        {report.title || report.code}
+                      </span>
+                      <span className="mt-0.5 block truncate text-[10px] text-zinc-500">
+                        {report.zone_name || 'Public report'}
+                      </span>
+                      {formatReportTimes(report) ? (
+                        <span className="mt-0.5 block text-[10px] text-zinc-600">
+                          {formatReportTimes(report)}
+                        </span>
+                      ) : null}
                     </span>
-                    <span className="shrink-0 text-zinc-500">{report.zone_name || 'Report'}</span>
+                    <span className="shrink-0 text-zinc-500">{report.code}</span>
                   </a>
                 ))}
               </div>
@@ -269,4 +279,22 @@ function RankingStat({ label, value }: { label: string; value: string }) {
 
 function formatMetric(value: number | null): string {
   return value === null ? '—' : Number.isInteger(value) ? value.toLocaleString() : value.toFixed(1);
+}
+
+function formatReportTimes(report: WarcraftLogsData['reports'][number]): string | null {
+  const start = formatReportTimestamp(report.start_time);
+  const end = formatReportTimestamp(report.end_time);
+  if (start && end) return `${start} – ${end}`;
+  return start || (end ? `Ended ${end}` : null);
+}
+
+function formatReportTimestamp(value: number | null): string | null {
+  if (value === null || !Number.isFinite(value) || value <= 0) return null;
+  const milliseconds = value < 100_000_000_000 ? value * 1_000 : value;
+  const date = new Date(milliseconds);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(date);
 }

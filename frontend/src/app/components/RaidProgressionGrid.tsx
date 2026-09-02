@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { getWarcraftLogsGuideUrl } from '../lib/warcraft-logs-guides';
+import { getWarcraftLogsGuideUrl, normalizeEncounterName } from '../lib/warcraft-logs-guides';
 import { RAID_VAULT_THRESHOLDS } from '../lib/game-rules';
 import type { RaidEncountersPayload } from '../lib/character-domain-types';
+import type { WarcraftLogsBossRanking, WarcraftLogsData } from '../lib/api';
 import {
   getWeeklyResetStartMs,
   parseRaidProgressionData,
@@ -20,6 +21,7 @@ export default function RaidProgressionGrid({
   selectedExpansion,
   selectedRaidName,
   onActiveRaidNameChange,
+  warcraftLogs,
 }: {
   raidEncounters: RaidEncountersPayload;
   region?: string;
@@ -28,6 +30,7 @@ export default function RaidProgressionGrid({
   selectedExpansion: string;
   selectedRaidName?: string;
   onActiveRaidNameChange?: (raidName: string | null) => void;
+  warcraftLogs?: WarcraftLogsData | null;
 }) {
   const parsed = useMemo(
     () => parseRaidProgressionData(raidEncounters, activeRaidInstanceIds),
@@ -232,6 +235,10 @@ export default function RaidProgressionGrid({
                   0
                 );
                 const guideUrl = getWarcraftLogsGuideUrl(boss.name);
+                const warcraftLogsRanking = findWarcraftLogsBossRanking(
+                  boss.name,
+                  warcraftLogs?.boss_rankings ?? []
+                );
                 const dotClass = (active: boolean, diff: DifficultyKey) => {
                   if (!active) return 'bg-zinc-700/60 ring-white/10';
                   if (diff === 'mythic') return 'bg-violet-400 ring-violet-300/60';
@@ -245,18 +252,25 @@ export default function RaidProgressionGrid({
                     className="rounded-md border border-white/10 bg-black/20 px-3 py-2"
                   >
                     <div className="grid grid-cols-[minmax(240px,1fr)_repeat(4,36px)_60px] items-center gap-2">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <p className="truncate text-sm font-semibold text-zinc-100">{boss.name}</p>
-                        {guideUrl ? (
-                          <a
-                            href={guideUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-gold hover:text-gold/80 shrink-0 text-xs font-semibold"
-                            aria-label={`Warcraft Logs guide for ${boss.name}`}
-                          >
-                            Guide
-                          </a>
+                      <div className="min-w-0">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <p className="truncate text-sm font-semibold text-zinc-100">
+                            {boss.name}
+                          </p>
+                          {guideUrl ? (
+                            <a
+                              href={guideUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-gold hover:text-gold/80 shrink-0 text-xs font-semibold"
+                              aria-label={`Warcraft Logs guide for ${boss.name}`}
+                            >
+                              Guide
+                            </a>
+                          ) : null}
+                        </div>
+                        {warcraftLogsRanking ? (
+                          <WarcraftLogsBossParse ranking={warcraftLogsRanking} />
                         ) : null}
                       </div>
                       {DIFFICULTIES.map((diff) => {
@@ -286,4 +300,70 @@ export default function RaidProgressionGrid({
       </div>
     </div>
   );
+}
+
+function findWarcraftLogsBossRanking(
+  bossName: string,
+  rankings: WarcraftLogsBossRanking[]
+): WarcraftLogsBossRanking | null {
+  const normalizedBossName = normalizeEncounterName(bossName);
+  const directMatch = rankings.find(
+    (ranking) => normalizeEncounterName(ranking.encounter_name) === normalizedBossName
+  );
+  if (directMatch) return directMatch;
+
+  const guideUrl = getWarcraftLogsGuideUrl(bossName);
+  if (!guideUrl) return null;
+  const guideMatches = rankings.filter(
+    (ranking) => getWarcraftLogsGuideUrl(ranking.encounter_name) === guideUrl
+  );
+  return guideMatches.length === 1 ? guideMatches[0] : null;
+}
+
+function WarcraftLogsBossParse({ ranking }: { ranking: WarcraftLogsBossRanking }) {
+  const hasPercentiles = ranking.rank_percent !== null || ranking.median_percent !== null;
+  const metric = ranking.metric?.trim().toUpperCase();
+  const amount = ranking.best_amount === null ? null : formatParseAmount(ranking.best_amount);
+
+  return (
+    <p
+      className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-zinc-500"
+      aria-label={`Warcraft Logs parses for ${ranking.encounter_name}`}
+    >
+      <span className="font-semibold text-sky-300/80">WCL</span>
+      {hasPercentiles ? (
+        <>
+          <span>Best parse {formatParsePercent(ranking.rank_percent)}</span>
+          <span>Median parse {formatParsePercent(ranking.median_percent)}</span>
+        </>
+      ) : (
+        <span>No public parse</span>
+      )}
+      {ranking.total_kills !== null ? (
+        <span>{formatParseCount(ranking.total_kills)} public kills</span>
+      ) : null}
+      {amount !== null ? (
+        <span>
+          Best {amount} {metric || 'amount'}
+        </span>
+      ) : null}
+      {ranking.spec ? <span>{ranking.spec}</span> : null}
+    </p>
+  );
+}
+
+function formatParsePercent(value: number | null): string {
+  return value === null || !Number.isFinite(value) ? '—' : `${value.toFixed(1)}%`;
+}
+
+function formatParseCount(value: number): string {
+  return Number.isFinite(value) ? Math.max(0, Math.round(value)).toLocaleString() : '—';
+}
+
+function formatParseAmount(value: number): string {
+  if (!Number.isFinite(value)) return '—';
+  const absolute = Math.abs(value);
+  if (absolute >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}m`;
+  if (absolute >= 1_000) return `${(value / 1_000).toFixed(1)}k`;
+  return Number.isInteger(value) ? value.toLocaleString() : value.toFixed(1);
 }
