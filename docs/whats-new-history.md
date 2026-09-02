@@ -6,6 +6,17 @@ Add new work under the `Unreleased` section. Stable bump and `promote-dev` relea
 
 ## Unreleased — Simulation queue management
 
+### New features
+
+#### Add optional Raider.IO and Warcraft Logs character data
+
+Character pages can now combine Blizzard data with public Raider.IO and Warcraft Logs data without making either provider a dependency.
+
+- Raider.IO is enabled by default and can be disabled under Settings > Integrations; it adds current-season Mythic+ scores, best runs, raid progression, attribution, and profile links.
+- Warcraft Logs activates after valid credentials are saved and adds latest-zone rankings, five recent public reports with report dates and end times, and per-boss best and median parses, public kills, best amounts, metrics, and specs.
+- The integration settings explain what belongs in each Warcraft Logs field and show the exact redirect host and port for the current app address; private reports and private OAuth/PKCE access are not used.
+- Personal Warcraft Logs credentials take precedence over shared hosted credentials, while environment credentials take precedence over the administrator-managed fallback. Secrets remain protected and are never returned by the API.
+
 ### Improvements
 
 #### Monitor and manage simulation queues
@@ -71,6 +82,13 @@ The character Raiding tab now opens on the latest concrete expansion so raid pro
 - The final expansion in the available raid data is selected by default, while `All expansions` remains available for browsing older content.
 
 ### Bug fixes
+
+#### Keep raid data complete and resilient
+
+Raid rows now retain every real boss, including bosses with zero kills, while ignoring catalog-only trash placeholders.
+
+- Warcraft Logs metadata is merged into the matching Blizzard boss row without replacing Blizzard kill and difficulty data.
+- Provider failures, outages, rate limits, refreshes, and missing rankings leave the last usable snapshot and Blizzard raid data visible.
 
 #### Show current raid progression
 

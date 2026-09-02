@@ -8,6 +8,7 @@ The format is based on Keep a Changelog and this project uses semantic versionin
 
 ### Added
 
+- Character pages now support optional public Raider.IO and Warcraft Logs integrations: Raider.IO provides current-season Mythic+ scores, best runs, raid progression, attribution, and profile links, while Warcraft Logs provides latest-zone rankings, five dated recent reports, and per-boss parse, kill, amount, metric, and spec data.
 - Simulation queue management now supports a configurable parallel-job limit across desktop and private Docker hosting; Docker-hosted changes are restricted to administrators.
 - The global activity card now shows running and queued simulations, remains available on result pages, and supports cancellation.
 - The dashboard now shows a live Queued Sims count while simulations are in flight.
@@ -17,6 +18,7 @@ The format is based on Keep a Changelog and this project uses semantic versionin
 
 ### Changed
 
+- Settings > Integrations now explains every Warcraft Logs credential field, shows the exact current redirect host and port, and applies personal, environment, and administrator-managed credential precedence without exposing secrets.
 - Queued simulations now clearly explain that SimC has not started, show the current queue position, and link directly to queue management instead of displaying misleading zero-progress details.
 - Result pages now place a clearer analysis section at the bottom with an estimated DPS distribution, percentile markers, confidence intervals, and uncertainty-aware comparison guidance.
 - Top Gear deltas now show whether their difference is meaningful, within simulation noise, or needs more data; stat plots include a baseline and stat weights show ranked relative values.
@@ -27,6 +29,7 @@ The format is based on Keep a Changelog and this project uses semantic versionin
 
 ### Fixed
 
+- Warcraft Logs data now merges into Blizzard boss rows without replacing Blizzard data, preserves snapshots through provider failures and refreshes, and keeps real zero-kill bosses visible while hiding catalog-only trash placeholders.
 - Character Raiding tabs now show current-season progression when active raid pools identify bosses by encounter ID instead of raid instance ID.
 
 ## [5.0.1] - 2026-08-31
