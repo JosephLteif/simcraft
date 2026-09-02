@@ -237,6 +237,159 @@ fn merge_mythic_season_best_runs(profile: &mut Value, season_details: &Value) {
     }
 }
 
+fn normalize_raid_catalog_name(value: &str) -> String {
+    value
+        .chars()
+        .map(|character| {
+            if character.is_alphanumeric() {
+                character.to_ascii_lowercase()
+            } else {
+                ' '
+            }
+        })
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn raid_instance_id(value: &Value) -> Option<i64> {
+    value
+        .get("instance")
+        .and_then(|instance| instance.get("id"))
+        .and_then(Value::as_i64)
+        .or_else(|| value.get("id").and_then(Value::as_i64))
+}
+
+fn raid_instance_name(value: &Value) -> Option<&str> {
+    value
+        .get("instance")
+        .and_then(|instance| instance.get("name"))
+        .and_then(Value::as_str)
+        .or_else(|| value.get("name").and_then(Value::as_str))
+}
+
+fn raid_encounter_id(value: &Value) -> Option<i64> {
+    value
+        .get("encounter")
+        .and_then(|encounter| encounter.get("id"))
+        .and_then(Value::as_i64)
+        .or_else(|| value.get("id").and_then(Value::as_i64))
+}
+
+fn raid_encounter_name(value: &Value) -> Option<&str> {
+    value
+        .get("encounter")
+        .and_then(|encounter| encounter.get("name"))
+        .and_then(Value::as_str)
+        .or_else(|| value.get("name").and_then(Value::as_str))
+}
+
+fn enrich_character_raid_encounters_with_catalog(value: &mut Value, catalog: &[Value]) {
+    let Some(expansions) = value.get_mut("expansions").and_then(Value::as_array_mut) else {
+        return;
+    };
+
+    for expansion in expansions {
+        let Some(instances) = expansion.get_mut("instances").and_then(Value::as_array_mut) else {
+            continue;
+        };
+
+        for instance in instances {
+            let instance_id = raid_instance_id(instance);
+            let instance_name = raid_instance_name(instance).unwrap_or_default();
+            let Some(catalog_instance) = catalog.iter().find(|candidate| {
+                if candidate.get("type").and_then(Value::as_str) != Some("raid") {
+                    return false;
+                }
+                let matches_id = instance_id.is_some()
+                    && candidate
+                        .get("id")
+                        .and_then(Value::as_i64)
+                        .is_some_and(|candidate_id| Some(candidate_id) == instance_id);
+                matches_id
+                    || (!instance_name.is_empty()
+                        && candidate.get("name").and_then(Value::as_str).is_some_and(
+                            |candidate_name| {
+                                normalize_raid_catalog_name(candidate_name)
+                                    == normalize_raid_catalog_name(instance_name)
+                            },
+                        ))
+            }) else {
+                continue;
+            };
+            let Some(catalog_encounters) = catalog_instance
+                .get("encounters")
+                .and_then(Value::as_array)
+                .filter(|encounters| !encounters.is_empty())
+            else {
+                continue;
+            };
+
+            let Some(modes) = instance.get_mut("modes").and_then(Value::as_array_mut) else {
+                continue;
+            };
+            for mode in modes {
+                let Some(mode_object) = mode.as_object_mut() else {
+                    continue;
+                };
+                let progress = mode_object
+                    .entry("progress".to_string())
+                    .or_insert_with(|| serde_json::json!({}));
+                let Some(progress_object) = progress.as_object_mut() else {
+                    continue;
+                };
+                if !progress_object.contains_key("total_count") {
+                    progress_object.insert(
+                        "total_count".to_string(),
+                        serde_json::json!(catalog_encounters.len()),
+                    );
+                }
+                progress_object
+                    .entry("encounters".to_string())
+                    .or_insert_with(|| serde_json::json!([]));
+                let Some(encounters) = progress_object
+                    .get_mut("encounters")
+                    .and_then(Value::as_array_mut)
+                else {
+                    continue;
+                };
+
+                for (index, catalog_encounter) in catalog_encounters.iter().enumerate() {
+                    let Some(encounter_id) = catalog_encounter.get("id").and_then(Value::as_i64)
+                    else {
+                        continue;
+                    };
+                    let Some(encounter_name) =
+                        catalog_encounter.get("name").and_then(Value::as_str)
+                    else {
+                        continue;
+                    };
+                    let already_present = encounters.iter().any(|entry| {
+                        raid_encounter_id(entry) == Some(encounter_id)
+                            || raid_encounter_name(entry).is_some_and(|name| {
+                                normalize_raid_catalog_name(name)
+                                    == normalize_raid_catalog_name(encounter_name)
+                            })
+                    });
+                    if already_present {
+                        continue;
+                    }
+
+                    encounters.push(serde_json::json!({
+                        "encounter": {
+                            "id": encounter_id,
+                            "name": encounter_name,
+                        },
+                        "completed_count": 0,
+                        "display_order": index + 1,
+                    }));
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::items_after_test_module)]
 mod tests {
@@ -378,6 +531,58 @@ mod tests {
             14
         );
         assert_eq!(profile["current_mythic_rating"]["rating"], 2410.0);
+    }
+
+    #[test]
+    fn raid_encounter_catalog_adds_uncompleted_bosses_without_duplicates() {
+        let mut payload = json!({
+            "expansions": [{
+                "instances": [{
+                    "instance": { "id": 1300, "name": "The Current Raid" },
+                    "modes": [{
+                        "difficulty": { "type": "normal" },
+                        "progress": {
+                            "completed_count": 7,
+                            "total_count": 8,
+                            "encounters": [{
+                                "encounter": { "id": 1, "name": "First Boss" },
+                                "completed_count": 1
+                            }]
+                        }
+                    }]
+                }]
+            }]
+        });
+        let catalog = vec![json!({
+            "id": 1300,
+            "name": "The Current Raid",
+            "type": "raid",
+            "encounters": [
+                { "id": 1, "name": "First Boss" },
+                { "id": 2, "name": "Second Boss" },
+                { "id": 3, "name": "Third Boss" },
+                { "id": 4, "name": "Fourth Boss" },
+                { "id": 5, "name": "Fifth Boss" },
+                { "id": 6, "name": "Sixth Boss" },
+                { "id": 7, "name": "Seventh Boss" },
+                { "id": 8, "name": "Ul'atek" }
+            ]
+        })];
+
+        enrich_character_raid_encounters_with_catalog(&mut payload, &catalog);
+        enrich_character_raid_encounters_with_catalog(&mut payload, &catalog);
+
+        let encounters = payload["expansions"][0]["instances"][0]["modes"][0]["progress"]
+            ["encounters"]
+            .as_array()
+            .expect("encounter list");
+        assert_eq!(encounters.len(), 8);
+        let ulatek = encounters
+            .iter()
+            .find(|entry| raid_encounter_name(entry) == Some("Ul'atek"))
+            .expect("uncompleted boss");
+        assert_eq!(ulatek["completed_count"], 0);
+        assert_eq!(ulatek["display_order"], 8);
     }
 
     #[test]
@@ -1233,7 +1438,9 @@ pub async fn proxy_character_raid_encounters(
     );
     if !query.refresh.unwrap_or(false) {
         if let Some(cached) = store.get_cache(&cache_key) {
-            if let Ok(json_val) = serde_json::from_str::<serde_json::Value>(&cached) {
+            if let Ok(mut json_val) = serde_json::from_str::<serde_json::Value>(&cached) {
+                let catalog = crate::game_data::get_instances();
+                enrich_character_raid_encounters_with_catalog(&mut json_val, &catalog);
                 return HttpResponse::Ok().json(json_val);
             }
         }
@@ -1268,7 +1475,9 @@ pub async fn proxy_character_raid_encounters(
 
     match res {
         Ok(r) if r.status().is_success() => {
-            let data: serde_json::Value = r.json().await.unwrap_or(serde_json::json!({}));
+            let mut data: serde_json::Value = r.json().await.unwrap_or(serde_json::json!({}));
+            let catalog = crate::game_data::get_instances();
+            enrich_character_raid_encounters_with_catalog(&mut data, &catalog);
             store.set_cache(&cache_key, data.to_string());
             HttpResponse::Ok().json(data)
         }
