@@ -253,6 +253,10 @@ fn normalize_raid_catalog_name(value: &str) -> String {
         .join(" ")
 }
 
+fn is_placeholder_raid_encounter(name: &str) -> bool {
+    normalize_raid_catalog_name(name) == "trash drop"
+}
+
 fn raid_instance_id(value: &Value) -> Option<i64> {
     value
         .get("instance")
@@ -342,7 +346,15 @@ fn enrich_character_raid_encounters_with_catalog(value: &mut Value, catalog: &[V
                 if !progress_object.contains_key("total_count") {
                     progress_object.insert(
                         "total_count".to_string(),
-                        serde_json::json!(catalog_encounters.len()),
+                        serde_json::json!(catalog_encounters
+                            .iter()
+                            .filter(|encounter| {
+                                !encounter
+                                    .get("name")
+                                    .and_then(Value::as_str)
+                                    .is_some_and(is_placeholder_raid_encounter)
+                            })
+                            .count()),
                     );
                 }
                 progress_object
@@ -355,6 +367,10 @@ fn enrich_character_raid_encounters_with_catalog(value: &mut Value, catalog: &[V
                     continue;
                 };
 
+                encounters.retain(|entry| {
+                    !raid_encounter_name(entry).is_some_and(is_placeholder_raid_encounter)
+                });
+
                 for (index, catalog_encounter) in catalog_encounters.iter().enumerate() {
                     let Some(encounter_id) = catalog_encounter.get("id").and_then(Value::as_i64)
                     else {
@@ -365,6 +381,9 @@ fn enrich_character_raid_encounters_with_catalog(value: &mut Value, catalog: &[V
                     else {
                         continue;
                     };
+                    if is_placeholder_raid_encounter(encounter_name) {
+                        continue;
+                    }
                     let already_present = encounters.iter().any(|entry| {
                         raid_encounter_id(entry) == Some(encounter_id)
                             || raid_encounter_name(entry).is_some_and(|name| {
@@ -547,6 +566,9 @@ mod tests {
                             "encounters": [{
                                 "encounter": { "id": 1, "name": "First Boss" },
                                 "completed_count": 1
+                            }, {
+                                "encounter": { "id": 9, "name": "Trash Drop" },
+                                "completed_count": 0
                             }]
                         }
                     }]
@@ -565,7 +587,8 @@ mod tests {
                 { "id": 5, "name": "Fifth Boss" },
                 { "id": 6, "name": "Sixth Boss" },
                 { "id": 7, "name": "Seventh Boss" },
-                { "id": 8, "name": "Ul'atek" }
+                { "id": 8, "name": "Ul'atek" },
+                { "id": 9, "name": "Trash Drop" }
             ]
         })];
 
@@ -577,6 +600,9 @@ mod tests {
             .as_array()
             .expect("encounter list");
         assert_eq!(encounters.len(), 8);
+        assert!(!encounters
+            .iter()
+            .any(|entry| raid_encounter_name(entry) == Some("Trash Drop")));
         let ulatek = encounters
             .iter()
             .find(|entry| raid_encounter_name(entry) == Some("Ul'atek"))
