@@ -1,5 +1,5 @@
 import { characterHref } from './routes';
-import type { MythicKeystoneDungeonDetail } from './api';
+import type { MythicKeystoneDungeonDetail, RaiderIoData } from './api';
 import type {
   CharacterNamedValue,
   CharacterRunMember,
@@ -323,6 +323,28 @@ export type CharacterMythicPlusSummary = {
   vaultProgressCount: number;
   hasAnyVaultIlvl: boolean;
 };
+
+export function mergeMythicPlusDisplay(
+  summary: CharacterMythicPlusSummary | null,
+  raiderIo: RaiderIoData | null
+): Pick<CharacterMythicPlusSummary, 'score' | 'runs' | 'bestLevel' | 'bestDungeonName'> {
+  const bestRaiderIoRun = (raiderIo?.best_runs || [])
+    .filter((run) => run.level !== null && run.level > 0 && run.dungeon.trim())
+    .reduce<RaiderIoData['best_runs'][number] | null>((best, run) => {
+      if (!best) return run;
+      if ((run.level || 0) !== (best.level || 0)) {
+        return (run.level || 0) > (best.level || 0) ? run : best;
+      }
+      return (run.score || 0) > (best.score || 0) ? run : best;
+    }, null);
+
+  return {
+    score: summary?.score ?? raiderIo?.score ?? null,
+    runs: summary?.runs || raiderIo?.best_runs.length || 0,
+    bestLevel: summary?.bestLevel ?? bestRaiderIoRun?.level ?? null,
+    bestDungeonName: summary?.bestDungeonName ?? bestRaiderIoRun?.dungeon ?? null,
+  };
+}
 
 function getMythicRunName(run: MythicRun): string {
   const candidates = [

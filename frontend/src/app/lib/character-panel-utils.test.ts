@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildCharacterExternalLinks,
   getRaidExpansionOptions,
+  mergeMythicPlusDisplay,
   parseCharacterProfessions,
   parseRaidProgressionData,
   summarizeCurrentRaidProgress,
@@ -111,6 +112,45 @@ describe('character panel normalization', () => {
 
     expect(summary?.bestLevel).toBe(14);
     expect(summary?.bestDungeonName).toBe('Theater of Pain');
+  });
+
+  it('fills missing Mythic+ summary values from Raider.IO without replacing Blizzard values', () => {
+    const blizzardSummary = summarizeMythicPlus({
+      current_mythic_rating: { rating: 1977 },
+    });
+    const raiderIo = {
+      profile_url: 'https://raider.io/characters/us/aerie-peak/hero',
+      name: 'Hero',
+      realm: 'Aerie Peak',
+      region: 'us',
+      score: 1945,
+      ranks: null,
+      best_runs: [
+        {
+          dungeon: 'The Blinding Vale',
+          level: 10,
+          score: 331,
+          completed_at: null,
+          url: null,
+        },
+      ],
+      raid_progression: [],
+      raid_achievements: [],
+      last_crawled_at: null,
+    };
+
+    expect(mergeMythicPlusDisplay(blizzardSummary, raiderIo)).toMatchObject({
+      score: 1977,
+      runs: 1,
+      bestLevel: 10,
+      bestDungeonName: 'The Blinding Vale',
+    });
+    expect(mergeMythicPlusDisplay(null, raiderIo)).toMatchObject({
+      score: 1945,
+      runs: 1,
+      bestLevel: 10,
+      bestDungeonName: 'The Blinding Vale',
+    });
   });
 
   it('normalizes current raid progress and filters inactive raid instances', () => {

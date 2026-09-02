@@ -74,6 +74,15 @@ Character detail pages now bring profile, progression, profession, and external 
 - Character data refreshes in the background after 15 minutes while the page is visible, keeps the last successful snapshot during failures, and recovers when the page becomes visible again.
 - Mythic+ summaries use current-season best runs when the profile index does not include period best-run entries.
 
+#### Consolidate external character data
+
+Character Mythic+ and Raiding tabs now place each provider's unique information alongside the canonical Blizzard data, so the same score and raid totals are not shown twice.
+
+- Mythic+ keeps Blizzard's score, vault, and recent runs as the primary view and fills missing summary values from Raider.IO, with ranks, best-run scores and levels, completion dates, and direct run links shown inline.
+- Raiding keeps Blizzard boss kills and difficulty data as the canonical view, adds Warcraft Logs boss metadata inline, and uses Raider.IO for active-raid AOTC and Cutting Edge milestones, achievement dates, scan freshness, attribution, and the profile link.
+- Warcraft Logs remains a separate card for unique latest-zone ranking metrics and five recent public reports with start and end dates.
+- Raider.IO progression and achievement entries are filtered against the active Blizzard raid list so stale or inactive raids do not reappear.
+
 #### Default Raiding to the latest expansion
 
 The character Raiding tab now opens on the latest concrete expansion so raid progression is immediately visible.

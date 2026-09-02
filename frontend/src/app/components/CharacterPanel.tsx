@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { RefreshCw } from 'lucide-react';
 import TalentTree from './TalentTree';
 import { type TalentTreeData, useTalentTree } from '../lib/useTalentTree';
 import CharacterQuickLinks from './character/CharacterQuickLinks';
@@ -35,6 +36,7 @@ import {
   getRaidExpansionOptions,
   getMemberProfileHref,
   isCurrentExpansionPlaceholder,
+  mergeMythicPlusDisplay,
   parseVaultRewardsFromSimcInput,
   parseRaidProgressionData,
   raidMatchesActiveIds,
@@ -45,8 +47,9 @@ import { useMythicDungeonDetails } from '../lib/useMythicDungeonDetails';
 import { useGameContext } from '../lib/useGameContext';
 import type { RaiderIoData, WarcraftLogsData } from '../lib/api';
 import {
-  RaidIntegrationCards,
-  RaiderIoMythicPlusCard,
+  RaiderIoRaidAttribution,
+  RaiderIoMythicPlusDetails,
+  WarcraftLogsRaidCard,
   type CharacterIntegrationState,
 } from './character/ExternalIntegrationCards';
 
@@ -227,8 +230,6 @@ export default function CharacterPanel({
           region={region}
           periods={seasonPeriods}
           activeRaidInstanceIds={gameContext?.pool_members?.raids}
-          realm={realm}
-          name={name}
           raiderIo={raiderIoIntegration}
           warcraftLogs={warcraftLogsIntegration}
           onRefreshIntegrations={onRefreshIntegrations}
@@ -373,6 +374,9 @@ function MythicPlusCard({
     () => summarizeMythicPlus(mythicPlus, region, periods, mplusDungeonDetailsByName),
     [mplusDungeonDetailsByName, mythicPlus, periods, region]
   );
+  const raiderIoData = raiderIo?.snapshot?.status === 'ok' ? raiderIo.snapshot.data : null;
+  const display = mergeMythicPlusDisplay(summary, raiderIoData);
+  const hasMythicPlusData = Boolean(summary || raiderIoData);
 
   const formatRelative = (timestamp: number) => {
     if (!timestamp || timestamp <= 0) return 'Unknown time';
@@ -404,75 +408,121 @@ function MythicPlusCard({
       <div className="card p-5">
         <div className="mb-4 flex items-center justify-between gap-3">
           <h3 className="text-xs font-bold tracking-wider text-zinc-500 uppercase">Mythic+</h3>
-          <div className="inline-flex rounded-md border border-white/10 bg-black/20 p-0.5">
-            <button
-              type="button"
-              onClick={() => setActiveTab('overview')}
-              className={`rounded px-2 py-1 text-[11px] font-bold ${
-                activeTab === 'overview'
-                  ? 'bg-gold/20 text-gold'
-                  : 'text-zinc-400 hover:text-zinc-200'
-              }`}
-            >
-              Overview
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('runs')}
-              className={`rounded px-2 py-1 text-[11px] font-bold ${
-                activeTab === 'runs' ? 'bg-gold/20 text-gold' : 'text-zinc-400 hover:text-zinc-200'
-              }`}
-            >
-              Recent Runs
-            </button>
+          <div className="flex items-center gap-2">
+            {raiderIo?.enabled && raiderIo.refreshing && (
+              <span className="text-[11px] text-zinc-500">Updating Raider.IO…</span>
+            )}
+            {raiderIo?.enabled && onRefreshIntegrations && (
+              <button
+                type="button"
+                onClick={onRefreshIntegrations}
+                disabled={raiderIo.loading || raiderIo.refreshing}
+                className="rounded border border-white/10 bg-black/20 p-1.5 text-zinc-400 transition-colors hover:text-white disabled:opacity-50"
+                aria-label="Refresh Raider.IO"
+                title="Refresh Raider.IO"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${raiderIo.refreshing ? 'animate-spin' : ''}`} />
+              </button>
+            )}
+            <div className="inline-flex rounded-md border border-white/10 bg-black/20 p-0.5">
+              <button
+                type="button"
+                onClick={() => setActiveTab('overview')}
+                className={`rounded px-2 py-1 text-[11px] font-bold ${
+                  activeTab === 'overview'
+                    ? 'bg-gold/20 text-gold'
+                    : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                Overview
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('runs')}
+                className={`rounded px-2 py-1 text-[11px] font-bold ${
+                  activeTab === 'runs'
+                    ? 'bg-gold/20 text-gold'
+                    : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                Recent Runs
+              </button>
+            </div>
           </div>
         </div>
-        {summary ? (
+        {hasMythicPlusData ? (
           activeTab === 'overview' ? (
             <div className="space-y-3">
               <StatRow
                 label="Current Score"
-                value={summary.score ? summary.score.toLocaleString() : '-'}
+                value={display.score ? display.score.toLocaleString() : '-'}
               />
-              <StatRow label="Best Runs (Period)" value={summary.runs.toString()} />
+              <StatRow label="Best Runs (Period)" value={display.runs.toString()} />
               <StatRow
                 label="Highest Key"
-                value={summary.bestLevel ? `+${summary.bestLevel}` : '-'}
+                value={display.bestLevel ? `+${display.bestLevel}` : '-'}
               />
-              <StatRow label="Top Dungeon" value={summary.bestDungeonName || '-'} />
-              <div className="my-2 h-px bg-white/5" />
-              <div className="rounded-md border border-white/5 bg-white/[0.02] p-3">
-                <p className="mb-2 text-[11px] font-bold tracking-wider text-zinc-500 uppercase">
-                  Weekly Vault Tracker
-                </p>
-                <p className="mb-3 text-[11px] text-zinc-400">
-                  Completed runs counted:{' '}
-                  <span className="font-bold text-zinc-200">{summary.vaultProgressCount}</span>
-                </p>
-                <div className="space-y-2">
-                  {summary.vaultSlots.map((slot) => (
-                    <ProgressSlotCard
-                      key={slot.slot}
-                      slotLabel={`Slot ${slot.slot}`}
-                      statusLabel={
-                        slot.unlocked
-                          ? 'Unlocked'
-                          : `${slot.threshold - summary.vaultProgressCount} more`
-                      }
-                      tone={slot.unlocked ? 'success' : 'neutral'}
-                      description={slot.keyLevel ? `Based on +${slot.keyLevel}` : 'Run more keys'}
-                      progress={slot.progress}
-                      footerRight={
-                        summary.hasAnyVaultIlvl && slot.rewardIlvl
-                          ? `iLvl ${slot.rewardIlvl}`
-                          : undefined
-                      }
-                    />
-                  ))}
-                </div>
-              </div>
+              <StatRow label="Top Dungeon" value={display.bestDungeonName || '-'} />
+              {summary && (
+                <>
+                  <div className="my-2 h-px bg-white/5" />
+                  <div className="rounded-md border border-white/5 bg-white/[0.02] p-3">
+                    <p className="mb-2 text-[11px] font-bold tracking-wider text-zinc-500 uppercase">
+                      Weekly Vault Tracker
+                    </p>
+                    <p className="mb-3 text-[11px] text-zinc-400">
+                      Completed runs counted:{' '}
+                      <span className="font-bold text-zinc-200">{summary.vaultProgressCount}</span>
+                    </p>
+                    <div className="space-y-2">
+                      {summary.vaultSlots.map((slot) => (
+                        <ProgressSlotCard
+                          key={slot.slot}
+                          slotLabel={`Slot ${slot.slot}`}
+                          statusLabel={
+                            slot.unlocked
+                              ? 'Unlocked'
+                              : `${slot.threshold - summary.vaultProgressCount} more`
+                          }
+                          tone={slot.unlocked ? 'success' : 'neutral'}
+                          description={
+                            slot.keyLevel ? `Based on +${slot.keyLevel}` : 'Run more keys'
+                          }
+                          progress={slot.progress}
+                          footerRight={
+                            summary.hasAnyVaultIlvl && slot.rewardIlvl
+                              ? `iLvl ${slot.rewardIlvl}`
+                              : undefined
+                          }
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+              {raiderIo?.enabled && (
+                <>
+                  <div className="my-2 h-px bg-white/5" />
+                  {raiderIoData ? (
+                    <RaiderIoMythicPlusDetails data={raiderIoData} />
+                  ) : (
+                    <p className="text-[11px] text-zinc-500" role="status">
+                      {raiderIo.loading && !raiderIo.snapshot
+                        ? 'Loading Raider.IO details…'
+                        : raiderIo.snapshot?.status === 'not_found'
+                          ? 'Raider.IO character profile not found.'
+                          : 'Raider.IO details unavailable.'}
+                    </p>
+                  )}
+                  {raiderIo.error && raiderIoData && (
+                    <p className="text-[11px] text-amber-300" role="status">
+                      Refresh failed; showing the last successful Raider.IO snapshot.
+                    </p>
+                  )}
+                </>
+              )}
             </div>
-          ) : (
+          ) : summary ? (
             <div className="space-y-2">
               <div className="flex items-center justify-between text-[11px] text-zinc-400">
                 <span>Showing {summary.recentRuns.length} recent runs</span>
@@ -507,7 +557,9 @@ function MythicPlusCard({
                           <p className="truncate text-[12px] font-semibold text-zinc-100">
                             {run.dungeon} <span className="text-gold font-mono">+{run.level}</span>
                           </p>
-                          <p className="text-[10px] text-zinc-500">{formatRelative(run.timestamp)}</p>
+                          <p className="text-[10px] text-zinc-500">
+                            {formatRelative(run.timestamp)}
+                          </p>
                         </div>
                         <div className="text-right">
                           <p className="font-mono text-[11px] text-zinc-200">{run.duration}</p>
@@ -532,7 +584,9 @@ function MythicPlusCard({
                       </div>
                       {run.members.length > 0 && (
                         <div className="mt-2 flex flex-wrap gap-1">
-                          {run.members.slice(0, 5).map((member: CharacterRunMember, idx: number) => {
+                          {run.members
+                            .slice(0, 5)
+                            .map((member: CharacterRunMember, idx: number) => {
                               const memberName =
                                 member?.profile?.name ||
                                 member?.character?.name ||
@@ -602,12 +656,15 @@ function MythicPlusCard({
                 })}
               </div>
             </div>
+          ) : (
+            <p className="text-[11px] text-zinc-500" role="status">
+              Blizzard recent run data unavailable.
+            </p>
           )
         ) : (
           <p className="text-[11px] text-zinc-600 italic">Mythic+ data unavailable.</p>
         )}
       </div>
-      <RaiderIoMythicPlusCard state={raiderIo} onRefresh={onRefreshIntegrations} />
     </div>
   );
 }
@@ -625,8 +682,6 @@ function RaidSectionCard({
   region: string;
   periods?: Array<Record<string, unknown>>;
   activeRaidInstanceIds?: number[];
-  realm: string;
-  name: string;
   raiderIo: CharacterIntegrationState<RaiderIoData> | null;
   warcraftLogs: CharacterIntegrationState<WarcraftLogsData> | null;
   onRefreshIntegrations?: () => void;
@@ -685,6 +740,11 @@ function RaidSectionCard({
             </select>
           </div>
         </div>
+        <RaiderIoRaidAttribution
+          state={raiderIo}
+          currentRaidNames={currentRaidNames}
+          onRefresh={onRefreshIntegrations}
+        />
         <div className="rounded-md border border-white/5 bg-white/[0.02] p-3">
           <RaidProgressCard
             raidEncounters={raidEncounters}
@@ -700,12 +760,7 @@ function RaidSectionCard({
           />
         </div>
       </div>
-      <RaidIntegrationCards
-        raiderIo={raiderIo}
-        warcraftLogs={warcraftLogs}
-        currentRaidNames={currentRaidNames}
-        onRefresh={onRefreshIntegrations}
-      />
+      <WarcraftLogsRaidCard warcraftLogs={warcraftLogs} onRefresh={onRefreshIntegrations} />
     </div>
   );
 }

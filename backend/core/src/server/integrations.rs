@@ -164,8 +164,20 @@ pub struct RaiderIoData {
     pub realm: String,
     pub region: String,
     pub score: Option<f64>,
+    pub ranks: Option<RaiderIoRanks>,
     pub best_runs: Vec<RaiderIoRun>,
     pub raid_progression: Vec<RaiderIoRaidProgression>,
+    #[serde(default)]
+    pub raid_achievements: Vec<RaiderIoRaidAchievement>,
+    #[serde(default)]
+    pub last_crawled_at: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct RaiderIoRanks {
+    pub world: Option<f64>,
+    pub region: Option<f64>,
+    pub realm: Option<f64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -174,6 +186,7 @@ pub struct RaiderIoRun {
     pub level: Option<f64>,
     pub score: Option<f64>,
     pub completed_at: Option<String>,
+    pub url: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -182,6 +195,13 @@ pub struct RaiderIoRaidProgression {
     pub summary: Option<String>,
     pub killed: Option<f64>,
     pub total: Option<f64>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct RaiderIoRaidAchievement {
+    pub raid: String,
+    pub ahead_of_the_curve_at: Option<String>,
+    pub cutting_edge_at: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -552,6 +572,33 @@ fn character_identity(
     Ok((region, realm, name))
 }
 
+fn raider_io_fields() -> String {
+    let mut raid_slugs = crate::game_data::get_instances()
+        .into_iter()
+        .filter(|instance| {
+            instance.get("type").and_then(Value::as_str) == Some("raid")
+                && instance.get("current_season").and_then(Value::as_bool) == Some(true)
+        })
+        .filter_map(|instance| {
+            instance
+                .get("slug")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+        })
+        .collect::<Vec<_>>();
+    raid_slugs.sort_unstable();
+    raid_slugs.dedup();
+
+    let mut fields = String::from(
+        "mythic_plus_scores_by_season:current,mythic_plus_ranks,mythic_plus_best_runs,raid_progression",
+    );
+    if !raid_slugs.is_empty() {
+        fields.push_str(",raid_achievement_curve:");
+        fields.push_str(&raid_slugs.join(":"));
+    }
+    fields
+}
+
 pub async fn get_raider_io_character(
     req: HttpRequest,
     state: web::Data<Arc<BlizzardAuthState>>,
@@ -586,6 +633,7 @@ pub async fn get_raider_io_character(
         }
     }
 
+    let fields = raider_io_fields();
     let response = integrations
         .client
         .get(RAIDER_IO_PROFILE_URL)
@@ -593,10 +641,7 @@ pub async fn get_raider_io_character(
             ("region", region.as_str()),
             ("realm", realm.as_str()),
             ("name", name.as_str()),
-            (
-                "fields",
-                "mythic_plus_scores_by_season:current,mythic_plus_best_runs,raid_progression",
-            ),
+            ("fields", fields.as_str()),
         ])
         .send()
         .await;
@@ -839,6 +884,16 @@ fn current_score(payload: &Value) -> Option<f64> {
     }
 }
 
+fn current_ranks(payload: &Value) -> Option<RaiderIoRanks> {
+    let overall = payload.get("mythic_plus_ranks")?.get("overall")?;
+    let ranks = RaiderIoRanks {
+        world: value_number(overall.get("world")).filter(|rank| *rank > 0.0),
+        region: value_number(overall.get("region")).filter(|rank| *rank > 0.0),
+        realm: value_number(overall.get("realm")).filter(|rank| *rank > 0.0),
+    };
+    (ranks.world.is_some() || ranks.region.is_some() || ranks.realm.is_some()).then_some(ranks)
+}
+
 fn normalize_raider_io(
     payload: &Value,
     region: &str,
@@ -879,6 +934,8 @@ fn normalize_raider_io(
                         completed_at: value_string(
                             run.get("completed_at").or_else(|| run.get("completedAt")),
                         ),
+                        url: value_string(run.get("url"))
+                            .filter(|url| url.starts_with("https://raider.io/")),
                     })
                 })
                 .collect::<Vec<_>>()
@@ -926,6 +983,38 @@ fn normalize_raider_io(
         _ => Vec::new(),
     };
 
+    let raid_achievements = profile
+        .get("raid_achievement_curve")
+        .and_then(Value::as_array)
+        .map(|achievements| {
+            achievements
+                .iter()
+                .filter_map(|achievement| {
+                    let achievement = achievement.as_object()?;
+                    let raid =
+                        value_string(achievement.get("raid").or_else(|| achievement.get("name")))?;
+                    let ahead_of_the_curve_at = value_string(
+                        achievement
+                            .get("aotc")
+                            .or_else(|| achievement.get("ahead_of_the_curve")),
+                    );
+                    let cutting_edge_at = value_string(
+                        achievement
+                            .get("cutting_edge")
+                            .or_else(|| achievement.get("cutting_edge_at")),
+                    );
+                    (ahead_of_the_curve_at.is_some() || cutting_edge_at.is_some()).then_some(
+                        RaiderIoRaidAchievement {
+                            raid,
+                            ahead_of_the_curve_at,
+                            cutting_edge_at,
+                        },
+                    )
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
     Some(RaiderIoData {
         profile_url: value_string(profile.get("profile_url"))
             .filter(|url| url.starts_with("https://raider.io/characters/"))
@@ -934,8 +1023,15 @@ fn normalize_raider_io(
         realm: display_realm,
         region: region.to_string(),
         score: current_score(payload),
+        ranks: current_ranks(payload),
         best_runs,
         raid_progression,
+        raid_achievements,
+        last_crawled_at: value_string(
+            profile
+                .get("last_crawled_at")
+                .or_else(|| profile.get("lastCrawledAt")),
+        ),
     })
 }
 
@@ -1276,6 +1372,9 @@ mod tests {
             "name": "Hero",
             "realm": {"name": "Aerie Peak"},
             "mythic_plus_scores_by_season": [{"scores": {"all": 2841.5}}],
+            "mythic_plus_ranks": {
+                "overall": {"world": 1200, "region": 340, "realm": 12}
+            },
             "mythic_plus_best_runs": [{
                 "dungeon": {"name": "Ara-Kara"},
                 "mythic_level": 15,
@@ -1284,16 +1383,49 @@ mod tests {
             }],
             "raid_progression": {
                 "current-raid": {"summary": "6/8 H", "bosses_killed": 6, "total_bosses": 8}
-            }
+            },
+            "raid_achievement_curve": [{
+                "raid": "current-raid",
+                "aotc": "2026-08-21T18:45:03Z",
+                "cutting_edge": "2026-08-22T18:45:03Z"
+            }],
+            "last_crawled_at": "2026-09-02T11:02:52Z"
         });
         let normalized = normalize_raider_io(&payload, "us", "aerie-peak", "hero").unwrap();
         assert_eq!(normalized.score, Some(2841.5));
+        assert_eq!(
+            normalized.ranks.as_ref().and_then(|ranks| ranks.world),
+            Some(1200.0)
+        );
+        assert_eq!(
+            normalized.ranks.as_ref().and_then(|ranks| ranks.region),
+            Some(340.0)
+        );
+        assert_eq!(
+            normalized.ranks.as_ref().and_then(|ranks| ranks.realm),
+            Some(12.0)
+        );
         assert_eq!(normalized.best_runs[0].dungeon, "Ara-Kara");
         assert_eq!(
             normalized.raid_progression[0].summary.as_deref(),
             Some("6/8 H")
         );
         assert_eq!(normalized.raid_progression[0].killed, Some(6.0));
+        assert_eq!(normalized.raid_achievements.len(), 1);
+        assert_eq!(
+            normalized.raid_achievements[0]
+                .ahead_of_the_curve_at
+                .as_deref(),
+            Some("2026-08-21T18:45:03Z")
+        );
+        assert_eq!(
+            normalized.raid_achievements[0].cutting_edge_at.as_deref(),
+            Some("2026-08-22T18:45:03Z")
+        );
+        assert_eq!(
+            normalized.last_crawled_at.as_deref(),
+            Some("2026-09-02T11:02:52Z")
+        );
     }
 
     #[test]

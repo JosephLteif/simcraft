@@ -183,6 +183,13 @@ export type RaiderIoRun = {
   level: number | null;
   score: number | null;
   completed_at: string | null;
+  url: string | null;
+};
+
+export type RaiderIoRanks = {
+  world: number | null;
+  region: number | null;
+  realm: number | null;
 };
 
 export type RaiderIoRaidProgression = {
@@ -192,14 +199,23 @@ export type RaiderIoRaidProgression = {
   total: number | null;
 };
 
+export type RaiderIoRaidAchievement = {
+  raid: string;
+  ahead_of_the_curve_at: string | null;
+  cutting_edge_at: string | null;
+};
+
 export type RaiderIoData = {
   profile_url: string;
   name: string;
   realm: string;
   region: string;
   score: number | null;
+  ranks: RaiderIoRanks | null;
   best_runs: RaiderIoRun[];
   raid_progression: RaiderIoRaidProgression[];
+  raid_achievements: RaiderIoRaidAchievement[];
+  last_crawled_at: string | null;
 };
 
 export type WarcraftLogsReport = {
