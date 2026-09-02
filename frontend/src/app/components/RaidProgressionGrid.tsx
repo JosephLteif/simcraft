@@ -354,15 +354,26 @@ function WarcraftLogsBossParse({ ranking }: { ranking: WarcraftLogsBossRanking }
         </span>
       )}
       {ranking.total_kills !== null ? (
-        <span className="text-zinc-400">{formatParseCount(ranking.total_kills)} public kills</span>
-      ) : null}
-      {amount !== null ? (
-        <span className="text-zinc-400">
-          Best amount <strong className="font-semibold text-zinc-200">{amount}</strong>{' '}
-          {metric || 'amount'}
+        <span className="rounded border border-white/10 bg-white/[0.04] px-1.5 py-0.5">
+          <strong className="font-semibold text-zinc-200">
+            {formatParseCount(ranking.total_kills)}
+          </strong>{' '}
+          <span className="text-zinc-400">public kills</span>
         </span>
       ) : null}
-      {ranking.spec ? <span className="text-zinc-400">Spec: {ranking.spec}</span> : null}
+      {amount !== null ? (
+        <span className="rounded border border-white/10 bg-white/[0.04] px-1.5 py-0.5">
+          <span className="text-zinc-400">Best amount</span>{' '}
+          <strong className="font-semibold text-zinc-200">{amount}</strong>{' '}
+          <span className="text-zinc-400">{metric || 'amount'}</span>
+        </span>
+      ) : null}
+      {ranking.spec ? (
+        <span className="rounded border border-white/10 bg-white/[0.04] px-1.5 py-0.5">
+          <span className="text-zinc-400">Spec</span>{' '}
+          <strong className="font-semibold text-zinc-200">{ranking.spec}</strong>
+        </span>
+      ) : null}
     </p>
   );
 }
