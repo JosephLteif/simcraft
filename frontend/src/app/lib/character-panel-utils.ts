@@ -605,6 +605,35 @@ export function isLikelyCurrentExpansionLabel(value: unknown): boolean {
   return lower === 'current season' || lower === 'current expansion';
 }
 
+export type CharacterRaidExpansionOption = {
+  key: string;
+  label: string;
+};
+
+export function getRaidExpansionOptions(
+  raidEncounters: RaidEncountersPayload
+): CharacterRaidExpansionOption[] {
+  const expansions = Array.isArray(raidEncounters?.expansions) ? raidEncounters.expansions : [];
+  const options = new Map<string, string>();
+  for (const expansion of expansions) {
+    const raw =
+      expansion?.expansion?.name ||
+      expansion?.expansion_name ||
+      expansion?.label ||
+      expansion?.name ||
+      'Unknown expansion';
+    const label = String(raw).trim() || 'Unknown expansion';
+    if (isCurrentExpansionPlaceholder(label)) continue;
+    const key = label.toLowerCase().replace(/[\s_]+/g, '-') || 'unknown-expansion';
+    if (!options.has(key)) options.set(key, label);
+  }
+
+  return [
+    { key: 'all', label: 'All expansions' },
+    ...Array.from(options.entries()).map(([key, label]) => ({ key, label })),
+  ];
+}
+
 export function raidMatchesActiveIds(raid: unknown, activeIds?: number[]): boolean {
   if (!activeIds) return true;
 
@@ -921,12 +950,12 @@ export function summarizeCurrentRaidProgress(
   const raidExpansionKeys = parsed.expansionOrder.filter((key) =>
     parsed.raids.some((raid) => raid.expansionKey === key)
   );
-  const currentExpansionKey =
-    raidExpansionKeys.find((key) =>
-      parsed.raids.some(
-        (raid) => raid.expansionKey === key && raid.expansionLabel === 'Current expansion'
-      )
-    ) || raidExpansionKeys[0];
+  const concreteExpansionKeys = raidExpansionKeys.filter((key) =>
+    parsed.raids.some(
+      (raid) => raid.expansionKey === key && !isCurrentExpansionPlaceholder(raid.expansionLabel)
+    )
+  );
+  const currentExpansionKey = concreteExpansionKeys.at(-1) || raidExpansionKeys.at(-1);
   const currentRaids = parsed.raids.filter((raid) => raid.expansionKey === currentExpansionKey);
   const bosses = currentRaids.flatMap((raid) => raid.bosses);
   if (bosses.length === 0) return null;

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildCharacterExternalLinks,
+  getRaidExpansionOptions,
   parseCharacterProfessions,
   parseRaidProgressionData,
   summarizeCurrentRaidProgress,
@@ -159,6 +160,53 @@ describe('character panel normalization', () => {
       clearedBosses: 2,
       totalBosses: 3,
       weeklyBossKills: 1,
+    });
+  });
+
+  it('omits generic current-expansion options and preserves latest expansion order', () => {
+    const options = getRaidExpansionOptions({
+      expansions: [{ name: 'Current expansion' }, { name: 'Dragonflight' }, { name: 'Midnight' }],
+    });
+
+    expect(options).toEqual([
+      { key: 'all', label: 'All expansions' },
+      { key: 'dragonflight', label: 'Dragonflight' },
+      { key: 'midnight', label: 'Midnight' },
+    ]);
+    expect(options.at(-1)?.label).toBe('Midnight');
+  });
+
+  it('summarizes the latest concrete expansion when a placeholder is present', () => {
+    const raids = {
+      expansions: [
+        {
+          name: 'Current expansion',
+          instances: [{ id: 900, name: 'Placeholder Raid', modes: [] }],
+        },
+        {
+          name: 'Midnight',
+          instances: [
+            {
+              id: 901,
+              name: 'Latest Raid',
+              modes: [
+                {
+                  difficulty: 'normal',
+                  progress: {
+                    encounters: [{ id: 1, name: 'Boss', completed_count: 1 }],
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(summarizeCurrentRaidProgress(raids, 'us', undefined, [900, 901])).toMatchObject({
+      expansionLabel: 'Midnight',
+      clearedBosses: 1,
+      totalBosses: 1,
     });
   });
 });

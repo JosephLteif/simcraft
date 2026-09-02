@@ -63,6 +63,13 @@ Character detail pages now bring profile, progression, profession, and external 
 - Character data refreshes in the background after 15 minutes while the page is visible, keeps the last successful snapshot during failures, and recovers when the page becomes visible again.
 - Mythic+ summaries use current-season best runs when the profile index does not include period best-run entries.
 
+#### Default Raiding to the latest expansion
+
+The character Raiding tab now opens on the latest concrete expansion so raid progression is immediately visible.
+
+- The generic `Current expansion` option is no longer shown when it does not map to the character's raid data.
+- The final expansion in the available raid data is selected by default, while `All expansions` remains available for browsing older content.
+
 ### Bug fixes
 
 #### Show current raid progression

@@ -1,5 +1,5 @@
 {
-  "contentRevision": "Unreleased-3183516ce484",
+  "contentRevision": "Unreleased-444ec8624d53",
   "releases": [
     {
       "version": "Unreleased",
@@ -71,6 +71,15 @@
             "Open consistent Armory, Warcraft Logs, and Raider.IO links for characters with spaces, apostrophes, and realm slugs.",
             "Character data refreshes in the background after 15 minutes while the page is visible, keeps the last successful snapshot during failures, and recovers when the page becomes visible again.",
             "Mythic+ summaries use current-season best runs when the profile index does not include period best-run entries."
+          ]
+        },
+        {
+          "category": "improvement",
+          "title": "Default Raiding to the latest expansion",
+          "summary": "The character Raiding tab now opens on the latest concrete expansion so raid progression is immediately visible.",
+          "items": [
+            "The generic `Current expansion` option is no longer shown when it does not map to the character's raid data.",
+            "The final expansion in the available raid data is selected by default, while `All expansions` remains available for browsing older content."
           ]
         },
         {

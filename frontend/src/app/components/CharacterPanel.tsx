@@ -32,9 +32,9 @@ import {
   buildCharacterExternalLinks,
   computeMythicVaultProgress,
   computeWeeklyRaidBossKills,
+  getRaidExpansionOptions,
   getMemberProfileHref,
   isCurrentExpansionPlaceholder,
-  isLikelyCurrentExpansionLabel,
   parseVaultRewardsFromSimcInput,
   raidMatchesActiveIds,
   summarizeMythicPlus,
@@ -603,57 +603,22 @@ function RaidSectionCard({
   const [selectedExpansion, setSelectedExpansion] = useState<string>('all');
   const [hasInitializedExpansion, setHasInitializedExpansion] = useState(false);
 
-  const expansionOptions = useMemo(() => {
-    const normalizeExpansionKey = (value: unknown) => {
-      const raw = String(value ?? '').trim();
-      const canonical = isCurrentExpansionPlaceholder(raw) ? 'Current expansion' : raw;
-      return canonical.toLowerCase().replace(/[\s_]+/g, '-');
-    };
-    const expansions = Array.isArray(raidEncounters?.expansions) ? raidEncounters.expansions : [];
-    const out = new Map<
-      string,
-      { label: string; isCurrent: boolean; isPlaceholderLabel: boolean }
-    >();
-    for (const exp of expansions) {
-      const raw =
-        exp?.expansion?.name ||
-        exp?.expansion_name ||
-        exp?.label ||
-        exp?.name ||
-        'Unknown expansion';
-      const rawLabel = String(raw || 'Unknown expansion').trim() || 'Unknown expansion';
-      const isCurrent = isCurrentExpansionPlaceholder(rawLabel);
-      const label = isCurrent ? 'Current expansion' : rawLabel;
-      const key = normalizeExpansionKey(label) || 'unknown-expansion';
-      const existing = out.get(key);
-      if (!existing) {
-        out.set(key, { label, isCurrent, isPlaceholderLabel: isCurrent });
-      } else {
-        if (!existing.isCurrent && isCurrent) {
-          existing.isCurrent = true;
-        }
-        if (existing.isPlaceholderLabel && !isCurrent) {
-          existing.label = label;
-          existing.isPlaceholderLabel = false;
-        }
-      }
-    }
-    const entries = Array.from(out.entries()).map(([key, value]) => ({
-      key,
-      label: value.label,
-      isCurrent: value.isCurrent || isLikelyCurrentExpansionLabel(value.label),
-    }));
-    return [{ key: 'all', label: 'All expansions', isCurrent: false }, ...entries];
-  }, [raidEncounters]);
+  const expansionOptions = useMemo(() => getRaidExpansionOptions(raidEncounters), [raidEncounters]);
 
   useEffect(() => {
-    if (hasInitializedExpansion) return;
-    const preferred =
-      expansionOptions.find((opt) => opt.isCurrent && opt.key !== 'all') ||
-      expansionOptions.find((opt) => opt.key !== 'all');
-    if (preferred) setSelectedExpansion(preferred.key);
+    const latestExpansion = [...expansionOptions].reverse().find((opt) => opt.key !== 'all');
+    if (!latestExpansion) {
+      setSelectedExpansion('all');
+      return;
+    }
+    if (
+      !hasInitializedExpansion ||
+      !expansionOptions.some((opt) => opt.key === selectedExpansion)
+    ) {
+      setSelectedExpansion(latestExpansion.key);
+    }
     setHasInitializedExpansion(true);
-  }, [expansionOptions, hasInitializedExpansion]);
+  }, [expansionOptions, hasInitializedExpansion, selectedExpansion]);
 
   return (
     <div className="card p-5">
