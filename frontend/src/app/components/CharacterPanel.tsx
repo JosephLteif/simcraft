@@ -42,6 +42,12 @@ import {
 import { parseTalentLoadouts, type TalentLoadoutParsed } from '../lib/types';
 import { useMythicDungeonDetails } from '../lib/useMythicDungeonDetails';
 import { useGameContext } from '../lib/useGameContext';
+import type { RaiderIoData, WarcraftLogsData } from '../lib/api';
+import {
+  RaidIntegrationCards,
+  RaiderIoMythicPlusCard,
+  type CharacterIntegrationState,
+} from './character/ExternalIntegrationCards';
 
 function getUpgradeLabel(item: Record<string, any>): string {
   const upgrade = item?.upgrade;
@@ -68,6 +74,9 @@ interface CharacterPanelProps {
   characterMediaUrl?: string | null;
   latestSimcInput?: string | null;
   initialTab?: 'profile' | 'raiding' | 'mythic' | 'vault';
+  raiderIoIntegration?: CharacterIntegrationState<RaiderIoData> | null;
+  warcraftLogsIntegration?: CharacterIntegrationState<WarcraftLogsData> | null;
+  onRefreshIntegrations?: () => void;
 }
 
 export default function CharacterPanel({
@@ -85,6 +94,9 @@ export default function CharacterPanel({
   characterMediaUrl,
   latestSimcInput,
   initialTab,
+  raiderIoIntegration = null,
+  warcraftLogsIntegration = null,
+  onRefreshIntegrations,
 }: CharacterPanelProps) {
   const gameContext = useGameContext();
   const seasonPeriods = gameContext?.active_season?.periods;
@@ -203,6 +215,8 @@ export default function CharacterPanel({
           periods={seasonPeriods}
           realm={realm}
           name={name}
+          raiderIo={raiderIoIntegration}
+          onRefreshIntegrations={onRefreshIntegrations}
         />
       )}
 
@@ -214,6 +228,9 @@ export default function CharacterPanel({
           activeRaidInstanceIds={gameContext?.pool_members?.raids}
           realm={realm}
           name={name}
+          raiderIo={raiderIoIntegration}
+          warcraftLogs={warcraftLogsIntegration}
+          onRefreshIntegrations={onRefreshIntegrations}
         />
       )}
       {pageTab === 'vault' && (
@@ -337,12 +354,16 @@ function MythicPlusCard({
   mythicPlus,
   region,
   periods,
+  raiderIo,
+  onRefreshIntegrations,
 }: {
   mythicPlus: MythicPlusPayload;
   region?: string;
   periods?: Array<Record<string, unknown>>;
   realm: string;
   name: string;
+  raiderIo: CharacterIntegrationState<RaiderIoData> | null;
+  onRefreshIntegrations?: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<'overview' | 'runs'>('overview');
   const mplusDungeonDetailsByName = useMythicDungeonDetails('us');
@@ -378,211 +399,214 @@ function MythicPlusCard({
     return out;
   }, [mplusDungeonDetailsByName]);
   return (
-    <div className="card p-5">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <h3 className="text-xs font-bold tracking-wider text-zinc-500 uppercase">Mythic+</h3>
-        <div className="inline-flex rounded-md border border-white/10 bg-black/20 p-0.5">
-          <button
-            type="button"
-            onClick={() => setActiveTab('overview')}
-            className={`rounded px-2 py-1 text-[11px] font-bold ${
-              activeTab === 'overview'
-                ? 'bg-gold/20 text-gold'
-                : 'text-zinc-400 hover:text-zinc-200'
-            }`}
-          >
-            Overview
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('runs')}
-            className={`rounded px-2 py-1 text-[11px] font-bold ${
-              activeTab === 'runs' ? 'bg-gold/20 text-gold' : 'text-zinc-400 hover:text-zinc-200'
-            }`}
-          >
-            Recent Runs
-          </button>
+    <div className="space-y-4">
+      <div className="card p-5">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h3 className="text-xs font-bold tracking-wider text-zinc-500 uppercase">Mythic+</h3>
+          <div className="inline-flex rounded-md border border-white/10 bg-black/20 p-0.5">
+            <button
+              type="button"
+              onClick={() => setActiveTab('overview')}
+              className={`rounded px-2 py-1 text-[11px] font-bold ${
+                activeTab === 'overview'
+                  ? 'bg-gold/20 text-gold'
+                  : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              Overview
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('runs')}
+              className={`rounded px-2 py-1 text-[11px] font-bold ${
+                activeTab === 'runs' ? 'bg-gold/20 text-gold' : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              Recent Runs
+            </button>
+          </div>
         </div>
-      </div>
-      {summary ? (
-        activeTab === 'overview' ? (
-          <div className="space-y-3">
-            <StatRow
-              label="Current Score"
-              value={summary.score ? summary.score.toLocaleString() : '-'}
-            />
-            <StatRow label="Best Runs (Period)" value={summary.runs.toString()} />
-            <StatRow
-              label="Highest Key"
-              value={summary.bestLevel ? `+${summary.bestLevel}` : '-'}
-            />
-            <StatRow label="Top Dungeon" value={summary.bestDungeonName || '-'} />
-            <div className="my-2 h-px bg-white/5" />
-            <div className="rounded-md border border-white/5 bg-white/[0.02] p-3">
-              <p className="mb-2 text-[11px] font-bold tracking-wider text-zinc-500 uppercase">
-                Weekly Vault Tracker
-              </p>
-              <p className="mb-3 text-[11px] text-zinc-400">
-                Completed runs counted:{' '}
-                <span className="font-bold text-zinc-200">{summary.vaultProgressCount}</span>
-              </p>
-              <div className="space-y-2">
-                {summary.vaultSlots.map((slot) => (
-                  <ProgressSlotCard
-                    key={slot.slot}
-                    slotLabel={`Slot ${slot.slot}`}
-                    statusLabel={
-                      slot.unlocked
-                        ? 'Unlocked'
-                        : `${slot.threshold - summary.vaultProgressCount} more`
-                    }
-                    tone={slot.unlocked ? 'success' : 'neutral'}
-                    description={slot.keyLevel ? `Based on +${slot.keyLevel}` : 'Run more keys'}
-                    progress={slot.progress}
-                    footerRight={
-                      summary.hasAnyVaultIlvl && slot.rewardIlvl
-                        ? `iLvl ${slot.rewardIlvl}`
-                        : undefined
-                    }
-                  />
-                ))}
+        {summary ? (
+          activeTab === 'overview' ? (
+            <div className="space-y-3">
+              <StatRow
+                label="Current Score"
+                value={summary.score ? summary.score.toLocaleString() : '-'}
+              />
+              <StatRow label="Best Runs (Period)" value={summary.runs.toString()} />
+              <StatRow
+                label="Highest Key"
+                value={summary.bestLevel ? `+${summary.bestLevel}` : '-'}
+              />
+              <StatRow label="Top Dungeon" value={summary.bestDungeonName || '-'} />
+              <div className="my-2 h-px bg-white/5" />
+              <div className="rounded-md border border-white/5 bg-white/[0.02] p-3">
+                <p className="mb-2 text-[11px] font-bold tracking-wider text-zinc-500 uppercase">
+                  Weekly Vault Tracker
+                </p>
+                <p className="mb-3 text-[11px] text-zinc-400">
+                  Completed runs counted:{' '}
+                  <span className="font-bold text-zinc-200">{summary.vaultProgressCount}</span>
+                </p>
+                <div className="space-y-2">
+                  {summary.vaultSlots.map((slot) => (
+                    <ProgressSlotCard
+                      key={slot.slot}
+                      slotLabel={`Slot ${slot.slot}`}
+                      statusLabel={
+                        slot.unlocked
+                          ? 'Unlocked'
+                          : `${slot.threshold - summary.vaultProgressCount} more`
+                      }
+                      tone={slot.unlocked ? 'success' : 'neutral'}
+                      description={slot.keyLevel ? `Based on +${slot.keyLevel}` : 'Run more keys'}
+                      progress={slot.progress}
+                      footerRight={
+                        summary.hasAnyVaultIlvl && slot.rewardIlvl
+                          ? `iLvl ${slot.rewardIlvl}`
+                          : undefined
+                      }
+                    />
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-[11px] text-zinc-400">
-              <span>Showing {summary.recentRuns.length} recent runs</span>
-              {summary.hasTimedStatusData ? (
-                <span>
-                  <span className="text-emerald-300">{summary.timedRuns} timed</span> ·{' '}
-                  <span className="text-red-300">{summary.depletedRuns} depleted</span>
-                </span>
-              ) : null}
-            </div>
-            <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
-              {summary.recentRuns.map((run) => {
-                const runStatus =
-                  run.timed === true ? 'Timed' : run.timed === false ? 'Depleted' : null;
-                const statusOrDelta = run.clockDelta || runStatus;
-                return (
-                  <div
-                    key={run.id}
-                    className="rounded-md border border-white/5 bg-white/[0.02] p-2.5"
-                  >
-                    <div className="flex items-center gap-2">
-                      {run.timed !== null ? (
-                        <span
-                          className={`h-7 w-1.5 shrink-0 rounded-full ${
-                            run.timed
-                              ? 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.6)]'
-                              : 'bg-red-400 shadow-[0_0_10px_rgba(248,113,113,0.6)]'
-                          }`}
-                        />
-                      ) : null}
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-[12px] font-semibold text-zinc-100">
-                          {run.dungeon} <span className="text-gold font-mono">+{run.level}</span>
-                        </p>
-                        <p className="text-[10px] text-zinc-500">{formatRelative(run.timestamp)}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-mono text-[11px] text-zinc-200">{run.duration}</p>
-                        {statusOrDelta ? (
-                          <p
-                            className={`text-[10px] font-bold ${
-                              run.timed === true
-                                ? 'text-emerald-300'
-                                : run.timed === false
-                                  ? 'text-red-300'
-                                  : run.clockDelta?.startsWith('+')
-                                    ? 'text-emerald-300'
-                                    : run.clockDelta?.startsWith('-')
-                                      ? 'text-red-300'
-                                      : 'text-zinc-400'
+          ) : (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-[11px] text-zinc-400">
+                <span>Showing {summary.recentRuns.length} recent runs</span>
+                {summary.hasTimedStatusData ? (
+                  <span>
+                    <span className="text-emerald-300">{summary.timedRuns} timed</span> ·{' '}
+                    <span className="text-red-300">{summary.depletedRuns} depleted</span>
+                  </span>
+                ) : null}
+              </div>
+              <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
+                {summary.recentRuns.map((run) => {
+                  const runStatus =
+                    run.timed === true ? 'Timed' : run.timed === false ? 'Depleted' : null;
+                  const statusOrDelta = run.clockDelta || runStatus;
+                  return (
+                    <div
+                      key={run.id}
+                      className="rounded-md border border-white/5 bg-white/[0.02] p-2.5"
+                    >
+                      <div className="flex items-center gap-2">
+                        {run.timed !== null ? (
+                          <span
+                            className={`h-7 w-1.5 shrink-0 rounded-full ${
+                              run.timed
+                                ? 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.6)]'
+                                : 'bg-red-400 shadow-[0_0_10px_rgba(248,113,113,0.6)]'
                             }`}
-                          >
-                            {statusOrDelta}
-                          </p>
+                          />
                         ) : null}
-                      </div>
-                    </div>
-                    {run.members.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-1">
-                        {run.members.slice(0, 5).map((member: CharacterRunMember, idx: number) => {
-                          const memberName =
-                            member?.profile?.name ||
-                            member?.character?.name ||
-                            member?.character_name ||
-                            member?.name ||
-                            'Player';
-                          const memberRealm =
-                            member?.profile?.realm?.slug ||
-                            member?.profile?.realm?.name ||
-                            member?.character?.realm?.slug ||
-                            member?.character?.realm?.name ||
-                            member?.realm ||
-                            '';
-                          const memberClass =
-                            member?.profile?.character_class?.name ||
-                            member?.specialization?.name ||
-                            member?.character_class?.name ||
-                            (typeof member?.class === 'object'
-                              ? member.class?.name
-                              : member?.class) ||
-                            '';
-                          const memberProfile = getMemberProfileHref(member, region);
-                          const memberLabel = `${memberName}${memberClass ? ` (${memberClass})` : ''}`;
-                          return memberProfile ? (
-                            memberProfile.external ? (
-                              <a
-                                key={`${memberName}-${idx}`}
-                                href={memberProfile.href}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="hover:border-gold/40 hover:text-gold rounded border border-white/10 bg-black/30 px-1.5 py-0.5 text-[10px] text-zinc-300 transition-colors"
-                                title={`Open ${memberName} profile`}
-                              >
-                                {memberLabel}
-                                {memberRealm ? ` - ${memberRealm}` : ''}
-                              </a>
-                            ) : (
-                              <Link
-                                key={`${memberName}-${idx}`}
-                                href={memberProfile.href}
-                                className="hover:border-gold/40 hover:text-gold rounded border border-white/10 bg-black/30 px-1.5 py-0.5 text-[10px] text-zinc-300 transition-colors"
-                                title={`Open ${memberName} profile`}
-                              >
-                                {memberLabel}
-                                {memberRealm ? ` - ${memberRealm}` : ''}
-                              </Link>
-                            )
-                          ) : (
-                            <span
-                              key={`${memberName}-${idx}`}
-                              className="rounded border border-white/10 bg-black/30 px-1.5 py-0.5 text-[10px] text-zinc-300"
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[12px] font-semibold text-zinc-100">
+                            {run.dungeon} <span className="text-gold font-mono">+{run.level}</span>
+                          </p>
+                          <p className="text-[10px] text-zinc-500">{formatRelative(run.timestamp)}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-mono text-[11px] text-zinc-200">{run.duration}</p>
+                          {statusOrDelta ? (
+                            <p
+                              className={`text-[10px] font-bold ${
+                                run.timed === true
+                                  ? 'text-emerald-300'
+                                  : run.timed === false
+                                    ? 'text-red-300'
+                                    : run.clockDelta?.startsWith('+')
+                                      ? 'text-emerald-300'
+                                      : run.clockDelta?.startsWith('-')
+                                        ? 'text-red-300'
+                                        : 'text-zinc-400'
+                              }`}
                             >
-                              {memberLabel}
-                              {memberRealm ? ` - ${memberRealm}` : ''}
-                            </span>
-                          );
-                        })}
-                        {run.members.length > 5 && (
-                          <span className="rounded border border-white/10 bg-black/30 px-1.5 py-0.5 text-[10px] text-zinc-400">
-                            +{run.members.length - 5} more
-                          </span>
-                        )}
+                              {statusOrDelta}
+                            </p>
+                          ) : null}
+                        </div>
                       </div>
-                    )}
-                  </div>
-                );
-              })}
+                      {run.members.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {run.members.slice(0, 5).map((member: CharacterRunMember, idx: number) => {
+                              const memberName =
+                                member?.profile?.name ||
+                                member?.character?.name ||
+                                member?.character_name ||
+                                member?.name ||
+                                'Player';
+                              const memberRealm =
+                                member?.profile?.realm?.slug ||
+                                member?.profile?.realm?.name ||
+                                member?.character?.realm?.slug ||
+                                member?.character?.realm?.name ||
+                                member?.realm ||
+                                '';
+                              const memberClass =
+                                member?.profile?.character_class?.name ||
+                                member?.specialization?.name ||
+                                member?.character_class?.name ||
+                                (typeof member?.class === 'object'
+                                  ? member.class?.name
+                                  : member?.class) ||
+                                '';
+                              const memberProfile = getMemberProfileHref(member, region);
+                              const memberLabel = `${memberName}${memberClass ? ` (${memberClass})` : ''}`;
+                              return memberProfile ? (
+                                memberProfile.external ? (
+                                  <a
+                                    key={`${memberName}-${idx}`}
+                                    href={memberProfile.href}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="hover:border-gold/40 hover:text-gold rounded border border-white/10 bg-black/30 px-1.5 py-0.5 text-[10px] text-zinc-300 transition-colors"
+                                    title={`Open ${memberName} profile`}
+                                  >
+                                    {memberLabel}
+                                    {memberRealm ? ` - ${memberRealm}` : ''}
+                                  </a>
+                                ) : (
+                                  <Link
+                                    key={`${memberName}-${idx}`}
+                                    href={memberProfile.href}
+                                    className="hover:border-gold/40 hover:text-gold rounded border border-white/10 bg-black/30 px-1.5 py-0.5 text-[10px] text-zinc-300 transition-colors"
+                                    title={`Open ${memberName} profile`}
+                                  >
+                                    {memberLabel}
+                                    {memberRealm ? ` - ${memberRealm}` : ''}
+                                  </Link>
+                                )
+                              ) : (
+                                <span
+                                  key={`${memberName}-${idx}`}
+                                  className="rounded border border-white/10 bg-black/30 px-1.5 py-0.5 text-[10px] text-zinc-300"
+                                >
+                                  {memberLabel}
+                                  {memberRealm ? ` - ${memberRealm}` : ''}
+                                </span>
+                              );
+                            })}
+                          {run.members.length > 5 && (
+                            <span className="rounded border border-white/10 bg-black/30 px-1.5 py-0.5 text-[10px] text-zinc-400">
+                              +{run.members.length - 5} more
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        )
-      ) : (
-        <p className="text-[11px] text-zinc-600 italic">Mythic+ data unavailable.</p>
-      )}
+          )
+        ) : (
+          <p className="text-[11px] text-zinc-600 italic">Mythic+ data unavailable.</p>
+        )}
+      </div>
+      <RaiderIoMythicPlusCard state={raiderIo} onRefresh={onRefreshIntegrations} />
     </div>
   );
 }
@@ -592,6 +616,9 @@ function RaidSectionCard({
   region,
   periods,
   activeRaidInstanceIds,
+  raiderIo,
+  warcraftLogs,
+  onRefreshIntegrations,
 }: {
   raidEncounters: RaidEncountersPayload;
   region: string;
@@ -599,6 +626,9 @@ function RaidSectionCard({
   activeRaidInstanceIds?: number[];
   realm: string;
   name: string;
+  raiderIo: CharacterIntegrationState<RaiderIoData> | null;
+  warcraftLogs: CharacterIntegrationState<WarcraftLogsData> | null;
+  onRefreshIntegrations?: () => void;
 }) {
   const [selectedExpansion, setSelectedExpansion] = useState<string>('all');
   const [hasInitializedExpansion, setHasInitializedExpansion] = useState(false);
@@ -621,36 +651,43 @@ function RaidSectionCard({
   }, [expansionOptions, hasInitializedExpansion, selectedExpansion]);
 
   return (
-    <div className="card p-5">
-      <div className="mb-4 flex items-start justify-between gap-3">
-        <h3 className="text-xs font-bold tracking-wider text-zinc-500 uppercase">Raid</h3>
-        <div className="flex items-center gap-2">
-          <select
-            aria-label="Raid expansion"
-            value={selectedExpansion}
-            onChange={(e) => setSelectedExpansion(e.target.value)}
-            className="input-field h-9 w-full px-2 py-1 text-[11px] text-zinc-100 sm:w-[180px]"
-            style={{ colorScheme: 'dark' }}
-          >
-            {expansionOptions.map((opt) => (
-              <option key={opt.key} value={opt.key}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
+    <div className="space-y-4">
+      <div className="card p-5">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <h3 className="text-xs font-bold tracking-wider text-zinc-500 uppercase">Raid</h3>
+          <div className="flex items-center gap-2">
+            <select
+              aria-label="Raid expansion"
+              value={selectedExpansion}
+              onChange={(e) => setSelectedExpansion(e.target.value)}
+              className="input-field h-9 w-full px-2 py-1 text-[11px] text-zinc-100 sm:w-[180px]"
+              style={{ colorScheme: 'dark' }}
+            >
+              {expansionOptions.map((opt) => (
+                <option key={opt.key} value={opt.key}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div className="rounded-md border border-white/5 bg-white/[0.02] p-3">
+          <RaidProgressCard
+            raidEncounters={raidEncounters}
+            embedded
+            region={region}
+            periods={periods}
+            activeRaidInstanceIds={activeRaidInstanceIds}
+            selectedExpansion={selectedExpansion}
+            selectedRaidName="all"
+          />
         </div>
       </div>
-      <div className="rounded-md border border-white/5 bg-white/[0.02] p-3">
-        <RaidProgressCard
-          raidEncounters={raidEncounters}
-          embedded
-          region={region}
-          periods={periods}
-          activeRaidInstanceIds={activeRaidInstanceIds}
-          selectedExpansion={selectedExpansion}
-          selectedRaidName="all"
-        />
-      </div>
+      <RaidIntegrationCards
+        raiderIo={raiderIo}
+        warcraftLogs={warcraftLogs}
+        onRefresh={onRefreshIntegrations}
+      />
     </div>
   );
 }

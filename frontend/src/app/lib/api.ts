@@ -169,6 +169,85 @@ export type BlizzardCredentialProfile = {
   has_secret?: boolean;
 };
 
+export type IntegrationStatus = 'ok' | 'not_found' | 'unavailable';
+
+export type IntegrationEnvelope<T> = {
+  status: IntegrationStatus;
+  data: T | null;
+  fetched_at: number | null;
+  error_code?: string;
+};
+
+export type RaiderIoRun = {
+  dungeon: string;
+  level: number | null;
+  score: number | null;
+  completed_at: string | null;
+};
+
+export type RaiderIoRaidProgression = {
+  raid: string;
+  summary: string | null;
+  killed: number | null;
+  total: number | null;
+};
+
+export type RaiderIoData = {
+  profile_url: string;
+  name: string;
+  realm: string;
+  region: string;
+  score: number | null;
+  best_runs: RaiderIoRun[];
+  raid_progression: RaiderIoRaidProgression[];
+};
+
+export type WarcraftLogsReport = {
+  code: string;
+  title: string | null;
+  zone_name: string | null;
+  start_time: number | null;
+  end_time: number | null;
+  url: string;
+};
+
+export type WarcraftLogsRanking = {
+  zone_id: number | null;
+  zone_name: string | null;
+  metric: string | null;
+  best_performance_average: number | null;
+  median_performance_average: number | null;
+  all_stars: number | null;
+  average_item_level: number | null;
+};
+
+export type WarcraftLogsData = {
+  profile_url: string;
+  name: string;
+  realm: string;
+  region: string;
+  reports: WarcraftLogsReport[];
+  ranking: WarcraftLogsRanking | null;
+};
+
+export type IntegrationSettings = {
+  raider_io_enabled: boolean;
+  warcraft_logs_enabled: boolean;
+  warcraft_logs: {
+    user_configured: boolean;
+    user_client_id: string | null;
+    effective_source: 'user' | 'environment' | 'admin' | null;
+    environment_configured: boolean;
+    admin_configured: boolean;
+  };
+};
+
+export type WarcraftLogsAdminSettings = {
+  configured: boolean;
+  client_id: string | null;
+  environment_configured: boolean;
+};
+
 export type HostedUser = {
   id: string;
   provider_subject: string | null;
@@ -198,6 +277,104 @@ export function updateHostedUser(
     method: 'PATCH',
     body: JSON.stringify(update),
   });
+}
+
+export function getIntegrationSettings(): Promise<IntegrationSettings> {
+  return fetchJson<IntegrationSettings>(`${API_URL}/api/integrations/settings`);
+}
+
+export function updateIntegrationSettings(
+  provider: 'raider_io' | 'warcraft_logs',
+  enabled: boolean
+) {
+  return fetchJson<IntegrationSettings>(`${API_URL}/api/integrations/settings`, {
+    method: 'POST',
+    body: JSON.stringify({ provider, enabled }),
+  });
+}
+
+function characterIntegrationUrl(
+  provider: 'raider-io' | 'warcraft-logs',
+  region: string,
+  realm: string,
+  name: string,
+  refresh: boolean
+) {
+  const path = [region, realm, name].map((part) => encodeURIComponent(part)).join('/');
+  return `${API_URL}/api/integrations/${provider}/character/${path}${refresh ? '?refresh=true' : ''}`;
+}
+
+export function getRaiderIoCharacter(
+  region: string,
+  realm: string,
+  name: string,
+  refresh = false
+): Promise<IntegrationEnvelope<RaiderIoData>> {
+  return fetchJson<IntegrationEnvelope<RaiderIoData>>(
+    characterIntegrationUrl('raider-io', region, realm, name, refresh)
+  );
+}
+
+export function getWarcraftLogsCharacter(
+  region: string,
+  realm: string,
+  name: string,
+  refresh = false
+): Promise<IntegrationEnvelope<WarcraftLogsData>> {
+  return fetchJson<IntegrationEnvelope<WarcraftLogsData>>(
+    characterIntegrationUrl('warcraft-logs', region, realm, name, refresh),
+    { timeoutMs: 12000 }
+  );
+}
+
+export function testWarcraftLogsCredentials(client_id: string, client_secret: string) {
+  return fetchJson<{ status: 'ok'; error_code?: string }>(
+    `${API_URL}/api/integrations/warcraft-logs/credentials/test`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ client_id, client_secret }),
+      timeoutMs: 15000,
+    }
+  );
+}
+
+export function saveWarcraftLogsCredentials(client_id: string, client_secret: string) {
+  return fetchJson<{ status: 'saved'; enabled: boolean }>(
+    `${API_URL}/api/integrations/warcraft-logs/credentials`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ client_id, client_secret }),
+      timeoutMs: 15000,
+    }
+  );
+}
+
+export function removeWarcraftLogsCredentials() {
+  return fetchJson<{ status: 'removed' }>(`${API_URL}/api/integrations/warcraft-logs/credentials`, {
+    method: 'DELETE',
+  });
+}
+
+export function getAdminWarcraftLogsCredentials(): Promise<WarcraftLogsAdminSettings> {
+  return fetchJson<WarcraftLogsAdminSettings>(`${API_URL}/api/admin/integrations/warcraft-logs`);
+}
+
+export function saveAdminWarcraftLogsCredentials(client_id: string, client_secret: string) {
+  return fetchJson<{ status: 'saved'; configured: boolean }>(
+    `${API_URL}/api/admin/integrations/warcraft-logs`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ client_id, client_secret }),
+      timeoutMs: 15000,
+    }
+  );
+}
+
+export function removeAdminWarcraftLogsCredentials() {
+  return fetchJson<{ status: 'removed'; configured: boolean }>(
+    `${API_URL}/api/admin/integrations/warcraft-logs`,
+    { method: 'DELETE' }
+  );
 }
 
 function sleep(ms: number): Promise<void> {

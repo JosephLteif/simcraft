@@ -81,6 +81,11 @@ published for `linux-x64`.
      the saved value is kept in the data volume.
    - Blizzard application credentials are entered in the app at runtime; they
      are not stored in this environment file.
+   - Warcraft Logs is optional. To provide a shared public-data client for
+     hosted users, set `WARCRAFT_LOGS_CLIENT_ID` and
+     `WARCRAFT_LOGS_CLIENT_SECRET` below, then recreate the service. Users can
+     also save personal Warcraft Logs credentials under **Settings >
+     Integrations**; personal credentials take precedence over shared ones.
 
    On Windows PowerShell, the two secrets can also be generated without
    OpenSSL:
@@ -129,6 +134,24 @@ cannot change this server-wide setting.
 The SQLite database, synchronized data, caches, saved encrypted credentials,
 and downloaded SimC runtime live in the Docker-managed `whylowdps-data` volume.
 Do not delete that volume during routine recreation, updates, or rollback.
+
+## Optional character-data integrations
+
+Warcraft Logs integration uses the [public client-credentials API](https://www.warcraftlogs.com/api/docs). It shows up
+to five recent public reports and the latest available public zone ranking;
+private reports, private OAuth/PKCE access, and report uploads are out of
+scope. Configure a shared fallback with `WARCRAFT_LOGS_CLIENT_ID` and
+`WARCRAFT_LOGS_CLIENT_SECRET`, or let each hosted user enter personal
+credentials from the [Warcraft Logs client manager](https://www.warcraftlogs.com/api/clients/) under **Settings > Integrations**. A user credential wins over
+environment credentials, and environment credentials win over the
+administrator-managed fallback. Valid credentials automatically enable the
+provider, which can still be disabled in the same settings panel.
+
+Raider.IO is enabled by default and does not need credentials. It is
+disableable under **Settings > Integrations** and includes an attribution link
+on character cards. Both providers may rate-limit or temporarily withhold
+public data; the existing Blizzard snapshot and profile links remain usable
+when an external provider is unavailable.
 
 ## Manage Docker application updates
 
@@ -182,6 +205,8 @@ was recorded.
 | `WHYLOWDPS_PORT` | Optional client-facing port; defaults to `8000`. |
 | `JWT_SECRET` | Optional random 32-byte signing secret, normally 64 hex characters. If omitted, it is generated and stored in `/data/.jwt-secret`. Keep it stable; changing it invalidates login tokens. |
 | `SESSION_ENCRYPTION_KEY` | Optional separate random 32-byte encryption key, normally 64 hex characters. If omitted, it is generated and stored in `/data/.session-encryption-key`. It protects OAuth tokens and saved Blizzard client secrets. Keep it stable. |
+| `WARCRAFT_LOGS_CLIENT_ID` | Optional shared Warcraft Logs public API client ID. Environment credentials take precedence over an admin-managed shared fallback. |
+| `WARCRAFT_LOGS_CLIENT_SECRET` | Optional shared Warcraft Logs public API client secret. Keep it private; it is never returned by the app. |
 | `WHYLOWDPS_BOOTSTRAP_ADMIN_BATTLETAG` | BattleTag such as `YourBattleTag#1234`; it is used only to create the first administrator when the user table is empty. |
 | `WHYLOWDPS_SECURE_COOKIES` | `false` for direct LAN HTTP; set `true` only behind trusted HTTPS. |
 | `SIMC_CHANNEL` | Initial runtime channel: `weekly` or `nightly`; defaults to `weekly`. After an administrator changes the channel in Settings, the persisted setting takes precedence. |

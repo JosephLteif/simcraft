@@ -24,6 +24,7 @@ import DataFileStateModal from './components/DataFileStateModal';
 import DiscordWebhookSettings from './components/DiscordWebhookSettings';
 import LocalBackupSection from './components/LocalBackupSection';
 import IntegrationsSettingsSection from './components/IntegrationsSettingsSection';
+import CharacterIntegrationsSettingsSection from './components/CharacterIntegrationsSettingsSection';
 import UpdatesSettingsSection from './components/UpdatesSettingsSection';
 import ReadinessPanel from '../components/ReadinessPanel';
 import { APP_VERSION_WITH_PREFIX } from '../lib/version';
@@ -1112,6 +1113,10 @@ export default function SettingsPage() {
               blizzardMessage={blizzardMessage}
             />
           )}
+          <CharacterIntegrationsSettingsSection
+            isHostedPrivate={isHostedPrivate}
+            isAdmin={user?.role === 'admin'}
+          />
           {isHostedPrivate && <DiscordWebhookSettings />}
         </div>
       )}

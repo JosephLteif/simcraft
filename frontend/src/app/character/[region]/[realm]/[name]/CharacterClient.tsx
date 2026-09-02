@@ -8,9 +8,13 @@ import {
   API_URL,
   deleteCharacterProfile,
   fetchJson,
+  getIntegrationSettings,
+  getRaiderIoCharacter,
+  getWarcraftLogsCharacter,
   listCharacterProfiles,
   SavedCharacterProfile,
 } from '@/app/lib/api';
+import type { IntegrationSettings, RaiderIoData, WarcraftLogsData } from '@/app/lib/api';
 import type {
   CharacterPanelEquipment,
   CharacterProfilePayload,
@@ -23,9 +27,11 @@ import type {
 import { getCharacterValueLabel, normalizeCharacterSlug } from '@/app/lib/character-panel-utils';
 import { CHARACTER_DATA_TTL_MS, isCharacterDataStale } from '@/app/lib/character-refresh';
 import { buildWishlistHref } from '@/app/lib/wishlist';
+import { useAuth } from '../../../../components/AuthContext';
 import CharacterPanel from '../../../../components/CharacterPanel';
 import ConfirmModal from '../../../../components/ConfirmModal';
 import ToggleOptionCard from '../../../../components/shared/ToggleOptionCard';
+import type { CharacterIntegrationState } from '../../../../components/character/ExternalIntegrationCards';
 
 const LOCAL_TRACKED_CHARACTERS_KEY = 'whylowdps_tracked_characters';
 const LAST_REFRESH_PREFIX = 'whylowdps_last_refresh_';
@@ -48,6 +54,20 @@ type CharacterPageData = {
   mythicPlus: MythicPlusPayload;
   raidEncounters: RaidEncountersPayload;
 };
+
+function initialIntegrationState<T>(enabled: boolean): CharacterIntegrationState<T> {
+  return {
+    enabled,
+    loading: false,
+    refreshing: false,
+    snapshot: null,
+    error: null,
+  };
+}
+
+function integrationErrorMessage(provider: 'Raider.IO' | 'Warcraft Logs'): string {
+  return `${provider} is temporarily unavailable.`;
+}
 
 function readRefreshTimestamp(storageKey: string): number | null {
   if (typeof window === 'undefined') return null;
@@ -98,6 +118,7 @@ function CopyIcon() {
 export default function CharacterClient() {
   const params = useParams();
   const searchParams = useSearchParams();
+  const { lightMode } = useAuth();
 
   // Robust resolution from params or URL path
   let region = (searchParams.get('region') || (params.region as string) || 'us').toLowerCase();
@@ -139,6 +160,12 @@ export default function CharacterClient() {
   const requestedKey = `${region.toLowerCase()}|${realm.toLowerCase()}|${name.toLowerCase()}`;
   const refreshStorageKey = `${LAST_REFRESH_PREFIX}${requestedKey}`;
   const [data, setData] = useState<CharacterPageData | null>(null);
+  const [raiderIoIntegration, setRaiderIoIntegration] = useState<
+    CharacterIntegrationState<RaiderIoData>
+  >(() => initialIntegrationState(true));
+  const [warcraftLogsIntegration, setWarcraftLogsIntegration] = useState<
+    CharacterIntegrationState<WarcraftLogsData>
+  >(() => initialIntegrationState(false));
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
@@ -156,6 +183,7 @@ export default function CharacterClient() {
   const lastRefreshRef = useRef<number | null>(null);
   const backgroundRefreshInFlightRef = useRef(false);
   const initialLoadKeyRef = useRef<string | null>(null);
+  const integrationRequestKeyRef = useRef(requestedKey);
 
   // Fetch saved profiles for this character
   useEffect(() => {
@@ -220,6 +248,125 @@ export default function CharacterClient() {
     }
     setSavedProfiles([]);
   }, [savedProfiles]);
+
+  const fetchIntegrations = useCallback(
+    async (refresh = false) => {
+      if (!region || !realm || !name) return;
+      if (lightMode) {
+        setRaiderIoIntegration(initialIntegrationState(false));
+        setWarcraftLogsIntegration(initialIntegrationState(false));
+        return;
+      }
+      const requestKey = `${region.toLowerCase()}|${realm.toLowerCase()}|${name.toLowerCase()}`;
+      const begin = <T,>(
+        setter: React.Dispatch<React.SetStateAction<CharacterIntegrationState<T>>>,
+        enabled: boolean
+      ) => {
+        setter((previous) => ({
+          enabled,
+          loading: enabled && !previous.snapshot,
+          refreshing: enabled && refresh && Boolean(previous.snapshot),
+          snapshot: enabled ? previous.snapshot : null,
+          error: null,
+        }));
+      };
+
+      setRaiderIoIntegration((previous) => ({
+        ...previous,
+        loading: !previous.snapshot,
+        refreshing: refresh && Boolean(previous.snapshot),
+        error: null,
+      }));
+      setWarcraftLogsIntegration((previous) => ({
+        ...previous,
+        loading: !previous.snapshot,
+        refreshing: refresh && Boolean(previous.snapshot),
+        error: null,
+      }));
+
+      let settings: IntegrationSettings;
+      try {
+        settings = await getIntegrationSettings();
+      } catch {
+        settings = {
+          raider_io_enabled: true,
+          warcraft_logs_enabled: false,
+          warcraft_logs: {
+            user_configured: false,
+            user_client_id: null,
+            effective_source: null,
+            environment_configured: false,
+            admin_configured: false,
+          },
+        };
+      }
+      if (integrationRequestKeyRef.current !== requestKey) return;
+
+      begin(setRaiderIoIntegration, settings.raider_io_enabled !== false);
+      begin(setWarcraftLogsIntegration, settings.warcraft_logs_enabled === true);
+
+      if (settings.raider_io_enabled !== false) {
+        void getRaiderIoCharacter(region, realm, name, refresh)
+          .then((response) => {
+            if (integrationRequestKeyRef.current !== requestKey) return;
+            const hasFreshData = response.status === 'ok' && response.data !== null;
+            setRaiderIoIntegration((previous) => ({
+              ...previous,
+              loading: false,
+              refreshing: false,
+              snapshot:
+                hasFreshData || previous.snapshot?.status !== 'ok'
+                  ? response
+                  : previous.snapshot,
+              error:
+                hasFreshData || previous.snapshot?.status !== 'ok'
+                  ? null
+                  : integrationErrorMessage('Raider.IO'),
+            }));
+          })
+          .catch(() => {
+            if (integrationRequestKeyRef.current !== requestKey) return;
+            setRaiderIoIntegration((previous) => ({
+              ...previous,
+              loading: false,
+              refreshing: false,
+              error: integrationErrorMessage('Raider.IO'),
+            }));
+          });
+      }
+
+      if (settings.warcraft_logs_enabled === true) {
+        void getWarcraftLogsCharacter(region, realm, name, refresh)
+          .then((response) => {
+            if (integrationRequestKeyRef.current !== requestKey) return;
+            const hasFreshData = response.status === 'ok' && response.data !== null;
+            setWarcraftLogsIntegration((previous) => ({
+              ...previous,
+              loading: false,
+              refreshing: false,
+              snapshot:
+                hasFreshData || previous.snapshot?.status !== 'ok'
+                  ? response
+                  : previous.snapshot,
+              error:
+                hasFreshData || previous.snapshot?.status !== 'ok'
+                  ? null
+                  : integrationErrorMessage('Warcraft Logs'),
+            }));
+          })
+          .catch(() => {
+            if (integrationRequestKeyRef.current !== requestKey) return;
+            setWarcraftLogsIntegration((previous) => ({
+              ...previous,
+              loading: false,
+              refreshing: false,
+              error: integrationErrorMessage('Warcraft Logs'),
+            }));
+          });
+      }
+    },
+    [lightMode, name, realm, region]
+  );
 
   const fetchCharacterData = useCallback(
     async (refresh = false, background = false) => {
@@ -286,6 +433,7 @@ export default function CharacterClient() {
         };
         dataRef.current = nextData;
         setData(nextData);
+        void fetchIntegrations(refresh);
         if (refresh || lastRefreshRef.current === null) {
           const ts = Date.now();
           lastRefreshRef.current = ts;
@@ -316,7 +464,7 @@ export default function CharacterClient() {
         }
       }
     },
-    [region, realm, name]
+    [fetchIntegrations, region, realm, name]
   );
 
   useEffect(() => {
@@ -330,6 +478,9 @@ export default function CharacterClient() {
       setData(null);
       setDataWarning(null);
     }
+    integrationRequestKeyRef.current = requestedKey;
+    setRaiderIoIntegration(initialIntegrationState(true));
+    setWarcraftLogsIntegration(initialIntegrationState(false));
     initialLoadKeyRef.current = requestedKey;
     void fetchCharacterData(forceRefresh || isCharacterDataStale(storedTimestamp));
   }, [fetchCharacterData, forceRefresh, name, realm, refreshStorageKey, region, requestedKey]);
@@ -580,6 +731,9 @@ export default function CharacterClient() {
         characterMediaUrl={characterMediaUrl}
         latestSimcInput={savedProfiles[0]?.simc_input || null}
         initialTab={initialTab}
+        raiderIoIntegration={raiderIoIntegration}
+        warcraftLogsIntegration={warcraftLogsIntegration}
+        onRefreshIntegrations={() => void fetchIntegrations(true)}
       />
       <ConfirmModal
         isOpen={deleteModalOpen}

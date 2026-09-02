@@ -18,6 +18,8 @@ mod game_data_handlers;
 #[cfg(feature = "web")]
 mod helpers;
 #[cfg(feature = "web")]
+mod integrations;
+#[cfg(feature = "web")]
 mod job_handlers;
 #[cfg(feature = "web")]
 mod lan_access;
@@ -902,6 +904,7 @@ pub async fn start_with_storage_bind_options_and_simc_runtime(
         let bind_addr = format!("{}:{}", bind_host, port);
 
         let blizzard_state = web::Data::new(Arc::new(blizzard::BlizzardState::new()));
+        let integrations_state = web::Data::new(Arc::new(integrations::IntegrationState::new()));
 
         let bnet_redirect = format!("http://localhost:{}/api/auth/bnet/callback", port);
         let jwt_secret = auth_handlers::validate_jwt_secret(
@@ -984,6 +987,7 @@ pub async fn start_with_storage_bind_options_and_simc_runtime(
                 .app_data(simc_data.clone())
                 .app_data(log_data.clone())
                 .app_data(blizzard_state.clone())
+                .app_data(integrations_state.clone())
                 .app_data(blizzard_credential_secrets.clone())
                 .app_data(auth_state.clone())
                 .app_data(auth_state_opt_data.clone());
@@ -1105,6 +1109,26 @@ pub async fn start_with_storage_bind_options_and_simc_runtime(
                     web::post().to(auth_handlers::test_blizzard_creds),
                 )
                 .route(
+                    "/api/integrations/settings",
+                    web::get().to(integrations::get_settings),
+                )
+                .route(
+                    "/api/integrations/settings",
+                    web::post().to(integrations::update_settings),
+                )
+                .route(
+                    "/api/integrations/warcraft-logs/credentials/test",
+                    web::post().to(integrations::test_warcraft_logs_credentials),
+                )
+                .route(
+                    "/api/integrations/warcraft-logs/credentials",
+                    web::post().to(integrations::save_warcraft_logs_credentials),
+                )
+                .route(
+                    "/api/integrations/warcraft-logs/credentials",
+                    web::delete().to(integrations::remove_warcraft_logs_credentials),
+                )
+                .route(
                     "/api/admin/users",
                     web::get().to(auth_handlers::list_hosted_users),
                 )
@@ -1115,6 +1139,18 @@ pub async fn start_with_storage_bind_options_and_simc_runtime(
                 .route(
                     "/api/admin/users/{id}",
                     web::patch().to(auth_handlers::update_hosted_user),
+                )
+                .route(
+                    "/api/admin/integrations/warcraft-logs",
+                    web::get().to(integrations::get_admin_warcraft_logs_credentials),
+                )
+                .route(
+                    "/api/admin/integrations/warcraft-logs",
+                    web::post().to(integrations::save_admin_warcraft_logs_credentials),
+                )
+                .route(
+                    "/api/admin/integrations/warcraft-logs",
+                    web::delete().to(integrations::remove_admin_warcraft_logs_credentials),
                 )
                 .route(
                     "/api/admin/docker-updates",
@@ -1309,6 +1345,14 @@ pub async fn start_with_storage_bind_options_and_simc_runtime(
                 .route(
                     "/api/blizzard/character/{realm}/{name}/encounters/raids",
                     web::get().to(blizzard::proxy_character_raid_encounters),
+                )
+                .route(
+                    "/api/integrations/raider-io/character/{region}/{realm}/{name}",
+                    web::get().to(integrations::get_raider_io_character),
+                )
+                .route(
+                    "/api/integrations/warcraft-logs/character/{region}/{realm}/{name}",
+                    web::get().to(integrations::get_warcraft_logs_character),
                 )
                 .route(
                     "/api/blizzard/mythic-keystone/dungeon/index",

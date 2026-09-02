@@ -13,6 +13,19 @@ vi.mock('@/app/lib/api', () => ({
   API_URL: '',
   deleteCharacterProfile: vi.fn(),
   fetchJson: vi.fn(),
+  getIntegrationSettings: vi.fn(async () => ({
+    raider_io_enabled: false,
+    warcraft_logs_enabled: false,
+    warcraft_logs: {
+      user_configured: false,
+      user_client_id: null,
+      effective_source: null,
+      environment_configured: false,
+      admin_configured: false,
+    },
+  })),
+  getRaiderIoCharacter: vi.fn(),
+  getWarcraftLogsCharacter: vi.fn(),
   listCharacterProfiles: vi.fn(),
 }));
 

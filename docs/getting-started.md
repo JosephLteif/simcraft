@@ -72,6 +72,15 @@ You can add, test, rename, replace, or remove credentials later under
 secrets with Windows DPAPI for the current Windows profile. It does not require
 credentials in the repository `.env` files.
 
+After signing in, **Settings > Integrations > Character data providers** can
+enable the optional public Raider.IO and Warcraft Logs cards. Raider.IO is
+enabled by default and requires no credential. Warcraft Logs uses personal
+credentials from the [Warcraft Logs client manager](https://www.warcraftlogs.com/api/clients/)
+entered there, shows only public reports and rankings, and
+does not support private-report OAuth/PKCE access. Existing Blizzard data and
+the outbound Raider.IO/Warcraft Logs profile links remain available if either
+provider is disabled or unavailable.
+
 If a saved profile says its secure secret is missing, re-enter the Client
 Secret and save that profile again. This can happen after moving app data to a
 different Windows account or machine because the protected value cannot be
@@ -88,6 +97,9 @@ Uncomment and set these variables in `.env.docker`:
 ```dotenv
 BLIZZARD_CLIENT_ID=your-client-id
 BLIZZARD_CLIENT_SECRET=your-client-secret
+# Optional shared Warcraft Logs public API credentials.
+WARCRAFT_LOGS_CLIENT_ID=your-warcraft-logs-client-id
+WARCRAFT_LOGS_CLIENT_SECRET=your-warcraft-logs-client-secret
 ```
 
 Then recreate the service so the environment is applied:
@@ -98,6 +110,10 @@ docker compose --env-file .env.docker up -d
 
 Do not use `docker compose restart app`; restart does not load changed
 environment values.
+
+The Warcraft Logs variables are optional. They provide a shared public-data
+fallback for hosted users; users may instead enter personal credentials under
+**Settings > Integrations**. Recreate the service after changing them.
 
 ### First-launch configuration
 
