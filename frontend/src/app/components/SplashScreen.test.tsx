@@ -135,7 +135,7 @@ describe('SplashScreen credential flow', () => {
     const content = logo.parentElement?.parentElement;
     const viewport = content?.parentElement;
 
-    expect(content).toHaveClass('min-h-full', 'py-12');
+    expect(content).toHaveClass('min-h-full', 'shrink-0', 'py-12');
     expect(viewport).toHaveClass('overflow-y-auto');
   });
 });
