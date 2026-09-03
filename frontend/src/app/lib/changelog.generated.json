@@ -1,5 +1,5 @@
 {
-  "contentRevision": "Unreleased-bd2c5a9fa0ec",
+  "contentRevision": "Unreleased-cb37f0c4409c",
   "releases": [
     {
       "version": "Unreleased",
@@ -119,6 +119,15 @@
           "summary": "The character Raiding tab now displays current-season raid progress when the active raid pool identifies bosses instead of raid instances.",
           "items": [
             "Active raid filters now match both raid instance IDs and boss encounter IDs returned by the game data context."
+          ]
+        },
+        {
+          "category": "fix",
+          "title": "Keep the login screen in view",
+          "summary": "The login screen now keeps the WhyLowDps logo visible on short desktop and mobile windows while allowing longer credential setup content to scroll.",
+          "items": [
+            "Prevented overflowing login content from being centered above the viewport.",
+            "Preserved the centered layout when the full screen fits."
           ]
         }
       ]

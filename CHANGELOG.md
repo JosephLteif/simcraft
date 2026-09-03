@@ -33,6 +33,7 @@ The format is based on Keep a Changelog and this project uses semantic versionin
 - Warcraft Logs data now merges into Blizzard boss rows without replacing Blizzard data, preserves snapshots through provider failures and refreshes, and keeps real zero-kill bosses visible while hiding catalog-only trash placeholders.
 - Raider.IO raid achievements now request active raid slugs and filter against active Blizzard raids, preventing stale expansion entries such as legacy progression from appearing in the current-season card.
 - Character Raiding tabs now show current-season progression when active raid pools identify bosses by encounter ID instead of raid instance ID.
+- Login screen content now grows and scrolls on short desktop and mobile windows, keeping the WhyLowDps logo fully visible.
 
 ## [5.0.1] - 2026-08-31
 
