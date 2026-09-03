@@ -16,9 +16,14 @@ import {
   updateConfig,
 } from '../lib/api';
 import { simResultHref } from '../lib/routes';
-import { clearScenarioSiblings, type ScenarioSibling, storeScenarioSiblings } from '../lib/scenario-siblings';
+import {
+  clearScenarioSiblings,
+  type ScenarioSibling,
+  storeScenarioSiblings,
+} from '../lib/scenario-siblings';
 import { useAuth } from '../components/AuthContext';
 import { useSimContext } from '../components/SimContext';
+import { useNotifications } from '../components/shared/NotificationSystem';
 
 interface JobSummary {
   id: string;
@@ -71,7 +76,12 @@ function TrashIcon() {
 }
 
 function ChevronIcon({ open }: { open: boolean }) {
-  return <ChevronDown className={`h-4 w-4 text-zinc-500 transition-transform ${open ? 'rotate-180' : ''}`} strokeWidth={2} />;
+  return (
+    <ChevronDown
+      className={`h-4 w-4 text-zinc-500 transition-transform ${open ? 'rotate-180' : ''}`}
+      strokeWidth={2}
+    />
+  );
 }
 
 function SearchIcon() {
@@ -79,7 +89,12 @@ function SearchIcon() {
 }
 
 function PinIcon({ pinned }: { pinned: boolean }) {
-  return <Pin className={`h-4 w-4 ${pinned ? 'fill-gold text-gold' : 'text-zinc-500'}`} strokeWidth={2} />;
+  return (
+    <Pin
+      className={`h-4 w-4 ${pinned ? 'fill-gold text-gold' : 'text-zinc-500'}`}
+      strokeWidth={2}
+    />
+  );
 }
 
 function formatSize(bytes: number): string {
@@ -123,18 +138,13 @@ function formatDateHeader(dateStr: string): string {
 function simTypeRoute(simType: string): string {
   const normalized = String(simType || '').toLowerCase();
   if (normalized.includes('top_gear') || normalized.includes('top-gear')) return '/top-gear';
-  if (normalized.includes('droptimizer') || normalized.includes('drop_finder')) return '/drop-finder';
+  if (normalized.includes('droptimizer') || normalized.includes('drop_finder'))
+    return '/drop-finder';
   if (normalized.includes('upgrade')) return '/upgrade';
   return '/quick-sim';
 }
 
-function SimulationComparison({
-  sims,
-  onClose,
-}: {
-  sims: JobSummary[];
-  onClose: () => void;
-}) {
+function SimulationComparison({ sims, onClose }: { sims: JobSummary[]; onClose: () => void }) {
   if (sims.length !== 2) return null;
   const [left, right] = sims;
   const dpsDelta = (left.dps ?? 0) - (right.dps ?? 0);
@@ -145,30 +155,58 @@ function SimulationComparison({
     <section className="card border-gold/20 bg-gold/[0.03] p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.16em] text-gold">Comparison</p>
-          <h2 className="mt-1 text-base font-semibold text-zinc-100">Selected simulation results</h2>
+          <p className="text-gold text-xs font-bold tracking-[0.16em] uppercase">Comparison</p>
+          <h2 className="mt-1 text-base font-semibold text-zinc-100">
+            Selected simulation results
+          </h2>
         </div>
-        <button type="button" onClick={onClose} className="rounded-md p-1.5 text-zinc-400 hover:bg-white/10 hover:text-white" aria-label="Close comparison">
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-md p-1.5 text-zinc-400 hover:bg-white/10 hover:text-white"
+          aria-label="Close comparison"
+        >
           <X className="h-4 w-4" />
         </button>
       </div>
       <div className="grid gap-3 md:grid-cols-2">
         {[left, right].map((sim, index) => (
-          <Link key={sim.id} href={simResultHref(sim.id)} className="rounded-lg border border-border bg-surface-2/70 p-3 hover:border-gold/30">
-            <p className="text-xs font-semibold text-zinc-400">{index === 0 ? 'Simulation A' : 'Simulation B'}</p>
-            <p className="mt-1 truncate text-sm font-semibold text-zinc-100">{sim.player_name || 'Unnamed character'}</p>
+          <Link
+            key={sim.id}
+            href={simResultHref(sim.id)}
+            className="border-border bg-surface-2/70 hover:border-gold/30 rounded-lg border p-3"
+          >
+            <p className="text-xs font-semibold text-zinc-400">
+              {index === 0 ? 'Simulation A' : 'Simulation B'}
+            </p>
+            <p className="mt-1 truncate text-sm font-semibold text-zinc-100">
+              {sim.player_name || 'Unnamed character'}
+            </p>
             <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-              <dt className="text-zinc-500">DPS</dt><dd className="text-right font-mono text-zinc-200">{sim.dps == null ? '—' : Math.round(sim.dps).toLocaleString()}</dd>
-              <dt className="text-zinc-500">Type</dt><dd className="text-right text-zinc-300">{SIM_TYPE_LABELS[sim.sim_type] || sim.sim_type}</dd>
-              <dt className="text-zinc-500">Fight</dt><dd className="text-right text-zinc-300">{renderValue(sim.fight_style)}</dd>
-              <dt className="text-zinc-500">Iterations</dt><dd className="text-right text-zinc-300">{renderValue(sim.iterations)}</dd>
-              <dt className="text-zinc-500">Status</dt><dd className="text-right text-zinc-300">{renderValue(sim.status)}</dd>
+              <dt className="text-zinc-500">DPS</dt>
+              <dd className="text-right font-mono text-zinc-200">
+                {sim.dps == null ? '—' : Math.round(sim.dps).toLocaleString()}
+              </dd>
+              <dt className="text-zinc-500">Type</dt>
+              <dd className="text-right text-zinc-300">
+                {SIM_TYPE_LABELS[sim.sim_type] || sim.sim_type}
+              </dd>
+              <dt className="text-zinc-500">Fight</dt>
+              <dd className="text-right text-zinc-300">{renderValue(sim.fight_style)}</dd>
+              <dt className="text-zinc-500">Iterations</dt>
+              <dd className="text-right text-zinc-300">{renderValue(sim.iterations)}</dd>
+              <dt className="text-zinc-500">Status</dt>
+              <dd className="text-right text-zinc-300">{renderValue(sim.status)}</dd>
             </dl>
           </Link>
         ))}
       </div>
       <p className="mt-3 text-xs text-zinc-400">
-        DPS difference: <span className={dpsDelta >= 0 ? 'text-emerald-300' : 'text-red-300'}>{dpsDelta >= 0 ? '+' : ''}{Math.round(dpsDelta).toLocaleString()}</span>
+        DPS difference:{' '}
+        <span className={dpsDelta >= 0 ? 'text-emerald-300' : 'text-red-300'}>
+          {dpsDelta >= 0 ? '+' : ''}
+          {Math.round(dpsDelta).toLocaleString()}
+        </span>
       </p>
     </section>
   );
@@ -204,7 +242,7 @@ function SimRow({
             checked={!!selected}
             onChange={(e) => onSelectToggle?.(sim.id, e.target.checked)}
             onClick={(e) => e.stopPropagation()}
-            className="h-4 w-4 rounded border-border bg-surface-2 text-gold focus:ring-gold"
+            className="border-border bg-surface-2 text-gold focus:ring-gold h-4 w-4 rounded"
             aria-label={`Select simulation ${sim.id}`}
           />
         </div>
@@ -231,7 +269,7 @@ function SimRow({
           className={`h-1.5 w-1.5 shrink-0 rounded-full ${STATUS_COLORS[sim.status] || STATUS_COLORS.pending}`}
         />
         {!compact && (
-          <span className="hidden w-[80px] shrink-0 rounded-md bg-gold/[0.08] px-2 py-0.5 text-center text-[12px] font-medium text-gold lg:inline-block">
+          <span className="bg-gold/[0.08] text-gold hidden w-[80px] shrink-0 rounded-md px-2 py-0.5 text-center text-[12px] font-medium lg:inline-block">
             {SIM_TYPE_LABELS[sim.sim_type] || sim.sim_type}
           </span>
         )}
@@ -240,7 +278,7 @@ function SimRow({
             <span className={`block truncate text-zinc-200 ${compact ? 'text-xs' : 'text-sm'}`}>
               {sim.player_name}
               {sim.pinned && (
-                <span className="ml-2 inline-flex items-center gap-1 rounded border border-gold/30 bg-gold/10 px-1.5 py-0.5 text-[10px] font-medium text-gold">
+                <span className="border-gold/30 bg-gold/10 text-gold ml-2 inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium">
                   <PinIcon pinned />
                   Pinned
                 </span>
@@ -274,7 +312,7 @@ function SimRow({
             </span>
           )}
         </div>
-        <span className="w-16 shrink-0 text-right font-mono text-sm tabular-nums text-zinc-200 sm:w-20">
+        <span className="w-16 shrink-0 text-right font-mono text-sm text-zinc-200 tabular-nums sm:w-20">
           {sim.dps ? Math.round(sim.dps).toLocaleString() : '—'}
         </span>
         <span className="hidden w-20 shrink-0 text-right text-[13px] text-zinc-500 sm:block">
@@ -283,13 +321,13 @@ function SimRow({
         <div className="hidden w-20 shrink-0 text-right group-hover:opacity-0 sm:block">
           <div className="text-[12px] text-zinc-500">{timeAgo(sim.created_at)}</div>
           {sim.size_bytes > 0 && (
-            <div className="text-[10px] tabular-nums text-zinc-600">
+            <div className="text-[10px] text-zinc-600 tabular-nums">
               {formatSize(sim.size_bytes)}
             </div>
           )}
         </div>
       </Link>
-      <div className="absolute right-3 top-1/2 flex -translate-y-1/2 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+      <div className="absolute top-1/2 right-3 flex -translate-y-1/2 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
         {onTogglePinned && (
           <button
             onClick={(e) => {
@@ -297,7 +335,7 @@ function SimRow({
               e.stopPropagation();
               onTogglePinned(sim.id, !(sim.pinned ?? false));
             }}
-            className={`rounded p-1 hover:bg-gold/10 ${sim.pinned ? 'text-gold' : 'text-zinc-500 hover:text-gold'}`}
+            className={`hover:bg-gold/10 rounded p-1 ${sim.pinned ? 'text-gold' : 'hover:text-gold text-zinc-500'}`}
             title={sim.pinned ? 'Unpin' : 'Pin'}
           >
             <PinIcon pinned={!!sim.pinned} />
@@ -335,8 +373,7 @@ function SimRow({
 }
 
 type HistoryEntry =
-  | { type: 'single'; sim: JobSummary }
-  | { type: 'batch'; batchId: string; sims: JobSummary[] };
+  { type: 'single'; sim: JobSummary } | { type: 'batch'; batchId: string; sims: JobSummary[] };
 
 function groupByBatch(sims: JobSummary[]): HistoryEntry[] {
   const topGearExactType = 'top_gear_exact_stats';
@@ -429,7 +466,7 @@ function BatchGroup({
   const isBatchIndeterminate = selectedCount > 0 && selectedCount < batchIds.length;
 
   return (
-    <div className="border-b border-border last:border-b-0">
+    <div className="border-border border-b last:border-b-0">
       <div
         className="group relative flex cursor-pointer items-center gap-2 px-3 py-3 transition-colors hover:bg-white/[0.03] sm:gap-3 sm:px-5"
         onClick={() => setIsOpen(!isOpen)}
@@ -443,12 +480,12 @@ function BatchGroup({
           }}
           onChange={(e) => onBatchSelectToggle?.(batchIds, e.target.checked)}
           onClick={(e) => e.stopPropagation()}
-          className="h-4 w-4 shrink-0 rounded border-border bg-surface-2 text-gold focus:ring-gold"
+          className="border-border bg-surface-2 text-gold focus:ring-gold h-4 w-4 shrink-0 rounded"
           aria-label={`Select batch ${entry.batchId}`}
         />
         <ChevronIcon open={isOpen} />
 
-        <span className="hidden w-[80px] shrink-0 rounded-md bg-gold/[0.08] px-2 py-0.5 text-center text-[12px] font-medium text-gold lg:inline-block">
+        <span className="bg-gold/[0.08] text-gold hidden w-[80px] shrink-0 rounded-md px-2 py-0.5 text-center text-[12px] font-medium lg:inline-block">
           {simType}
         </span>
 
@@ -458,7 +495,7 @@ function BatchGroup({
           </span>
         </div>
 
-        <span className="w-16 shrink-0 text-right font-mono text-sm tabular-nums text-zinc-200 sm:w-20">
+        <span className="w-16 shrink-0 text-right font-mono text-sm text-zinc-200 tabular-nums sm:w-20">
           {bestDps > 0 ? Math.round(bestDps).toLocaleString() : '—'}
         </span>
 
@@ -467,11 +504,11 @@ function BatchGroup({
         <div className="hidden w-20 shrink-0 text-right group-hover:opacity-0 sm:block">
           <div className="text-[12px] text-zinc-600">{timeAgo(first?.created_at)}</div>
           {batchSize > 0 && (
-            <div className="text-[10px] tabular-nums text-zinc-700">{formatSize(batchSize)}</div>
+            <div className="text-[10px] text-zinc-700 tabular-nums">{formatSize(batchSize)}</div>
           )}
         </div>
 
-        <div className="absolute right-3 top-1/2 flex -translate-y-1/2 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+        <div className="absolute top-1/2 right-3 flex -translate-y-1/2 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
           {onDelete && (
             <button
               onClick={(e) => {
@@ -490,8 +527,8 @@ function BatchGroup({
       </div>
 
       {isOpen && (
-        <div className="border-t border-border/50 bg-surface-2/50 pl-4">
-          <div className="divide-y divide-border/30">
+        <div className="border-border/50 bg-surface-2/50 border-t pl-4">
+          <div className="divide-border/30 divide-y">
             {entry.sims.map((sim) => (
               <SimRow
                 key={sim.id}
@@ -515,6 +552,7 @@ function BatchGroup({
 
 export default function HistoryPage() {
   const { lightMode } = useAuth();
+  const { notify } = useNotifications();
   const router = useRouter();
   const { setSimcInput } = useSimContext();
   const [sims, setSims] = useState<JobSummary[]>([]);
@@ -537,6 +575,7 @@ export default function HistoryPage() {
   const [bulkPinning, setBulkPinning] = useState(false);
   const [compareIds, setCompareIds] = useState<string[]>([]);
   const [rerunError, setRerunError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     // Fetch account characters and historical characters
@@ -588,9 +627,9 @@ export default function HistoryPage() {
       setSims(simsData);
       setStats(statsData);
       setSelectedIds(new Set());
+      setError(null);
     } catch (err) {
-      console.log(err);
-      setSims([]);
+      setError(err instanceof Error ? err.message : 'Could not load simulation history.');
     }
   }, [character, showPinnedOnly]);
 
@@ -603,8 +642,16 @@ export default function HistoryPage() {
   }, [refreshHistory]);
 
   const handleDelete = async (id: string) => {
-    await deleteSim(id);
-    refreshHistory();
+    try {
+      await deleteSim(id);
+      await refreshHistory();
+    } catch (err) {
+      notify({
+        title: 'Could not delete simulation',
+        description: err instanceof Error ? err.message : 'Please try again.',
+        variant: 'error',
+      });
+    }
   };
 
   const handleRerun = useCallback(
@@ -625,7 +672,9 @@ export default function HistoryPage() {
         }
         router.push(simTypeRoute(sim.sim_type));
       } catch {
-        setRerunError('This simulation input could not be loaded. The original result is still available.');
+        setRerunError(
+          'This simulation input could not be loaded. The original result is still available.'
+        );
       }
     },
     [router, setSimcInput]
@@ -662,16 +711,32 @@ export default function HistoryPage() {
 
   const handleClear = async () => {
     if (!confirm('Are you sure you want to clear ALL history?')) return;
-    await clearHistory();
-    refreshHistory();
+    try {
+      await clearHistory();
+      await refreshHistory();
+    } catch (err) {
+      notify({
+        title: 'Could not clear history',
+        description: err instanceof Error ? err.message : 'Please try again.',
+        variant: 'error',
+      });
+    }
   };
 
   const handleMaxJobsChange = async (val: string) => {
     const num = parseInt(val);
     if (isNaN(num) || num < 1) return;
     setMaxJobs(num);
-    await updateConfig({ max_jobs: num });
-    refreshHistory();
+    try {
+      await updateConfig({ max_jobs: num });
+      await refreshHistory();
+    } catch (err) {
+      notify({
+        title: 'Could not update history limit',
+        description: err instanceof Error ? err.message : 'Please try again.',
+        variant: 'error',
+      });
+    }
   };
 
   const filteredEntries = useMemo(() => {
@@ -723,7 +788,10 @@ export default function HistoryPage() {
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id));
   const someVisibleSelected = visibleIds.some((id) => selectedIds.has(id));
   const comparisonSims = useMemo(
-    () => compareIds.map((id) => sims.find((sim) => sim.id === id)).filter((sim): sim is JobSummary => !!sim),
+    () =>
+      compareIds
+        .map((id) => sims.find((sim) => sim.id === id))
+        .filter((sim): sim is JobSummary => !!sim),
     [compareIds, sims]
   );
 
@@ -748,10 +816,16 @@ export default function HistoryPage() {
     try {
       await Promise.all(Array.from(selectedIds).map((id) => deleteSim(id)));
       await refreshHistory();
+    } catch (err) {
+      notify({
+        title: 'Could not delete all selected simulations',
+        description: err instanceof Error ? err.message : 'Some records may not have been deleted.',
+        variant: 'error',
+      });
     } finally {
       setBulkDeleting(false);
     }
-  }, [selectedIds, refreshHistory]);
+  }, [notify, refreshHistory, selectedIds]);
 
   const handleBulkPin = useCallback(
     async (pinned: boolean) => {
@@ -762,6 +836,11 @@ export default function HistoryPage() {
       try {
         await Promise.all(ids.map((id) => setSimPinned(id, pinned)));
       } catch {
+        notify({
+          title: 'Could not update pinned state',
+          description: 'The selected records were refreshed locally, but the server update failed.',
+          variant: 'error',
+        });
         setSims((prev) =>
           prev.map((sim) => (selectedIds.has(sim.id) ? { ...sim, pinned: !pinned } : sim))
         );
@@ -769,13 +848,13 @@ export default function HistoryPage() {
         setBulkPinning(false);
       }
     },
-    [selectedIds]
+    [notify, selectedIds]
   );
 
   if (loading) {
     return (
       <div className="py-12 text-center">
-        <p className="text-sm text-muted">Loading history...</p>
+        <p className="text-muted text-sm">Loading history...</p>
       </div>
     );
   }
@@ -793,11 +872,28 @@ export default function HistoryPage() {
             </span>
           )}
         </div>
+        {error && (
+          <div
+            role="alert"
+            className="rounded-lg border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-200"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <span>{error}</span>
+              <button
+                type="button"
+                onClick={() => void refreshHistory()}
+                className="font-semibold hover:text-white"
+              >
+                Try again
+              </button>
+            </div>
+          </div>
+        )}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:flex xl:flex-wrap xl:items-center">
-          <div className="flex min-w-0 items-center gap-2 xl:border-r xl:border-border xl:pr-2">
+          <div className="xl:border-border flex min-w-0 items-center gap-2 xl:border-r xl:pr-2">
             <span className="text-xs text-zinc-500">Filter by Character:</span>
             <select
-              className="min-w-0 flex-1 rounded-md border border-border bg-surface-2 px-2 py-1.5 text-xs text-zinc-200 focus:border-gold focus:outline-none xl:w-48 xl:flex-none"
+              className="border-border bg-surface-2 focus:border-gold min-w-0 flex-1 rounded-md border px-2 py-1.5 text-xs text-zinc-200 focus:outline-none xl:w-48 xl:flex-none"
               value={character ? `${character.name}-${character.realm}` : 'all'}
               onChange={(e) => {
                 const val = e.target.value;
@@ -817,10 +913,10 @@ export default function HistoryPage() {
               ))}
             </select>
           </div>
-          <div className="flex min-w-0 items-center gap-2 xl:border-r xl:border-border xl:pr-2">
+          <div className="xl:border-border flex min-w-0 items-center gap-2 xl:border-r xl:pr-2">
             <span className="text-xs text-zinc-500">Pin Filter:</span>
             <select
-              className="min-w-0 flex-1 rounded-md border border-border bg-surface-2 px-2 py-1.5 text-xs text-zinc-200 focus:border-gold focus:outline-none xl:w-28 xl:flex-none"
+              className="border-border bg-surface-2 focus:border-gold min-w-0 flex-1 rounded-md border px-2 py-1.5 text-xs text-zinc-200 focus:outline-none xl:w-28 xl:flex-none"
               value={pinFilter}
               onChange={(e) => {
                 const val = e.target.value as 'all' | 'pinned' | 'unpinned';
@@ -842,7 +938,7 @@ export default function HistoryPage() {
               placeholder="Search history..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full rounded-md border border-border bg-surface-2 py-1.5 pl-8 pr-3 text-xs text-zinc-200 placeholder:text-zinc-500 focus:border-gold focus:outline-none xl:w-48"
+              className="border-border bg-surface-2 focus:border-gold w-full rounded-md border py-1.5 pr-3 pl-8 text-xs text-zinc-200 placeholder:text-zinc-500 focus:outline-none xl:w-48"
             />
           </div>
           <div className="flex items-center gap-2">
@@ -852,7 +948,7 @@ export default function HistoryPage() {
               value={maxJobs}
               onChange={(e) => setMaxJobs(parseInt(e.target.value) || 0)}
               onBlur={(e) => handleMaxJobsChange(e.target.value)}
-              className="w-16 rounded border border-border bg-surface-2 px-1.5 py-1 text-xs text-zinc-300 focus:border-gold focus:outline-none"
+              className="border-border bg-surface-2 focus:border-gold w-16 rounded border px-1.5 py-1 text-xs text-zinc-300 focus:outline-none"
             />
           </div>
           {sims.length > 0 && (
@@ -867,7 +963,10 @@ export default function HistoryPage() {
       </div>
 
       {rerunError && (
-        <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200" role="alert">
+        <div
+          className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200"
+          role="alert"
+        >
           {rerunError}
         </div>
       )}
@@ -877,7 +976,7 @@ export default function HistoryPage() {
 
       {groupKeys.length === 0 ? (
         <div className="card py-12 text-center">
-          <p className="text-sm text-muted">
+          <p className="text-muted text-sm">
             {search
               ? 'No records match your search.'
               : pinFilter === 'pinned'
@@ -891,7 +990,7 @@ export default function HistoryPage() {
         </div>
       ) : (
         <div className="space-y-8">
-          <div className="sticky top-[var(--app-header-height)] z-20 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface/95 px-4 py-2 backdrop-blur">
+          <div className="border-border bg-surface/95 sticky top-[var(--app-header-height)] z-20 flex flex-wrap items-center justify-between gap-2 rounded-lg border px-4 py-2 backdrop-blur">
             <label className="inline-flex items-center gap-2 text-xs text-zinc-300">
               <input
                 type="checkbox"
@@ -901,7 +1000,7 @@ export default function HistoryPage() {
                   el.indeterminate = !allVisibleSelected && someVisibleSelected;
                 }}
                 onChange={(e) => handleToggleSelectAllVisible(e.target.checked)}
-                className="h-4 w-4 rounded border-border bg-surface-2 text-gold focus:ring-gold"
+                className="border-border bg-surface-2 text-gold focus:ring-gold h-4 w-4 rounded"
               />
               Select all visible
             </label>
@@ -909,7 +1008,7 @@ export default function HistoryPage() {
           </div>
           {groupKeys.map((group) => (
             <div key={group} className="space-y-2">
-              <h3 className="px-1 text-[11px] font-bold uppercase tracking-wider text-zinc-500">
+              <h3 className="px-1 text-[11px] font-bold tracking-wider text-zinc-500 uppercase">
                 {group}
               </h3>
               <div className="card overflow-hidden">
@@ -920,7 +1019,7 @@ export default function HistoryPage() {
                       : `batch-${entry.batchId}-${idx}`;
                   const isLast = idx === filteredEntries[group].length - 1;
                   return (
-                    <div key={id} className={!isLast ? 'border-b border-border' : ''}>
+                    <div key={id} className={!isLast ? 'border-border border-b' : ''}>
                       {entry.type === 'single' ? (
                         <SimRow
                           sim={entry.sim}
@@ -951,7 +1050,7 @@ export default function HistoryPage() {
         </div>
       )}
       {selectedIds.size > 0 && (
-        <div className="fixed bottom-4 left-1/2 z-50 flex w-[min(95vw,760px)] -translate-x-1/2 flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-surface/95 px-4 py-3 shadow-2xl backdrop-blur">
+        <div className="border-border bg-surface/95 fixed bottom-4 left-1/2 z-50 flex w-[min(95vw,760px)] -translate-x-1/2 flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 shadow-2xl backdrop-blur">
           <div className="text-sm text-zinc-200">
             {selectedIds.size} record{selectedIds.size === 1 ? '' : 's'} selected
           </div>
@@ -969,21 +1068,21 @@ export default function HistoryPage() {
             <button
               onClick={() => handleBulkPin(true)}
               disabled={bulkDeleting || bulkPinning}
-              className="rounded-md border border-gold/30 px-3 py-1.5 text-xs text-gold hover:bg-gold/10 disabled:opacity-50"
+              className="border-gold/30 text-gold hover:bg-gold/10 rounded-md border px-3 py-1.5 text-xs disabled:opacity-50"
             >
               {bulkPinning ? 'Pinning...' : 'Pin Selected'}
             </button>
             <button
               onClick={() => handleBulkPin(false)}
               disabled={bulkDeleting || bulkPinning}
-              className="rounded-md border border-border px-3 py-1.5 text-xs text-zinc-300 hover:bg-surface-2 disabled:opacity-50"
+              className="border-border hover:bg-surface-2 rounded-md border px-3 py-1.5 text-xs text-zinc-300 disabled:opacity-50"
             >
               {bulkPinning ? 'Updating...' : 'Unpin Selected'}
             </button>
             <button
               onClick={() => setSelectedIds(new Set())}
               disabled={bulkDeleting || bulkPinning}
-              className="rounded-md border border-border px-3 py-1.5 text-xs text-zinc-300 hover:bg-surface-2 disabled:opacity-50"
+              className="border-border hover:bg-surface-2 rounded-md border px-3 py-1.5 text-xs text-zinc-300 disabled:opacity-50"
             >
               Cancel Selection
             </button>

@@ -318,7 +318,7 @@ export default function UpgradeComparePage() {
       if (comboTimer.current) clearTimeout(comboTimer.current);
       controller.abort();
     };
-  }, [simcInput, selectedSlots, effectiveMaxCombinations, upgradeMode, budgetOverridePayload]);
+  }, [simcInput, selectedSlots, effectiveMaxCombinations, maxCombinations, upgradeMode, budgetOverridePayload]);
 
   // Sim submission
   const buildPayload = useCallback(() => {

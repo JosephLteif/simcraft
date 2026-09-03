@@ -3,7 +3,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { API_URL, getGameContext, listInstances } from '../lib/api';
-import { wowExpansions, wowInstances } from '../lib/wow-season-content';
+import {
+  getRuntimeWowSeasonContent,
+  wowExpansions,
+  wowInstances,
+  type WowExpansion,
+  type WowInstance,
+} from '../lib/wow-season-content';
 import type { Instance } from '../drop-finder/types';
 
 type RaidEncounter = {
@@ -55,6 +61,20 @@ function fallbackRaidImages(raid: Instance): string[] {
   ].filter((url): url is string => Boolean(url));
 }
 
+function toApiRaid(instance: WowInstance): Instance {
+  return {
+    id: instance.id,
+    name: instance.name,
+    type: 'raid',
+    expansion: instance.expansionId,
+    image_url: instance.imageUrl,
+    encounters: (instance.encounters ?? []).map((encounter) => ({
+      id: encounter.id,
+      name: encounter.name,
+    })),
+  };
+}
+
 function RaidArtwork({ raid }: { raid: Instance }) {
   const apiImageUrl = resolveAssetUrl(raid.image_url);
   const fallbackImageUrls = fallbackRaidImages(raid);
@@ -92,7 +112,7 @@ function RaidCard({ raid }: { raid: Instance }) {
       <RaidArtwork raid={raid} />
       <div className="p-4">
         <h2 className="text-xl font-bold text-zinc-100">{raid.name}</h2>
-        <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+        <p className="mt-1 text-xs font-semibold tracking-wide text-zinc-500 uppercase">
           {encounters.length} encounters
         </p>
         {encounters.length > 0 ? (
@@ -116,6 +136,8 @@ function RaidCard({ raid }: { raid: Instance }) {
 
 export default function RaidsPage() {
   const [instances, setInstances] = useState<Instance[]>([]);
+  const [runtimeRaids, setRuntimeRaids] = useState<Instance[]>([]);
+  const [expansions, setExpansions] = useState<WowExpansion[]>(wowExpansions);
   const [currentExpansionId, setCurrentExpansionId] = useState<number | null>(null);
   const [selectedExpansionId, setSelectedExpansionId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -123,15 +145,29 @@ export default function RaidsPage() {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([listInstances(), getGameContext().catch(() => null)])
-      .then(([data, context]) => {
+    Promise.all([
+      listInstances().catch(() => []),
+      getGameContext().catch(() => null),
+      getRuntimeWowSeasonContent(),
+    ])
+      .then(([data, context, runtimeWow]) => {
         if (cancelled) return;
         setInstances(data);
-        const seasonName = context?.active_season?.name?.toLocaleLowerCase();
+        if (runtimeWow.expansions.length > 0) setExpansions(runtimeWow.expansions);
+        const seasonName = context?.active_season?.name?.toLocaleLowerCase() ?? '';
+        const currentContent = runtimeWow.result.content.find(
+          (content) =>
+            content.season.source?.gameContext === true ||
+            seasonName.includes(content.season.name.toLocaleLowerCase())
+        );
+        if (currentContent) setRuntimeRaids(currentContent.raids.map(toApiRaid));
+        const expansionName = currentContent?.season.expansion?.name?.toLocaleLowerCase();
         setCurrentExpansionId(
-          wowExpansions.find((expansion) =>
-            seasonName?.includes(expansion.name.toLocaleLowerCase())
-          )?.id ?? null
+          runtimeWow.expansions.find((expansion) =>
+            expansionName?.includes(expansion.name.toLocaleLowerCase())
+          )?.id ??
+            currentContent?.season.expansionId ??
+            null
         );
       })
       .catch((err) => {
@@ -148,12 +184,13 @@ export default function RaidsPage() {
 
   const raids = useMemo(() => {
     const apiRaids = instances.filter((instance) => instance.type === 'raid' && instance.id > 0);
+    if (runtimeRaids.length > 0) return runtimeRaids;
     return apiRaids.map((raid) =>
       raid.expansion == null && currentExpansionId != null
         ? { ...raid, expansion: currentExpansionId }
         : raid
     );
-  }, [currentExpansionId, instances]);
+  }, [currentExpansionId, instances, runtimeRaids]);
   const expansionIds = useMemo(
     () =>
       [
@@ -165,7 +202,7 @@ export default function RaidsPage() {
   const visibleRaids = raids.filter(
     (raid) => effectiveExpansionId == null || raid.expansion === effectiveExpansionId
   );
-  const expansionNames = new Map(wowExpansions.map((expansion) => [expansion.id, expansion.name]));
+  const expansionNames = new Map(expansions.map((expansion) => [expansion.id, expansion.name]));
 
   if (loading) {
     return <div className="h-64 animate-pulse rounded-xl border border-white/10 bg-white/5" />;
@@ -177,6 +214,13 @@ export default function RaidsPage() {
         <AlertTriangle className="mx-auto mb-4 h-8 w-8 text-red-400" />
         <h1 className="text-xl font-bold text-zinc-100">Failed to load raids</h1>
         <p className="mt-2 text-zinc-500">{error}</p>
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          className="bg-gold mt-6 rounded-lg px-4 py-2 text-sm font-semibold text-black"
+        >
+          Retry
+        </button>
       </div>
     );
   }
@@ -190,13 +234,14 @@ export default function RaidsPage() {
             Blizzard raid names, artwork, and encounters
           </p>
         </div>
-        <label className="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+        <label className="flex flex-col gap-1 text-[11px] font-semibold tracking-wide text-zinc-400 uppercase">
           Expansion
           <select
             value={effectiveExpansionId ?? ''}
             onChange={(event) => setSelectedExpansionId(Number(event.currentTarget.value) || null)}
-            className="w-full rounded-lg border border-white/15 bg-zinc-900 px-3 py-2 text-sm font-medium normal-case tracking-normal text-zinc-100 sm:w-auto sm:min-w-56"
+            className="w-full rounded-lg border border-white/15 bg-zinc-900 px-3 py-2 text-sm font-medium tracking-normal text-zinc-100 normal-case sm:w-auto sm:min-w-56"
           >
+            {expansionIds.length === 0 ? <option value="">No expansions available</option> : null}
             {expansionIds.map((id) => (
               <option key={id} value={id}>
                 {expansionNames.get(id) ?? `Expansion ${id}`}

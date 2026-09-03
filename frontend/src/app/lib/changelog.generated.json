@@ -1,5 +1,5 @@
 {
-  "contentRevision": "Unreleased-cb37f0c4409c",
+  "contentRevision": "Unreleased-06e28ce735fd",
   "releases": [
     {
       "version": "Unreleased",
@@ -15,6 +15,17 @@
             "Warcraft Logs activates after valid credentials are saved and adds latest-zone rankings, five recent public reports with report dates and end times, and per-boss best and median parses, public kills, best amounts, metrics, and specs.",
             "The integration settings explain what belongs in each Warcraft Logs field and show the exact redirect host and port for the current app address; private reports and private OAuth/PKCE access are not used.",
             "Personal Warcraft Logs credentials take precedence over shared hosted credentials, while environment credentials take precedence over the administrator-managed fallback. Secrets remain protected and are never returned by the API."
+          ]
+        },
+        {
+          "category": "improvement",
+          "title": "Make navigation and recovery easier",
+          "summary": "Core pages are easier to discover and recover when runtime game data or a network request is unavailable.",
+          "items": [
+            "App search now includes Queue, Raids, Saved Routes, Wishlist, Crest Upgrades, analysis tools, and Trinket Heatmaps.",
+            "The Analysis navigation group stays active while browsing Trinket Heatmaps.",
+            "Raids now prefer the same runtime expansion and raid catalog data used by Dungeons, while retaining artwork fallbacks and a retry action.",
+            "Saved Routes now reports load, save, delete, and clipboard failures through in-app notifications instead of browser alerts."
           ]
         },
         {
@@ -102,6 +113,16 @@
           "items": [
             "The generic `Current expansion` option is no longer shown when it does not map to the character's raid data.",
             "The final expansion in the available raid data is selected by default, while `All expansions` remains available for browsing older content."
+          ]
+        },
+        {
+          "category": "fix",
+          "title": "Preserve data-page state during failures",
+          "summary": "Transient refresh and mutation failures no longer turn valid page state into misleading empty screens.",
+          "items": [
+            "History keeps already-loaded simulation rows visible when a refresh fails and provides an inline retry action.",
+            "History mutations now surface delete, clear, pin, and configuration failures instead of failing silently.",
+            "Queue polling pauses while its browser tab is hidden, and row actions are disabled while a request is in flight."
           ]
         },
         {
