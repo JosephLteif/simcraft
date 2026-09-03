@@ -8,6 +8,13 @@ Add new work under the `Unreleased` section. Stable bump and `promote-dev` relea
 
 ### New features
 
+#### Prioritize Drop Finder activities
+
+Drop Finder rankings now summarize which raid bosses and dungeons are the best next targets for the current character.
+
+- Compare unique item rewards, likely upgrades, and the best DPS gain for each source.
+- Select a boss or dungeon to filter the rankings to matching combinations, switch directly to another source, or use Show all sources to clear the filter.
+
 #### Add optional Raider.IO and Warcraft Logs character data
 
 Character pages can now combine Blizzard data with public Raider.IO and Warcraft Logs data without making either provider a dependency.
