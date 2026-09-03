@@ -19,6 +19,15 @@ Character pages can now combine Blizzard data with public Raider.IO and Warcraft
 
 ### Improvements
 
+#### Make navigation and recovery easier
+
+Core pages are easier to discover and recover when runtime game data or a network request is unavailable.
+
+- App search now includes Queue, Raids, Saved Routes, Wishlist, Crest Upgrades, analysis tools, and Trinket Heatmaps.
+- The Analysis navigation group stays active while browsing Trinket Heatmaps.
+- Raids now prefer the same runtime expansion and raid catalog data used by Dungeons, while retaining artwork fallbacks and a retry action.
+- Saved Routes now reports load, save, delete, and clipboard failures through in-app notifications instead of browser alerts.
+
 #### Monitor and manage simulation queues
 
 Simulation runs now support a configurable parallel-job limit, with clear queue visibility across desktop, hosted Docker, and the dashboard.
@@ -91,6 +100,14 @@ The character Raiding tab now opens on the latest concrete expansion so raid pro
 - The final expansion in the available raid data is selected by default, while `All expansions` remains available for browsing older content.
 
 ### Bug fixes
+
+#### Preserve data-page state during failures
+
+Transient refresh and mutation failures no longer turn valid page state into misleading empty screens.
+
+- History keeps already-loaded simulation rows visible when a refresh fails and provides an inline retry action.
+- History mutations now surface delete, clear, pin, and configuration failures instead of failing silently.
+- Queue polling pauses while its browser tab is hidden, and row actions are disabled while a request is in flight.
 
 #### Keep raid data complete and resilient
 

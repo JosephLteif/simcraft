@@ -18,6 +18,9 @@ The format is based on Keep a Changelog and this project uses semantic versionin
 
 ### Changed
 
+- App search now includes Queue, Raids, Saved Routes, Wishlist, Crest Upgrades, analysis tools, and Trinket Heatmaps, while the Analysis navigation group correctly stays active on Trinket Heatmaps.
+- The Raids page now prefers the runtime expansion and raid catalog data shared with Dungeons, while retaining artwork fallbacks and a retry action.
+- Saved Routes now uses in-app success and error feedback for loading, saving, deleting, and copying route data.
 - Settings > Integrations now explains every Warcraft Logs credential field, shows the exact current redirect host and port, and applies personal, environment, and administrator-managed credential precedence without exposing secrets.
 - Queued simulations now clearly explain that SimC has not started, show the current queue position, and link directly to queue management instead of displaying misleading zero-progress details.
 - Result pages now place a clearer analysis section at the bottom with an estimated DPS distribution, percentile markers, confidence intervals, and uncertainty-aware comparison guidance.
@@ -30,6 +33,7 @@ The format is based on Keep a Changelog and this project uses semantic versionin
 
 ### Fixed
 
+- History now preserves already-loaded simulation rows when refreshes fail, reports mutation errors, and offers an inline retry action; queue polling also pauses for hidden tabs and disables busy row actions.
 - Warcraft Logs data now merges into Blizzard boss rows without replacing Blizzard data, preserves snapshots through provider failures and refreshes, and keeps real zero-kill bosses visible while hiding catalog-only trash placeholders.
 - Raider.IO raid achievements now request active raid slugs and filter against active Blizzard raids, preventing stale expansion entries such as legacy progression from appearing in the current-season card.
 - Character Raiding tabs now show current-season progression when active raid pools identify bosses by encounter ID instead of raid instance ID.

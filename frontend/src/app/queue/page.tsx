@@ -93,6 +93,7 @@ function QueueRow({
   job,
   allJobs,
   canManage,
+  busy,
   onMove,
   onRunNext,
   onCancel,
@@ -102,6 +103,7 @@ function QueueRow({
   job: QueueJob;
   allJobs: QueueJob[];
   canManage: boolean;
+  busy: boolean;
   onMove: (id: string, offset: number) => void;
   onRunNext: (id: string) => void;
   onCancel: (id: string) => void;
@@ -109,7 +111,8 @@ function QueueRow({
   onDrop: (id: string) => void;
 }) {
   const pending = job.status === 'pending';
-  const canCancel = canManage && (pending || job.status === 'running' || job.status === 'paused');
+  const canCancel =
+    canManage && !busy && (pending || job.status === 'running' || job.status === 'paused');
   const batchJobs = batchCount(allJobs, job.batch_id);
   const progress = Math.min(100, Math.max(0, job.progress));
   const title = job.player_name || 'Simulation';
@@ -119,7 +122,7 @@ function QueueRow({
 
   return (
     <div
-      draggable={canManage && pending}
+      draggable={canManage && pending && !busy}
       onDragStart={() => onDragStart(job.id)}
       onDragOver={(event) => {
         if (canManage && pending) event.preventDefault();
@@ -186,6 +189,7 @@ function QueueRow({
               <button
                 type="button"
                 onClick={() => onMove(job.id, -1)}
+                disabled={busy}
                 className="rounded-md p-1.5 text-zinc-500 hover:bg-white/10 hover:text-zinc-200"
                 aria-label={`Move ${title} up`}
                 title="Move up"
@@ -195,6 +199,7 @@ function QueueRow({
               <button
                 type="button"
                 onClick={() => onMove(job.id, 1)}
+                disabled={busy}
                 className="rounded-md p-1.5 text-zinc-500 hover:bg-white/10 hover:text-zinc-200"
                 aria-label={`Move ${title} down`}
                 title="Move down"
@@ -204,6 +209,7 @@ function QueueRow({
               <button
                 type="button"
                 onClick={() => onRunNext(job.id)}
+                disabled={busy}
                 className="text-gold hover:bg-gold/10 rounded-md p-1.5"
                 aria-label={`Run ${title} next`}
                 title="Run next"
@@ -271,7 +277,9 @@ export default function QueuePage() {
 
   useEffect(() => {
     void refresh();
-    const timer = window.setInterval(() => void refresh(true), 2500);
+    const timer = window.setInterval(() => {
+      if (!document.hidden) void refresh(true);
+    }, 2500);
     return () => window.clearInterval(timer);
   }, [refresh]);
 
@@ -477,6 +485,7 @@ export default function QueuePage() {
                 job={job}
                 allJobs={pending}
                 canManage={canManage}
+                busy={busyIds.has(job.id)}
                 onMove={move}
                 onRunNext={runNext}
                 onCancel={cancel}
@@ -519,6 +528,7 @@ export default function QueuePage() {
                 job={job}
                 allJobs={data?.jobs || []}
                 canManage={canManage}
+                busy={busyIds.has(job.id)}
                 onMove={move}
                 onRunNext={runNext}
                 onCancel={cancel}
@@ -545,6 +555,7 @@ export default function QueuePage() {
                 job={job}
                 allJobs={data?.jobs || []}
                 canManage={canManage}
+                busy={busyIds.has(job.id)}
                 onMove={move}
                 onRunNext={runNext}
                 onCancel={cancel}

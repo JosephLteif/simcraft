@@ -13,10 +13,12 @@ import { useSimContext } from '../components/SimContext';
 import RouteDetailsModal from '../components/RouteDetailsModal';
 import { useDismissOnOutside } from '../lib/useDismissOnOutside';
 import { normalizeSourceName } from '../lib/source-navigation';
+import { useNotifications } from '../components/shared/NotificationSystem';
 
 export default function DungeonRoutesPage() {
   const router = useRouter();
   const { setSimcFooter } = useSimContext();
+  const { notify } = useNotifications();
   const [routes, setRoutes] = useState<SavedRoute[]>([]);
   const [availableInstances, setAvailableInstances] = useState<Instance[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -42,6 +44,8 @@ export default function DungeonRoutesPage() {
   const [customDungeonName, setCustomDungeonName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [viewingRoute, setViewingRoute] = useState<SavedRoute | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [deletingRouteId, setDeletingRouteId] = useState<string | null>(null);
   useDismissOnOutside(addRouteModalRef, isModalOpen, () => setIsModalOpen(false));
 
   const formatHealth = (hp: number) => {
@@ -62,6 +66,9 @@ export default function DungeonRoutesPage() {
       const [data, instances] = await Promise.all([listSavedRoutes(), listInstances()]);
       setRoutes(data);
       setAvailableInstances(instances);
+      setError(null);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Failed to load saved routes.');
     } finally {
       setIsLoading(false);
     }
@@ -88,10 +95,10 @@ export default function DungeonRoutesPage() {
     }
 
     const levelMatch = input.match(
-      /^(?:keystone_level|level|mythic_plus_level)\s*=\s*"?([^"\n,]+)"?/im,
+      /^(?:keystone_level|level|mythic_plus_level)\s*=\s*"?([^"\n,]+)"?/im
     );
     const dungeonMatch = input.match(
-      /^(?:dungeon|instance|mythic_plus_dungeon|keystone_dungeon)\s*=\s*"?([^"\n,]+)"?/im,
+      /^(?:dungeon|instance|mythic_plus_dungeon|keystone_dungeon)\s*=\s*"?([^"\n,]+)"?/im
     );
     const nameMatch = input.match(/^(?:route_name|name)\s*=\s*"?([^"\n,]+)"?/im);
     const enemyMatch = input.match(/^enemy\s*=\s*"([^"]+)"/im);
@@ -131,7 +138,7 @@ export default function DungeonRoutesPage() {
           const matched = availableInstances.find(
             (i) =>
               i.name.toLowerCase() === updates.dungeon.toLowerCase() ||
-              i.name.toLowerCase().includes(updates.dungeon.toLowerCase()),
+              i.name.toLowerCase().includes(updates.dungeon.toLowerCase())
           );
           if (matched) {
             setSelectedDungeonId(String(matched.id));
@@ -193,21 +200,42 @@ export default function DungeonRoutesPage() {
       setSelectedDungeonId('');
       setCustomDungeonName('');
       setIsModalOpen(false);
-      refresh();
+      await refresh();
+      notify({
+        title: 'Route saved',
+        description: 'The route is now available in Saved Routes.',
+        variant: 'success',
+      });
     } catch (e: any) {
-      alert(`Failed to save route: ${e.message}`);
+      notify({
+        title: 'Could not save route',
+        description: e?.message || 'Please try again.',
+        variant: 'error',
+      });
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this route?')) return;
+    if (!window.confirm('Are you sure you want to delete this route?')) return;
+    setDeletingRouteId(id);
     try {
       await deleteSavedRoute(id);
       setRoutes((prev) => prev.filter((r) => r.id !== id));
+      notify({
+        title: 'Route deleted',
+        description: 'The saved route was removed.',
+        variant: 'success',
+      });
     } catch (e: any) {
-      alert(`Failed to delete: ${e.message}`);
+      notify({
+        title: 'Could not delete route',
+        description: e?.message || 'Please try again.',
+        variant: 'error',
+      });
+    } finally {
+      setDeletingRouteId(null);
     }
   };
 
@@ -258,13 +286,13 @@ export default function DungeonRoutesPage() {
       }
       return null;
     },
-    [availableInstances, instanceIdByNormalizedName],
+    [availableInstances, instanceIdByNormalizedName]
   );
 
   if (isLoading && routes.length === 0) {
     return (
       <div className="flex h-[60vh] items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-gold border-t-transparent" />
+        <div className="border-gold h-8 w-8 animate-spin rounded-full border-4 border-t-transparent" />
       </div>
     );
   }
@@ -280,21 +308,37 @@ export default function DungeonRoutesPage() {
         </div>
         <button
           onClick={() => setIsModalOpen(true)}
-          className="rounded-xl bg-gold px-6 py-3 text-[15px] font-bold text-black transition-all hover:bg-gold/90 hover:shadow-lg hover:shadow-gold/20"
+          className="bg-gold hover:bg-gold/90 hover:shadow-gold/20 rounded-xl px-6 py-3 text-[15px] font-bold text-black transition-all hover:shadow-lg"
         >
           Add Route
         </button>
       </div>
 
+      {error && (
+        <div
+          role="alert"
+          className="mb-6 flex items-center justify-between gap-3 rounded-xl border border-red-400/20 bg-red-400/10 p-4 text-sm text-red-200"
+        >
+          <span>{error}</span>
+          <button
+            type="button"
+            onClick={() => void refresh()}
+            className="font-semibold hover:text-white"
+          >
+            Try again
+          </button>
+        </div>
+      )}
+
       <div className="mb-6 flex flex-wrap items-center gap-4 rounded-xl border border-white/5 bg-white/[0.02] p-4">
         <div className="flex flex-col gap-1.5">
-          <label className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">
+          <label className="text-[11px] font-bold tracking-wider text-zinc-500 uppercase">
             Dungeon
           </label>
           <select
             value={dungeonFilter}
             onChange={(e) => setDungeonFilter(e.target.value)}
-            className="rounded-lg border border-border bg-surface-2 px-3 py-1.5 text-sm text-zinc-100 focus:border-gold/50 focus:outline-none focus:ring-1 focus:ring-gold/50"
+            className="border-border bg-surface-2 focus:border-gold/50 focus:ring-gold/50 rounded-lg border px-3 py-1.5 text-sm text-zinc-100 focus:ring-1 focus:outline-none"
             style={{ colorScheme: 'dark' }}
           >
             <option value="all">All Dungeons</option>
@@ -307,13 +351,13 @@ export default function DungeonRoutesPage() {
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <label className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">
+          <label className="text-[11px] font-bold tracking-wider text-zinc-500 uppercase">
             Sort By
           </label>
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as any)}
-            className="rounded-lg border border-border bg-surface-2 px-3 py-1.5 text-sm text-zinc-100 focus:border-gold/50 focus:outline-none focus:ring-1 focus:ring-gold/50"
+            className="border-border bg-surface-2 focus:border-gold/50 focus:ring-gold/50 rounded-lg border px-3 py-1.5 text-sm text-zinc-100 focus:ring-1 focus:outline-none"
             style={{ colorScheme: 'dark' }}
           >
             <option value="date">Newest First</option>
@@ -334,7 +378,7 @@ export default function DungeonRoutesPage() {
       {filteredAndSortedRoutes.length === 0 ? (
         <div className="flex h-64 flex-col items-center justify-center rounded-2xl border border-dashed border-white/10 bg-white/[0.01]">
           <p className="text-zinc-500">No saved routes found matching your filters.</p>
-          <Link href="/quick-sim" className="mt-4 text-sm font-medium text-gold hover:underline">
+          <Link href="/quick-sim" className="text-gold mt-4 text-sm font-medium hover:underline">
             Go to Quick Sim to save your first route
           </Link>
         </div>
@@ -348,8 +392,7 @@ export default function DungeonRoutesPage() {
               <div className="p-5">
                 <div className="mb-4 flex items-start justify-between gap-4">
                   <div className="min-w-0">
-                    <h3
-                      className="truncate text-lg font-bold tracking-tight text-white transition-colors group-hover:text-gold">
+                    <h3 className="group-hover:text-gold truncate text-lg font-bold tracking-tight text-white transition-colors">
                       {route.name}
                     </h3>
                     <div className="mt-0.5 flex flex-wrap items-center gap-2">
@@ -360,7 +403,7 @@ export default function DungeonRoutesPage() {
                         return (
                           <Link
                             href="/dungeons"
-                            className="text-xs font-semibold text-gold/90 transition-colors hover:text-gold hover:underline"
+                            className="text-gold/90 hover:text-gold text-xs font-semibold transition-colors hover:underline"
                           >
                             Open Dungeon
                           </Link>
@@ -384,11 +427,11 @@ export default function DungeonRoutesPage() {
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  <span className="rounded-md bg-white/5 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                  <span className="rounded-md bg-white/5 px-2 py-0.5 text-[10px] font-bold tracking-wider text-zinc-400 uppercase">
                     {new Date(route.created_at).toLocaleDateString()}
                   </span>
                   {route.pull_count && (
-                    <span className="rounded-md bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-400">
+                    <span className="rounded-md bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold tracking-wider text-emerald-400 uppercase">
                       {route.pull_count} Pulls
                     </span>
                   )}
@@ -397,7 +440,7 @@ export default function DungeonRoutesPage() {
                     if (info?.kind !== 'dungeon') return null;
                     const totalHealth = info.pulls.reduce(
                       (sum, p) => sum + (p.totalHealth || 0),
-                      0,
+                      0
                     );
                     const timer = route.timer_seconds || (info.maxTime ? Number(info.maxTime) : 0);
                     // Assume 3 DPS do 90% of total HP.
@@ -407,17 +450,17 @@ export default function DungeonRoutesPage() {
                     return (
                       <>
                         {timer > 0 && (
-                          <span className="rounded-md bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-400">
+                          <span className="rounded-md bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold tracking-wider text-amber-400 uppercase">
                             {formatTime(timer)} Timer
                           </span>
                         )}
                         {totalHealth > 0 && (
-                          <span className="rounded-md bg-sky-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-sky-400">
+                          <span className="rounded-md bg-sky-500/10 px-2 py-0.5 text-[10px] font-bold tracking-wider text-sky-400 uppercase">
                             {formatHealth(totalHealth)} HP
                           </span>
                         )}
                         {minDps > 0 && (
-                          <span className="rounded-md bg-gold/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-gold">
+                          <span className="bg-gold/10 text-gold rounded-md px-2 py-0.5 text-[10px] font-bold tracking-wider uppercase">
                             {Math.round(minDps).toLocaleString()} DPS
                           </span>
                         )}
@@ -439,23 +482,37 @@ export default function DungeonRoutesPage() {
                     setSimcFooter(route.route_data);
                     router.push('/quick-sim');
                   }}
-                  className="flex-1 bg-gold/10 py-3 text-xs font-bold uppercase tracking-widest text-gold transition-colors hover:bg-gold/20"
+                  className="bg-gold/10 text-gold hover:bg-gold/20 flex-1 py-3 text-xs font-bold tracking-widest uppercase transition-colors"
                 >
                   Use in Sim
                 </button>
                 <button
                   onClick={() => {
-                    navigator.clipboard.writeText(route.route_data);
-                    alert('Route data copied to clipboard!');
+                    void navigator.clipboard.writeText(route.route_data).then(
+                      () =>
+                        notify({
+                          title: 'Route copied',
+                          description: 'Route data copied to the clipboard.',
+                          variant: 'success',
+                        }),
+                      () =>
+                        notify({
+                          title: 'Could not copy route',
+                          description: 'Clipboard access was unavailable.',
+                          variant: 'error',
+                        })
+                    );
                   }}
-                  className="flex-1 bg-white/[0.02] py-3 text-xs font-bold uppercase tracking-widest text-zinc-400 transition-colors hover:bg-white/[0.05] hover:text-white"
+                  className="flex-1 bg-white/[0.02] py-3 text-xs font-bold tracking-widest text-zinc-400 uppercase transition-colors hover:bg-white/[0.05] hover:text-white"
                 >
                   Copy
                 </button>
                 <button
+                  disabled={deletingRouteId === route.id}
                   onClick={() => handleDelete(route.id)}
-                  className="bg-white/[0.02] px-4 py-3 text-zinc-500 transition-colors hover:bg-red-500/10 hover:text-red-400"
+                  className="bg-white/[0.02] px-4 py-3 text-zinc-500 transition-colors hover:bg-red-500/10 hover:text-red-400 disabled:cursor-wait disabled:opacity-50"
                   title="Delete Route"
+                  aria-label={`Delete ${route.name}`}
                 >
                   <Trash2 className="h-4 w-4" strokeWidth={2} />
                 </button>
@@ -479,7 +536,8 @@ export default function DungeonRoutesPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
           <div
             ref={addRouteModalRef}
-            className="animate-in fade-in zoom-in w-full max-w-2xl rounded-2xl border border-white/10 bg-zinc-900 p-6 shadow-2xl duration-200">
+            className="animate-in fade-in zoom-in w-full max-w-2xl rounded-2xl border border-white/10 bg-zinc-900 p-6 shadow-2xl duration-200"
+          >
             <div className="mb-6 flex items-center justify-between">
               <h2 className="text-xl font-bold text-white">Add New Dungeon Route</h2>
               <button
@@ -493,7 +551,7 @@ export default function DungeonRoutesPage() {
             <form onSubmit={handleCreateRoute} className="space-y-4">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-bold uppercase tracking-wider text-zinc-500">
+                  <label className="text-xs font-bold tracking-wider text-zinc-500 uppercase">
                     Route Name
                   </label>
                   <input
@@ -502,18 +560,18 @@ export default function DungeonRoutesPage() {
                     value={newRoute.name}
                     onChange={(e) => setNewRoute({ ...newRoute, name: e.target.value })}
                     placeholder="e.g. Mists +10 Push Route"
-                    className="rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white focus:border-gold/50 focus:outline-none focus:ring-1 focus:ring-gold/50"
+                    className="focus:border-gold/50 focus:ring-gold/50 rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white focus:ring-1 focus:outline-none"
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-bold uppercase tracking-wider text-zinc-500">
+                  <label className="text-xs font-bold tracking-wider text-zinc-500 uppercase">
                     Dungeon
                   </label>
                   <select
                     required
                     value={selectedDungeonId}
                     onChange={(e) => setSelectedDungeonId(e.target.value)}
-                    className="rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white focus:border-gold/50 focus:outline-none focus:ring-1 focus:ring-gold/50"
+                    className="focus:border-gold/50 focus:ring-gold/50 rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white focus:ring-1 focus:outline-none"
                   >
                     <option value="" disabled>
                       Select a Dungeon
@@ -533,7 +591,7 @@ export default function DungeonRoutesPage() {
 
               {selectedDungeonId === 'other' && (
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-bold uppercase tracking-wider text-zinc-500">
+                  <label className="text-xs font-bold tracking-wider text-zinc-500 uppercase">
                     Custom Dungeon Name
                   </label>
                   <input
@@ -542,13 +600,13 @@ export default function DungeonRoutesPage() {
                     value={customDungeonName}
                     onChange={(e) => setCustomDungeonName(e.target.value)}
                     placeholder="e.g. Operation: Mechagon"
-                    className="rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white focus:border-gold/50 focus:outline-none focus:ring-1 focus:ring-gold/50"
+                    className="focus:border-gold/50 focus:ring-gold/50 rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white focus:ring-1 focus:outline-none"
                   />
                 </div>
               )}
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-bold uppercase tracking-wider text-zinc-500">
+                <label className="text-xs font-bold tracking-wider text-zinc-500 uppercase">
                   Keystone Level (Optional)
                 </label>
                 <input
@@ -556,12 +614,12 @@ export default function DungeonRoutesPage() {
                   value={newRoute.level}
                   onChange={(e) => setNewRoute({ ...newRoute, level: e.target.value })}
                   placeholder="e.g. 10"
-                  className="w-32 rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white focus:border-gold/50 focus:outline-none focus:ring-1 focus:ring-gold/50"
+                  className="focus:border-gold/50 focus:ring-gold/50 w-32 rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white focus:ring-1 focus:outline-none"
                 />
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-bold uppercase tracking-wider text-zinc-500">
+                <label className="text-xs font-bold tracking-wider text-zinc-500 uppercase">
                   SimC Route Data
                 </label>
                 <textarea
@@ -570,18 +628,18 @@ export default function DungeonRoutesPage() {
                   value={newRoute.route_data}
                   onChange={(e) => setNewRoute({ ...newRoute, route_data: e.target.value })}
                   placeholder="Paste your dungeon_route=... or route=... here"
-                  className="rounded-lg border border-white/10 bg-black/40 px-3 py-2 font-mono text-xs text-zinc-300 focus:border-gold/50 focus:outline-none focus:ring-1 focus:ring-gold/50"
+                  className="focus:border-gold/50 focus:ring-gold/50 rounded-lg border border-white/10 bg-black/40 px-3 py-2 font-mono text-xs text-zinc-300 focus:ring-1 focus:outline-none"
                 />
               </div>
 
               {parsedMdt && (
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-bold uppercase tracking-wider text-zinc-500">
+                  <label className="text-xs font-bold tracking-wider text-zinc-500 uppercase">
                     Pulls Preview ({parsedMdt.pullCount} pulls)
                   </label>
                   <div className="max-h-60 overflow-y-auto rounded-lg border border-white/10 bg-black/40">
                     <table className="w-full text-left text-[11px]">
-                      <thead className="sticky top-0 bg-zinc-900 text-[10px] font-black uppercase tracking-wider text-zinc-500">
+                      <thead className="sticky top-0 bg-zinc-900 text-[10px] font-black tracking-wider text-zinc-500 uppercase">
                         <tr>
                           <th className="px-4 py-2">Pull</th>
                           <th className="px-2 py-2 text-center">BL</th>
@@ -634,7 +692,7 @@ export default function DungeonRoutesPage() {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="rounded-lg bg-gold px-6 py-2 text-sm font-bold text-black transition-all hover:bg-gold/90 disabled:opacity-50"
+                  className="bg-gold hover:bg-gold/90 rounded-lg px-6 py-2 text-sm font-bold text-black transition-all disabled:opacity-50"
                 >
                   {isSubmitting ? 'Saving...' : 'Save Route'}
                 </button>
