@@ -8,6 +8,7 @@ The format is based on Keep a Changelog and this project uses semantic versionin
 
 ### Added
 
+- Drop Finder rankings now include raid-boss and dungeon activity priorities with unique reward counts, likely-upgrade counts, and best DPS gain; selecting a source filters to matching combinations and can be cleared with Show all sources.
 - Character pages now support optional public Raider.IO and Warcraft Logs integrations: Raider.IO provides current-season Mythic+ scores, best runs, raid progression, attribution, and profile links, while Warcraft Logs provides latest-zone rankings, five dated recent reports, and per-boss parse, kill, amount, metric, and spec data.
 - Simulation queue management now supports a configurable parallel-job limit across desktop and private Docker hosting; Docker-hosted changes are restricted to administrators.
 - The global activity card now shows running and queued simulations, remains available on result pages, and supports cancellation.
