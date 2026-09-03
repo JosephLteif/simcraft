@@ -1,17 +1,17 @@
 'use client';
 
-import { type MouseEvent, useEffect, useMemo, useState } from 'react';
+import { type MouseEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Search, X } from 'lucide-react';
 import { API_URL } from '../lib/api';
 import { INVENTORY_TYPE_TO_SLOT } from '../lib/gear-utils';
-import { DEFAULT_TRACK_BADGE_CLASS, RAID_TRACK_BY_DIFFICULTY, TRACK_COLORS } from '../lib/loot-track';
+import {
+  DEFAULT_TRACK_BADGE_CLASS,
+  RAID_TRACK_BY_DIFFICULTY,
+  TRACK_COLORS,
+} from '../lib/loot-track';
 import { useWowheadTooltips } from '../lib/useWowheadTooltips';
 import { getWowheadData, QUALITY_COLORS } from '../lib/useItemInfo';
-import {
-  wowExpansions,
-  wowMythicPlusDungeons,
-  wowSeasons,
-} from '../lib/wow-season-content';
+import { wowExpansions, wowMythicPlusDungeons, wowSeasons } from '../lib/wow-season-content';
 import {
   type GemDisplay,
   isPvpCraftedItem,
@@ -30,6 +30,7 @@ import AddItemDifficultyToggle from './add-item/AddItemDifficultyToggle';
 import AddItemInstanceSidebar from './add-item/AddItemInstanceSidebar';
 import CustomSelect from './shared/CustomSelect';
 import WowIcon from './shared/WowIcon';
+import { useDismissOnOutside } from '../lib/useDismissOnOutside';
 
 interface AddItemModalProps {
   isOpen: boolean;
@@ -198,13 +199,13 @@ function itemUsesCurrentSeasonUpgradeValues(
  */
 const DELVE_TRACKS = [
   { key: 'adventurer', label: 'Adventurer', infoSource: 'dungeon_info', infoDiff: 'heroic' },
-  { key: 'champion',   label: 'Champion',   infoSource: 'dungeon_info', infoDiff: 'mythic' },
-  { key: 'hero',       label: 'Hero',       infoSource: 'difficulty_info', infoDiff: 'heroic' },
+  { key: 'champion', label: 'Champion', infoSource: 'dungeon_info', infoDiff: 'mythic' },
+  { key: 'hero', label: 'Hero', infoSource: 'difficulty_info', infoDiff: 'heroic' },
 ] as const;
 
 const PREY_TRACKS = [
   { key: 'adventurer', label: 'Adventurer', infoSource: 'dungeon_info', infoDiff: 'heroic' },
-  { key: 'champion',   label: 'Champion',   infoSource: 'dungeon_info', infoDiff: 'mythic' },
+  { key: 'champion', label: 'Champion', infoSource: 'dungeon_info', infoDiff: 'mythic' },
 ] as const;
 
 /** PvP items all drop at a single fixed track level. */
@@ -214,10 +215,7 @@ const PVP_TRACKS = [
 
 type FixedTrackDef = { key: string; label: string; infoSource: string; infoDiff: string };
 
-function getFixedTracksForCategory(
-  category: string,
-  item: ExternalItem
-): FixedTrackDef[] | null {
+function getFixedTracksForCategory(category: string, item: ExternalItem): FixedTrackDef[] | null {
   const instName = (item.instance_name || item.encounter || '').toLowerCase();
   if (category === 'delves') {
     // If the item is from Prey, restrict to Prey tracks
@@ -236,27 +234,31 @@ const DEFAULT_BADGE = DEFAULT_TRACK_BADGE_CLASS;
 function isWorldBossInstance(inst: { name?: string; type?: string }): boolean {
   const name = String(inst.name || '').toLowerCase();
   const type = String(inst.type || '').toLowerCase();
-  return (
-    name.includes('world boss') ||
-    type.includes('world-boss') ||
-    type.includes('world_boss')
-  );
+  return name.includes('world boss') || type.includes('world-boss') || type.includes('world_boss');
 }
 
 function isDelveInstance(inst: { type?: string }): boolean {
-  return String(inst.type || '').toLowerCase().includes('delve');
+  return String(inst.type || '')
+    .toLowerCase()
+    .includes('delve');
 }
 
 function isPvpInstance(inst: { type?: string }): boolean {
-  return String(inst.type || '').toLowerCase().includes('pvp');
+  return String(inst.type || '')
+    .toLowerCase()
+    .includes('pvp');
 }
 
 function isCraftedInstance(inst: { type?: string }): boolean {
-  return String(inst.type || '').toLowerCase().includes('profession');
+  return String(inst.type || '')
+    .toLowerCase()
+    .includes('profession');
 }
 
 function isPreyInstance(inst: { type?: string }): boolean {
-  return String(inst.type || '').toLowerCase().includes('prey');
+  return String(inst.type || '')
+    .toLowerCase()
+    .includes('prey');
 }
 
 function isDungeonType(type: string): boolean {
@@ -336,7 +338,11 @@ function missivesForItem(item: ExternalItem, missives: MissiveOption[]): Missive
   return matching.length > 0 ? matching : missives;
 }
 
-function getDisplayQuality(item: ExternalItem, tierQuality: number | undefined, category: LootCategory): number {
+function getDisplayQuality(
+  item: ExternalItem,
+  tierQuality: number | undefined,
+  category: LootCategory
+): number {
   const effective = tierQuality ?? item.quality;
   const sourceType = String(item.source_type || '').toLowerCase();
   // Crafted quality rank (Q5) is not item rarity; keep crafted items in Epic color unless explicitly lower.
@@ -349,14 +355,22 @@ function getDisplayQuality(item: ExternalItem, tierQuality: number | undefined, 
 function instanceMatchesCategory(inst: { name?: string; type?: string }, cat: string): boolean {
   const type = String(inst.type || '').toLowerCase();
   switch (cat) {
-    case 'raid':        return type === 'raid' && !isWorldBossInstance(inst);
-    case 'dungeon':     return isDungeonType(type);
-    case 'tier':        return type === 'catalyst';
-    case 'delves':      return isDelveInstance(inst) || isPreyInstance(inst);
-    case 'pvp':         return isPvpInstance(inst);
-    case 'crafted':     return isCraftedInstance(inst);
-    case 'world_bosses': return isWorldBossInstance(inst);
-    default:            return false;
+    case 'raid':
+      return type === 'raid' && !isWorldBossInstance(inst);
+    case 'dungeon':
+      return isDungeonType(type);
+    case 'tier':
+      return type === 'catalyst';
+    case 'delves':
+      return isDelveInstance(inst) || isPreyInstance(inst);
+    case 'pvp':
+      return isPvpInstance(inst);
+    case 'crafted':
+      return isCraftedInstance(inst);
+    case 'world_bosses':
+      return isWorldBossInstance(inst);
+    default:
+      return false;
   }
 }
 
@@ -397,7 +411,9 @@ function resolveInfoForDifficulty(
   category: string
 ): any {
   if (category !== 'dungeon') {
-    return item.difficulty_info?.[selectedDifficulty] || item.dungeon_info?.[selectedDifficulty] || null;
+    return (
+      item.difficulty_info?.[selectedDifficulty] || item.dungeon_info?.[selectedDifficulty] || null
+    );
   }
 
   for (const key of dungeonDifficultyKeyCandidates(selectedDifficulty)) {
@@ -413,7 +429,10 @@ function hasAvailableDifficulty(item: ExternalItem, difficulty: string, category
   return !!resolveInfoForDifficulty(item, difficulty, category);
 }
 
-function collectCraftedIlevels(item: ExternalItem, upgradeTracks: Record<string, any>): Array<{ ilvl: number; bonus_id: number; key: string }> {
+function collectCraftedIlevels(
+  item: ExternalItem,
+  upgradeTracks: Record<string, any>
+): Array<{ ilvl: number; bonus_id: number; key: string }> {
   if (Array.isArray(item.crafted_levels) && item.crafted_levels.length > 0) {
     return Array.from(new Set(item.crafted_levels))
       .filter((ilvl) => Number.isFinite(ilvl) && ilvl > 0)
@@ -437,7 +456,11 @@ function collectCraftedIlevels(item: ExternalItem, upgradeTracks: Record<string,
           const maxTrackLevel = Math.max(...track.map((t: any) => t.max || 0));
           const gilded = track.find((t: any) => t.level === maxTrackLevel - 1);
           if (gilded) {
-            out.push({ ilvl: gilded.ilvl || gilded.itemLevel || 0, bonus_id: gilded.bonus_id || gilded.bonusIds?.[0] || 0, key: 'gilded' });
+            out.push({
+              ilvl: gilded.ilvl || gilded.itemLevel || 0,
+              bonus_id: gilded.bonus_id || gilded.bonusIds?.[0] || 0,
+              key: 'gilded',
+            });
           }
         }
       }
@@ -473,7 +496,10 @@ const getEffectiveTier = (
     const trackMaxLevel = track ? track[track.length - 1].level : UPGRADE_TRACK_MAX_LEVEL;
     const baseLevel = infoBlock.level || 1;
     const defaultLevel = Math.max(1, Math.min(baseLevel, trackMaxLevel));
-    const currentLevel = Math.max(1, Math.min(itemTiers[item.item_id] || defaultLevel, trackMaxLevel));
+    const currentLevel = Math.max(
+      1,
+      Math.min(itemTiers[item.item_id] || defaultLevel, trackMaxLevel)
+    );
 
     const levelInfo = track?.find((t: any) => t.level === currentLevel);
 
@@ -520,7 +546,10 @@ const getEffectiveTier = (
   const trackMaxLevel = track[track.length - 1].level;
   const baseLevel = info.level || 1;
   const defaultLevel = Math.max(1, Math.min(baseLevel, trackMaxLevel));
-  const currentLevel = Math.max(1, Math.min(itemTiers[item.item_id] || defaultLevel, trackMaxLevel));
+  const currentLevel = Math.max(
+    1,
+    Math.min(itemTiers[item.item_id] || defaultLevel, trackMaxLevel)
+  );
 
   const levelInfo = track.find((t: any) => t.level === currentLevel);
   return {
@@ -545,6 +574,8 @@ export default function AddItemModal({
   preferredSlot,
 }: AddItemModalProps) {
   const state = useAddItemState(isOpen, className, spec, preferredSlot);
+  const modalRef = useRef<HTMLDivElement | null>(null);
+  useDismissOnOutside(modalRef, isOpen, onClose);
   const [embellishmentOptionsByItem, setEmbellishmentOptionsByItem] = useState<
     Record<number, EmbellishmentOption[]>
   >({});
@@ -585,10 +616,7 @@ export default function AddItemModal({
   } = state;
 
   const slotFilterOptions = useMemo(
-    () =>
-      SLOT_FILTER_OPTIONS.filter(
-        (entry) => canUseOffhand || entry.value !== 'off_hand'
-      ),
+    () => SLOT_FILTER_OPTIONS.filter((entry) => canUseOffhand || entry.value !== 'off_hand'),
     [canUseOffhand]
   );
 
@@ -608,18 +636,17 @@ export default function AddItemModal({
     )?.id ?? Math.max(...wowExpansions.map((expansion) => expansion.id), 0);
 
   const usesCurrentSeasonUpgradeValues = useMemo(
-    () =>
-      (item: ExternalItem) =>
-        itemUsesCurrentSeasonUpgradeValues(
-          item,
-          instances,
-          selectedInstance,
-          seasonByInstanceId,
-          currentSeasonDescriptor,
-          expansionNames,
-          currentExpansionId,
-          focusedDungeonExpansionId == null
-        ),
+    () => (item: ExternalItem) =>
+      itemUsesCurrentSeasonUpgradeValues(
+        item,
+        instances,
+        selectedInstance,
+        seasonByInstanceId,
+        currentSeasonDescriptor,
+        expansionNames,
+        currentExpansionId,
+        focusedDungeonExpansionId == null
+      ),
     [
       currentExpansionId,
       currentSeasonDescriptor,
@@ -689,7 +716,10 @@ export default function AddItemModal({
     setFocusedDungeonExpansionId(null);
   }, [category]);
 
-  const effectiveDifficulty = (category === 'world_bosses' || category === 'pvp' || category === 'crafted') ? 'normal' : selectedDifficulty;
+  const effectiveDifficulty =
+    category === 'world_bosses' || category === 'pvp' || category === 'crafted'
+      ? 'normal'
+      : selectedDifficulty;
   const isSearchingAcrossCategory = globalSearch.trim().length > 0;
   const isDropListLoading = loading || (isSearchingAcrossCategory && isGlobalLoading);
 
@@ -850,22 +880,22 @@ export default function AddItemModal({
           ? availableMissives[0].token.split('/')
           : [];
     const selectedMissiveToken = [...missiveTokens].sort().join('/');
-    const selectedMissive = availableMissives.find((m: MissiveOption) => m.token === selectedMissiveToken);
+    const selectedMissive = availableMissives.find(
+      (m: MissiveOption) => m.token === selectedMissiveToken
+    );
     const missiveBonusIds = selectedMissive?.bonus_ids || [];
     const missivePoolBonusIds = Array.from(
       new Set(
-        missives.flatMap((m: MissiveOption) =>
-          Array.isArray(m.bonus_ids) ? m.bonus_ids : []
-        )
+        missives.flatMap((m: MissiveOption) => (Array.isArray(m.bonus_ids) ? m.bonus_ids : []))
       )
     );
     const embellishmentPoolBonusIds = Array.from(
       new Set(
-        (((item.embellishment_options || []).length > 0
-          ? item.embellishment_options
-          : embellishmentOptionsByItem[item.item_id] || []) as EmbellishmentOption[]).flatMap(
-          (opt) => (Array.isArray(opt.bonus_ids) ? opt.bonus_ids : [])
-        )
+        (
+          ((item.embellishment_options || []).length > 0
+            ? item.embellishment_options
+            : embellishmentOptionsByItem[item.item_id] || []) as EmbellishmentOption[]
+        ).flatMap((opt) => (Array.isArray(opt.bonus_ids) ? opt.bonus_ids : []))
       )
     );
     const craftedVariableBonusPool = Array.from(
@@ -936,7 +966,11 @@ export default function AddItemModal({
     if (category === 'crafted') {
       const levels = collectCraftedIlevels(item, upgradeTracks);
       const boundedLevel = Math.min(levels.length, Math.max(1, selectedLevel));
-      const levelInfo = levels[boundedLevel - 1] || { ilvl: item.ilevel, bonus_id: 0, key: 'normal' };
+      const levelInfo = levels[boundedLevel - 1] || {
+        ilvl: item.ilevel,
+        bonus_id: 0,
+        key: 'normal',
+      };
       const craftedBaseBonusIds = Array.isArray(item.crafted_base_bonus_ids)
         ? item.crafted_base_bonus_ids
         : [];
@@ -1028,14 +1062,16 @@ export default function AddItemModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-x-0 bottom-0 top-[var(--app-header-height)] z-[100] flex items-center justify-center p-0 sm:p-4">
+    <div className="fixed inset-x-0 top-[var(--app-header-height)] bottom-0 z-[100] flex items-center justify-center p-0 sm:p-4">
       <div className="absolute inset-0 bg-black/75 backdrop-blur-md" onClick={onClose} />
       <div
+        ref={modalRef}
         data-tour="loot-browser"
-        className="mobile-modal-shell animate-in fade-in zoom-in relative flex h-full max-h-[calc(100dvh-var(--app-header-height))] min-h-0 w-full max-w-[88rem] flex-col overflow-hidden rounded-2xl border border-border bg-bg shadow-2xl duration-200 sm:max-h-[calc(100dvh-var(--app-header-height)-2rem)]"
+        tabIndex={-1}
+        className="mobile-modal-shell animate-in fade-in zoom-in border-border bg-bg relative flex h-full max-h-[calc(100dvh-var(--app-header-height))] min-h-0 w-full max-w-[88rem] flex-col overflow-hidden rounded-2xl border shadow-2xl duration-200 sm:max-h-[calc(100dvh-var(--app-header-height)-2rem)]"
       >
         {/* ── Header ─────────────────────────────────────────── */}
-        <div className="relative z-10 shrink-0 border-b border-border bg-surface/80 px-4 py-3 sm:px-5 sm:py-4">
+        <div className="border-border bg-surface/80 relative z-10 shrink-0 border-b px-4 py-3 sm:px-5 sm:py-4">
           <div className="mb-3 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
               {/* Title */}
@@ -1043,7 +1079,7 @@ export default function AddItemModal({
                 <h2 className="text-lg font-bold tracking-tight text-white">Loot Browser</h2>
               </div>
               {/* Category Switcher */}
-              <div className="flex max-w-full overflow-x-auto rounded-lg border border-border bg-surface-2 p-0.5">
+              <div className="border-border bg-surface-2 flex max-w-full overflow-x-auto rounded-lg border p-0.5">
                 {LOOT_CATEGORIES.map((cat) => (
                   <button
                     key={cat.key}
@@ -1070,7 +1106,7 @@ export default function AddItemModal({
               {/* Group-by toggle for raids */}
               {!['dungeon', 'delves', 'pvp', 'tier'].includes(category) && (
                 <div className="flex items-center gap-3">
-                  <div className="flex rounded-lg border border-border bg-surface-2 p-0.5">
+                  <div className="border-border bg-surface-2 flex rounded-lg border p-0.5">
                     {[
                       { id: 'slot', label: 'Slot' },
                       { id: 'boss', label: category === 'crafted' ? 'Profession' : 'Boss' },
@@ -1078,10 +1114,10 @@ export default function AddItemModal({
                       <button
                         key={mode.id}
                         onClick={() => setGroupBy(mode.id)}
-                        className={`rounded-md px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition-all ${
+                        className={`rounded-md px-3 py-1.5 text-[10px] font-bold tracking-wider uppercase transition-all ${
                           groupBy === mode.id
-                            ? 'bg-gold text-black shadow-sm border-transparent'
-                            : 'border-transparent text-zinc-300 hover:text-white hover:bg-white/5'
+                            ? 'bg-gold border-transparent text-black shadow-sm'
+                            : 'border-transparent text-zinc-300 hover:bg-white/5 hover:text-white'
                         }`}
                       >
                         {mode.label}
@@ -1093,23 +1129,23 @@ export default function AddItemModal({
             </div>
             <div className="flex items-center gap-3">
               {category !== 'crafted' && (
-              <div className="w-full shrink-0 sm:w-48">
-                <CustomSelect
-                  variant="header"
-                  value={normalizeSlotFilter(filterSlot) || ''}
-                  placeholder="All Item Types"
-                  options={slotFilterOptions.map((slot) => ({
-                    value: slot.value,
-                    label: slot.label,
-                  }))}
-                  onChange={(val) => setFilterSlot(val || null)}
-                />
-              </div>
+                <div className="w-full shrink-0 sm:w-48">
+                  <CustomSelect
+                    variant="header"
+                    value={normalizeSlotFilter(filterSlot) || ''}
+                    placeholder="All Item Types"
+                    options={slotFilterOptions.map((slot) => ({
+                      value: slot.value,
+                      label: slot.label,
+                    }))}
+                    onChange={(val) => setFilterSlot(val || null)}
+                  />
+                </div>
               )}
               <button
                 onClick={onClose}
                 data-tour="loot-browser-close"
-                className="flex h-10 w-10 items-center justify-center self-end rounded-lg border border-border bg-surface-2 text-zinc-500 transition-all hover:border-red-500/30 hover:bg-red-500/10 hover:text-white sm:h-8 sm:w-8 sm:self-auto"
+                className="border-border bg-surface-2 flex h-10 w-10 items-center justify-center self-end rounded-lg border text-zinc-500 transition-all hover:border-red-500/30 hover:bg-red-500/10 hover:text-white sm:h-8 sm:w-8 sm:self-auto"
                 aria-label="Close loot browser"
               >
                 <X className="h-4 w-4" strokeWidth={2.5} />
@@ -1121,16 +1157,23 @@ export default function AddItemModal({
             <div className="group relative flex-1">
               <input
                 type="text"
+                autoFocus
                 placeholder="Search by item name, boss, or type..."
                 value={globalSearch}
                 onChange={(e) => {
                   setGlobalSearch(e.target.value);
                 }}
-                className="input-field w-full pl-10 pr-4 py-2.5 text-sm"
+                className="input-field w-full py-2.5 pr-4 pl-10 text-sm"
               />
-              <Search className="absolute left-3.5 top-3 h-4 w-4 text-zinc-500 transition-colors group-focus-within:text-gold" strokeWidth={2} />
+              <Search
+                className="group-focus-within:text-gold absolute top-3 left-3.5 h-4 w-4 text-zinc-500 transition-colors"
+                strokeWidth={2}
+              />
             </div>
-            {(category === 'raid' || category === 'dungeon' || category === 'tier' || (category === 'delves' && difficulties.length > 1)) && (
+            {(category === 'raid' ||
+              category === 'dungeon' ||
+              category === 'tier' ||
+              (category === 'delves' && difficulties.length > 1)) && (
               <AddItemDifficultyToggle
                 difficulties={difficulties}
                 selectedDifficulty={selectedDifficulty}
@@ -1152,10 +1195,10 @@ export default function AddItemModal({
             currentSeasonName={seasonConfig?.season}
             isDungeonBrowser={category === 'dungeon'}
           />
-          <div className="scrollbar-thin scrollbar-thumb-white/10 flex-1 overflow-y-auto bg-bg p-6">
+          <div className="bg-bg flex-1 scrollbar-thin scrollbar-thumb-white/10 overflow-y-auto p-6">
             {isDropListLoading ? (
               <div className="flex h-full items-center justify-center">
-                <div className="h-12 w-12 animate-spin rounded-full border-[3px] border-border border-t-gold" />
+                <div className="border-border border-t-gold h-12 w-12 animate-spin rounded-full border-[3px]" />
               </div>
             ) : Object.keys(filteredDrops).length === 0 ? (
               <div className="flex h-full flex-col items-center justify-center px-6 text-center">
@@ -1177,10 +1220,10 @@ export default function AddItemModal({
                   >
                     <div className="flex items-center lg:justify-center">
                       <div className="min-w-20 lg:text-center">
-                        <div className="whitespace-normal break-words text-xs font-black uppercase leading-tight tracking-[0.16em] text-gold/85 sm:text-sm xl:text-[0.95rem]">
+                        <div className="text-gold/85 text-xs leading-tight font-black tracking-[0.16em] break-words whitespace-normal uppercase sm:text-sm xl:text-[0.95rem]">
                           {slot}
                         </div>
-                        <div className="mt-2 text-[10px] font-bold uppercase tracking-[0.18em] text-white">
+                        <div className="mt-2 text-[10px] font-bold tracking-[0.18em] text-white uppercase">
                           {items.length} item{items.length === 1 ? '' : 's'}
                         </div>
                       </div>
@@ -1199,29 +1242,30 @@ export default function AddItemModal({
                           : null;
                         const ascendantEligible = Boolean(tier) && isAscendantEligible(item, tier);
                         const ascendantLevel = tier ? tier.maxLevel + 1 : 0;
-                        const rawSliderLevel = tier ? (itemTiers[item.item_id] || tier.level) : 0;
-                        const ascendantApplied = Boolean(tier) && ascendantEligible && rawSliderLevel === ascendantLevel;
+                        const rawSliderLevel = tier ? itemTiers[item.item_id] || tier.level : 0;
+                        const ascendantApplied =
+                          Boolean(tier) && ascendantEligible && rawSliderLevel === ascendantLevel;
                         const currentIlvl = canSelectIlvl
                           ? (tier?.ilvl || item.ilevel) + (ascendantApplied ? 9 : 0)
                           : item.ilevel;
                         const trackName = tier?.track || '';
                         const tc = trackName ? TRACK_COLORS[trackName] : null;
                         const badgeClass = tc?.badge || DEFAULT_BADGE;
-                        const displayQuality = getDisplayQuality(item, tier?.quality, category as LootCategory);
+                        const displayQuality = getDisplayQuality(
+                          item,
+                          tier?.quality,
+                          category as LootCategory
+                        );
                         const availableMissives = missivesForItem(item, missives);
                         const defaultMissive =
-                          availableMissives.length > 0
-                            ? availableMissives[0]
-                            : null;
+                          availableMissives.length > 0 ? availableMissives[0] : null;
                         const effectiveMissiveTokens =
                           (itemMissives[item.item_id] || []).length > 0
                             ? itemMissives[item.item_id]
                             : defaultMissive
                               ? defaultMissive.token.split('/')
                               : [];
-                        const selectedMissiveToken = [...effectiveMissiveTokens]
-                          .sort()
-                          .join('/');
+                        const selectedMissiveToken = [...effectiveMissiveTokens].sort().join('/');
                         const selectedMissive = availableMissives.find(
                           (m: MissiveOption) => m.token === selectedMissiveToken
                         );
@@ -1238,16 +1282,20 @@ export default function AddItemModal({
                                   ...((selectedEmbellishment?.bonus_ids as number[]) || []),
                                 ])
                               )
-                            : (tier?.bonus_id ? [tier.bonus_id] : []);
+                            : tier?.bonus_id
+                              ? [tier.bonus_id]
+                              : [];
                         const whData = getWowheadData(
                           tooltipBonusIds,
                           currentIlvl,
                           undefined,
                           selectedGem?.gem_id
                         );
-                        const embellishmentOptions = ((item.embellishment_options || []).length > 0
-                          ? item.embellishment_options || []
-                          : embellishmentOptionsByItem[item.item_id] || []).filter(
+                        const embellishmentOptions = (
+                          (item.embellishment_options || []).length > 0
+                            ? item.embellishment_options || []
+                            : embellishmentOptionsByItem[item.item_id] || []
+                        ).filter(
                           (opt): opt is EmbellishmentOption =>
                             !!opt &&
                             Number.isFinite(opt.item_id) &&
@@ -1258,7 +1306,7 @@ export default function AddItemModal({
                         return (
                           <div
                             key={`${item.item_id}-${item.encounter}-${item.instance_name}-${item.inventory_type}-${index}`}
-                            className="group card cursor-pointer p-2.5 transition-all hover:border-gold hover:shadow-card-hover"
+                            className="group card hover:border-gold hover:shadow-card-hover cursor-pointer p-2.5 transition-all"
                             onClick={(event) => handleCardClick(item, event)}
                           >
                             <div className="flex items-center gap-3">
@@ -1270,19 +1318,21 @@ export default function AddItemModal({
                               >
                                 <WowIcon
                                   icon={item.icon}
-                                  className="h-10 w-10 rounded-lg border border-border shadow-sm"
+                                  className="border-border h-10 w-10 rounded-lg border shadow-sm"
                                   alt=""
                                 />
                               </a>
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-center justify-between gap-2">
                                   <span
-                                    className="truncate text-xs font-bold transition-colors group-hover:text-gold"
+                                    className="group-hover:text-gold truncate text-xs font-bold transition-colors"
                                     style={{ color: QUALITY_COLORS[displayQuality] || '#f4f4f5' }}
                                   >
                                     {item.name}
                                   </span>
-                                  <span className={`shrink-0 rounded-md border px-1.5 py-0.5 font-mono text-[11px] font-black ${badgeClass}`}>
+                                  <span
+                                    className={`shrink-0 rounded-md border px-1.5 py-0.5 font-mono text-[11px] font-black ${badgeClass}`}
+                                  >
                                     {currentIlvl}
                                   </span>
                                 </div>
@@ -1298,27 +1348,27 @@ export default function AddItemModal({
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 <div className="flex items-center justify-between gap-2">
-                                  <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                                  <span className="text-[10px] font-bold tracking-wider text-zinc-400 uppercase">
                                     Embellishment
                                   </span>
                                 </div>
-                                  <CustomSelect
-                                    value={
-                                      itemEmbellishments[item.item_id]
-                                        ? String(itemEmbellishments[item.item_id]?.item_id || '')
-                                        : ''
-                                    }
-                                    placeholder="No Embellishment"
-                                    options={[
-                                      { value: '', label: 'No Embellishment' },
-                                      ...embellishmentOptions.map((opt) => ({
-                                        value: String(opt.item_id),
-                                        label: opt.name,
-                                        icon: opt.icon,
-                                        href: `https://www.wowhead.com/item=${opt.item_id}`,
-                                        wowheadData: `item=${opt.item_id}`,
-                                      })),
-                                    ]}
+                                <CustomSelect
+                                  value={
+                                    itemEmbellishments[item.item_id]
+                                      ? String(itemEmbellishments[item.item_id]?.item_id || '')
+                                      : ''
+                                  }
+                                  placeholder="No Embellishment"
+                                  options={[
+                                    { value: '', label: 'No Embellishment' },
+                                    ...embellishmentOptions.map((opt) => ({
+                                      value: String(opt.item_id),
+                                      label: opt.name,
+                                      icon: opt.icon,
+                                      href: `https://www.wowhead.com/item=${opt.item_id}`,
+                                      wowheadData: `item=${opt.item_id}`,
+                                    })),
+                                  ]}
                                   onChange={(val) => {
                                     if (!val) {
                                       setItemEmbellishments({
@@ -1346,7 +1396,7 @@ export default function AddItemModal({
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 <div className="flex items-center justify-between gap-2">
-                                  <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                                  <span className="text-[10px] font-bold tracking-wider text-zinc-400 uppercase">
                                     Gem
                                   </span>
                                 </div>
@@ -1369,8 +1419,9 @@ export default function AddItemModal({
                                       return;
                                     }
                                     const gem =
-                                      seasonalGems.find((candidate) => String(candidate.gem_id) === val) ||
-                                      null;
+                                      seasonalGems.find(
+                                        (candidate) => String(candidate.gem_id) === val
+                                      ) || null;
                                     setItemGems({ ...itemGems, [item.item_id]: gem });
                                   }}
                                 />
@@ -1383,7 +1434,7 @@ export default function AddItemModal({
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 <div className="flex items-center justify-between gap-2">
-                                  <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                                  <span className="text-[10px] font-bold tracking-wider text-zinc-400 uppercase">
                                     Stats
                                   </span>
                                 </div>
@@ -1391,7 +1442,10 @@ export default function AddItemModal({
                                   <CustomSelect
                                     value={effectiveMissiveTokens.join('/')}
                                     placeholder="Select Stats..."
-                                    options={availableMissives.map((m) => ({ value: m.token, label: m.label }))}
+                                    options={availableMissives.map((m) => ({
+                                      value: m.token,
+                                      label: m.label,
+                                    }))}
                                     onChange={(val) => {
                                       const stats = val ? val.split('/') : [];
                                       setItemMissives({ ...itemMissives, [item.item_id]: stats });
@@ -1404,9 +1458,14 @@ export default function AddItemModal({
                               <div className="mt-2 space-y-1">
                                 {(() => {
                                   const sliderMin = tier.baseLevel || 1;
-                                  const sliderMax = ascendantEligible ? tier.maxLevel + 1 : tier.maxLevel;
+                                  const sliderMax = ascendantEligible
+                                    ? tier.maxLevel + 1
+                                    : tier.maxLevel;
                                   const rawSliderValue = itemTiers[item.item_id] || tier.level;
-                                  const sliderValue = Math.max(sliderMin, Math.min(sliderMax, rawSliderValue));
+                                  const sliderValue = Math.max(
+                                    sliderMin,
+                                    Math.min(sliderMax, rawSliderValue)
+                                  );
                                   const displayIlvl = tier.ilvl + (ascendantApplied ? 9 : 0);
                                   const trackText =
                                     tier.track === 'Crafted'
@@ -1418,9 +1477,7 @@ export default function AddItemModal({
                                     <>
                                       <div className="flex items-center justify-between text-[11px] font-semibold text-white">
                                         <span>{trackText}</span>
-                                        <span className="font-mono">
-                                          {displayIlvl} ilvl
-                                        </span>
+                                        <span className="font-mono">{displayIlvl} ilvl</span>
                                       </div>
                                       <input
                                         type="range"

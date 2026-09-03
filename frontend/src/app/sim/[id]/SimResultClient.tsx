@@ -43,6 +43,7 @@ import {
   type ScenarioSibling,
 } from '../../lib/scenario-siblings';
 import { simResultHref } from '../../lib/routes';
+import { simulationTypeRoute } from '../../lib/simulation-routes';
 import { trackSimulations } from '../../lib/sim-tracking';
 import {
   getSimReturnTarget,
@@ -646,25 +647,6 @@ export default function SimResultClient({ initialJob, shared = false }: SimResul
     [job?.id, activeScenarioId, id]
   );
 
-  const getSimTypeFallbackUrl = useCallback((simType?: string) => {
-    const normalized = String(simType || '').toLowerCase();
-    if (normalized.includes('top_gear') || normalized.includes('top-gear')) return '/top-gear';
-    if (normalized.includes('droptimizer') || normalized.includes('drop_finder'))
-      return '/drop-finder';
-    if (normalized.includes('trinket_tier_heatmap')) return '/upgrade/trinkets';
-    if (normalized.includes('external_buff_matrix')) return '/stat-weights';
-    if (normalized.includes('consumable_matrix')) return '/stat-weights';
-    if (
-      normalized.includes('stat_weights') ||
-      normalized.includes('stat-weights') ||
-      normalized.includes('stat_plot')
-    ) {
-      return '/stat-weights';
-    }
-    if (normalized.includes('upgrade')) return '/upgrade';
-    return '/quick-sim';
-  }, []);
-
   useEffect(() => {
     if (shared) return;
     if (toolbarScenarios.length === 0) return;
@@ -863,8 +845,8 @@ export default function SimResultClient({ initialJob, shared = false }: SimResul
         }
       }
     }
-    router.push(getSimTypeFallbackUrl(job?.sim_type));
-  }, [getCurrentSimId, getSimTypeFallbackUrl, job?.sim_type, router]);
+    router.push(simulationTypeRoute(job?.sim_type));
+  }, [getCurrentSimId, job?.sim_type, router]);
 
   const handleShareResult = useCallback(() => {
     if (!job?.result) return;

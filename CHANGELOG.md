@@ -30,6 +30,9 @@ The format is based on Keep a Changelog and this project uses semantic versionin
 - Character detail pages now show profile, Mythic+, raid, vault, profession, and external-profile information in the Profile tab, with 15-minute visible-page refreshes that retain the last successful snapshot if a background refresh fails.
 - Character Mythic+ and Raiding tabs now consolidate external data into the canonical Blizzard cards: Raider.IO details, active-raid achievement milestones, scan freshness, attribution, and profile links appear inline without duplicate progression totals, while Warcraft Logs keeps its unique rankings, dated reports, and per-boss metadata.
 - The character Raiding tab now hides the generic Current expansion option and selects the latest concrete expansion by default, while keeping All expansions available for older progression.
+- History character filters now preserve names and realms containing hyphens, and saved simulation reruns open the matching tool for each simulation type.
+- Drop Finder now distinguishes catalog loading, empty results, and request failures, retries catalog requests, ignores stale responses, and requires a parsed character export before launch.
+- Settings now reports failed simulation-setting loads and saves, retries stale loads safely, and rolls failed changes back to the last confirmed value.
 
 ### Fixed
 
@@ -38,6 +41,9 @@ The format is based on Keep a Changelog and this project uses semantic versionin
 - Raider.IO raid achievements now request active raid slugs and filter against active Blizzard raids, preventing stale expansion entries such as legacy progression from appearing in the current-season card.
 - Character Raiding tabs now show current-season progression when active raid pools identify bosses by encounter ID instead of raid instance ID.
 - Login screen content now grows and scrolls on short desktop and mobile windows, keeping the WhyLowDps logo fully visible.
+- Initial game-data synchronization now reports backend and status failures with a manual recovery action instead of leaving a misleading automatic-retry state, and hidden tabs no longer continue background polling.
+- Light mode now exposes only the explicit public gear catalog and conversion endpoints, keeping other gear paths protected.
+- Route copy and credential setup errors now use in-app feedback, while changelog, command-palette, loot, and route dialogs restore focus and support keyboard dismissal.
 
 ## [5.0.1] - 2026-08-31
 
