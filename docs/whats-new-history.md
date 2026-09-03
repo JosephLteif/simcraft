@@ -28,6 +28,14 @@ Core pages are easier to discover and recover when runtime game data or a networ
 - Raids now prefer the same runtime expansion and raid catalog data used by Dungeons, while retaining artwork fallbacks and a retry action.
 - Saved Routes now reports load, save, delete, and clipboard failures through in-app notifications instead of browser alerts.
 
+#### Preserve complete raid catalogs and artwork
+
+Raid browsing now keeps historical and current content available even when runtime data is incomplete.
+
+- The Raids page retains the complete Blizzard raid catalog across every expansion instead of replacing it with only active-season rows.
+- Current raids identified by game-context encounter or instance IDs are assigned to the active expansion when the catalog omits that metadata.
+- Drop Finder and Raids share ordered artwork fallbacks and recover from failed image requests instead of leaving current raid tiles blank.
+
 #### Make simulation recovery states actionable
 
 Simulation workflows now expose the state needed to recover from unavailable services, saved-input edge cases, and failed settings updates.

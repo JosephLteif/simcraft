@@ -1,4 +1,5 @@
-import { API_URL } from '../lib/api';
+import { useState } from 'react';
+import { getInstanceImageSources } from '../lib/instance-artwork';
 import type { Instance } from './types';
 
 interface DungeonGridProps {
@@ -14,20 +15,20 @@ interface DungeonGridProps {
   allLabel: string;
 }
 
-function instanceImageSrc(inst: Instance): string | null {
-  if (inst.id <= 0) return null;
-  return `${API_URL}/api/data/images/instance/${inst.id}`;
-}
+function ImageLayer({ sources }: { sources: string[] }) {
+  const [sourceIndex, setSourceIndex] = useState(0);
+  const src = sources[sourceIndex];
 
-function ImageLayer({ src }: { src: string }) {
+  if (!src) return null;
+
   return (
     <img
       src={src}
       alt=""
       loading="lazy"
       decoding="async"
-      onError={(event) => {
-        event.currentTarget.hidden = true;
+      onError={() => {
+        setSourceIndex((index) => index + 1);
       }}
       className="absolute inset-0 h-full w-full object-cover transition-all duration-300"
     />
@@ -64,12 +65,15 @@ export default function DungeonGrid({
 
   const allTileImages = instances
     .filter((inst) => inst.id !== 1312 && inst.name !== 'World Bosses')
-    .map((inst) => ({ inst, src: instanceImageSrc(inst) }))
-    .filter((x) => !!x.src)
+    .map((inst) => ({ inst, sources: getInstanceImageSources(inst) }))
+    .filter((x) => x.sources.length > 0)
     .slice(0, 4);
 
   return (
-    <div data-tour="drop-finder-selection" className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+    <div
+      data-tour="drop-finder-selection"
+      className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4"
+    >
       {/* "All" tile */}
       <button
         onClick={() => {
@@ -78,7 +82,7 @@ export default function DungeonGrid({
         }}
         className={`group relative flex aspect-[16/9] items-end overflow-hidden rounded-lg border transition-all duration-150 ${
           isAllActive
-            ? 'border-gold/60 shadow-[0_0_12px_rgba(200,153,42,0.14)] ring-1 ring-gold/30'
+            ? 'border-gold/60 ring-gold/30 shadow-[0_0_12px_rgba(200,153,42,0.14)] ring-1'
             : 'border-border hover:border-gold/20'
         }`}
       >
@@ -90,15 +94,15 @@ export default function DungeonGrid({
             gridTemplateColumns: `repeat(${Math.max(allTileImages.length, 1)}, minmax(0, 1fr))`,
           }}
         >
-          {allTileImages.map(({ inst, src }) => (
+          {allTileImages.map(({ inst, sources }) => (
             <div key={inst.id} className="relative h-full w-full overflow-hidden">
-              {src && <ImageLayer src={src} />}
+              <ImageLayer sources={sources} />
             </div>
           ))}
         </div>
-        <div className="relative w-full px-3 pb-3 pt-1">
+        <div className="relative w-full px-3 pt-1 pb-3">
           <p
-            className={`text-base font-bold leading-snug drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)] ${isAllActive ? 'text-gold' : 'text-white'}`}
+            className={`text-base leading-snug font-bold drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)] ${isAllActive ? 'text-gold' : 'text-white'}`}
           >
             {allLabel}
           </p>
@@ -106,37 +110,40 @@ export default function DungeonGrid({
       </button>
 
       {/* Individual dungeon tiles */}
-      {instances.map((inst) => (
-        <button
-          key={inst.id}
-          onClick={() => {
-            if (multi) onToggleValue?.(String(inst.id));
-            else onChange?.(String(inst.id));
-          }}
-          className={`group relative flex aspect-[16/9] items-end overflow-hidden rounded-lg border transition-all duration-150 ${
-            isTileActive(String(inst.id))
-              ? 'border-gold/60 shadow-[0_0_10px_rgba(200,153,42,0.14)] ring-1 ring-gold/30'
-              : 'border-border hover:border-gold/20'
-          }`}
-        >
-          <div className="absolute inset-0 bg-black" />
-          <MissingImageFallback />
-          {instanceImageSrc(inst) && (
-            <div className="absolute inset-0 overflow-hidden">
-              <ImageLayer src={instanceImageSrc(inst)!} />
+      {instances.map((inst) => {
+        const sources = getInstanceImageSources(inst);
+        return (
+          <button
+            key={inst.id}
+            onClick={() => {
+              if (multi) onToggleValue?.(String(inst.id));
+              else onChange?.(String(inst.id));
+            }}
+            className={`group relative flex aspect-[16/9] items-end overflow-hidden rounded-lg border transition-all duration-150 ${
+              isTileActive(String(inst.id))
+                ? 'border-gold/60 ring-gold/30 shadow-[0_0_10px_rgba(200,153,42,0.14)] ring-1'
+                : 'border-border hover:border-gold/20'
+            }`}
+          >
+            <div className="absolute inset-0 bg-black" />
+            <MissingImageFallback />
+            {sources.length > 0 && (
+              <div className="absolute inset-0 overflow-hidden">
+                <ImageLayer sources={sources} />
+              </div>
+            )}
+            <div className="relative w-full px-3 pt-1 pb-3">
+              <p
+                className={`text-base leading-snug font-bold drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)] ${
+                  isTileActive(String(inst.id)) ? 'text-gold' : 'text-white'
+                }`}
+              >
+                {inst.name}
+              </p>
             </div>
-          )}
-          <div className="relative w-full px-3 pb-3 pt-1">
-            <p
-              className={`text-base font-bold leading-snug drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)] ${
-                isTileActive(String(inst.id)) ? 'text-gold' : 'text-white'
-              }`}
-            >
-              {inst.name}
-            </p>
-          </div>
-        </button>
-      ))}
+          </button>
+        );
+      })}
     </div>
   );
 }
