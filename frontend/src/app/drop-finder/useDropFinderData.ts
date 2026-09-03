@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { API_URL, fetchJson } from '../lib/api';
+import type { GameContext } from '../lib/api';
 import type { SeasonConfigResponse, DungeonCategory } from '../lib/types';
+import { getCurrentRaidInstances } from '../lib/raid-catalog';
 import { parseCharacterInfo } from '../../lib/simc-parser';
 import {
   detectClass,
@@ -23,6 +25,7 @@ export function useDropFinderData(simcInput: string, activeSpecs: Set<string>) {
     FALLBACK_SEASON_CONFIG
   );
   const [upgradeTracks, setUpgradeTracks] = useState<UpgradeTracks>({});
+  const [gameContext, setGameContext] = useState<GameContext | null>(null);
   const [selectedId, setSelectedId] = useState('');
   const [drops, setDrops] = useState<Record<string, DropItem[]> | null>(null);
   const [loading, setLoading] = useState(false);
@@ -81,17 +84,20 @@ export function useDropFinderData(simcInput: string, activeSpecs: Set<string>) {
     setCatalogError(null);
 
     const loadCatalog = async () => {
-      const [seasonResult, tracksResult, instancesResult] = await Promise.allSettled([
-        fetchWithRetries<SeasonConfigResponse>(`${API_URL}/api/season-config`, 3, 400),
-        fetchWithRetries<unknown>(`${API_URL}/api/upgrade-tracks`, 5, 350).then((data) => {
-          const normalized = normalizeUpgradeTracks(data);
-          if (Object.keys(normalized).length === 0) {
-            throw new Error('Upgrade-track data was empty.');
-          }
-          return normalized;
-        }),
-        fetchWithRetries<Instance[]>(`${API_URL}/api/instances`, 3, 400),
-      ]);
+      const [seasonResult, tracksResult, instancesResult, contextResult] = await Promise.allSettled(
+        [
+          fetchWithRetries<SeasonConfigResponse>(`${API_URL}/api/season-config`, 3, 400),
+          fetchWithRetries<unknown>(`${API_URL}/api/upgrade-tracks`, 5, 350).then((data) => {
+            const normalized = normalizeUpgradeTracks(data);
+            if (Object.keys(normalized).length === 0) {
+              throw new Error('Upgrade-track data was empty.');
+            }
+            return normalized;
+          }),
+          fetchWithRetries<Instance[]>(`${API_URL}/api/instances`, 3, 400),
+          fetchWithRetries<GameContext>(`${API_URL}/api/game-context`, 2, 400),
+        ]
+      );
 
       if (cancelled) return;
 
@@ -102,6 +108,7 @@ export function useDropFinderData(simcInput: string, activeSpecs: Set<string>) {
       else failures.push('upgrade tracks');
       if (instancesResult.status === 'fulfilled') setInstances(instancesResult.value);
       else failures.push('raid and dungeon catalog');
+      if (contextResult.status === 'fulfilled') setGameContext(contextResult.value);
 
       setCatalogError(
         failures.length > 0
@@ -137,14 +144,12 @@ export function useDropFinderData(simcInput: string, activeSpecs: Set<string>) {
       }
     }
 
-    const raidList: Instance[] = [];
+    const raidList = getCurrentRaidInstances(instances, gameContext);
     const dcList: { cat: DungeonCategory; instances: Instance[] }[] =
       seasonConfig.dungeon_categories.map((cat) => ({ cat, instances: [] }));
 
     for (const instance of currentSeasonInstances) {
-      if (instance.type === 'raid' && instance.id > 0) {
-        raidList.push(instance);
-      } else if (instance.type === 'dungeon') {
+      if (instance.type === 'dungeon') {
         let placed = false;
         for (const dc of dcList) {
           const pool = poolMap.get(dc.cat.poolInstanceId);
@@ -175,7 +180,7 @@ export function useDropFinderData(simcInput: string, activeSpecs: Set<string>) {
     }
 
     return { raids: raidList, dungeonCats: dcList };
-  }, [instances, seasonConfig]);
+  }, [gameContext, instances, seasonConfig]);
 
   useEffect(() => {
     const requestId = ++dropRequestIdRef.current;

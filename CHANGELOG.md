@@ -20,6 +20,7 @@ The format is based on Keep a Changelog and this project uses semantic versionin
 
 - App search now includes Queue, Raids, Saved Routes, Wishlist, Crest Upgrades, analysis tools, and Trinket Heatmaps, while the Analysis navigation group correctly stays active on Trinket Heatmaps.
 - The Raids page now prefers the runtime expansion and raid catalog data shared with Dungeons, while retaining artwork fallbacks and a retry action.
+- The Raids page now retains the complete Blizzard raid catalog across all expansions, assigns missing current-expansion metadata from game context, and shares resilient artwork fallbacks with Drop Finder.
 - Saved Routes now uses in-app success and error feedback for loading, saving, deleting, and copying route data.
 - Settings > Integrations now explains every Warcraft Logs credential field, shows the exact current redirect host and port, and applies personal, environment, and administrator-managed credential precedence without exposing secrets.
 - Queued simulations now clearly explain that SimC has not started, show the current queue position, and link directly to queue management instead of displaying misleading zero-progress details.
