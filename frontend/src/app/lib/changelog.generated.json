@@ -1,11 +1,20 @@
 {
-  "contentRevision": "Unreleased-75a9da171e2c",
+  "contentRevision": "Unreleased-957eb37d685f",
   "releases": [
     {
       "version": "Unreleased",
       "date": "",
       "title": "Simulation queue management",
       "entries": [
+        {
+          "category": "feature",
+          "title": "Prioritize Drop Finder activities",
+          "summary": "Drop Finder rankings now summarize which raid bosses and dungeons are the best next targets for the current character.",
+          "items": [
+            "Compare unique item rewards, likely upgrades, and the best DPS gain for each source.",
+            "Select a boss or dungeon to filter the rankings to matching combinations, switch directly to another source, or use Show all sources to clear the filter."
+          ]
+        },
         {
           "category": "feature",
           "title": "Add optional Raider.IO and Warcraft Logs character data",

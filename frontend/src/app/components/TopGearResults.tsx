@@ -22,6 +22,8 @@ import SimResultTalentsCard from './SimResultTalentsCard';
 import { addItemsToWishlist, buildWishlistOwnerKey, isWishlisted, removeFromWishlist } from '../lib/wishlist';
 import type { DropItem, Instance } from '../drop-finder/types';
 import { trackSimulations } from '../lib/sim-tracking';
+import { filterResultsByDropSource } from '../lib/drop-source-priority';
+import DropSourcePriority from './DropSourcePriority';
 
 interface TopGearResultsProps {
   parentSimId?: string;
@@ -364,6 +366,7 @@ export default function TopGearResults({
   const [exactStatsCache, setExactStatsCache] = useState<Record<string, ExactStatsCacheEntry>>({});
   const [cachedExactJobIds, setCachedExactJobIds] = useState<Record<string, string>>({});
   const [slotFilter, setSlotFilter] = useState<string>('all');
+  const [sourceFilter, setSourceFilter] = useState<string | null>(null);
   const warmStartedRef = useRef(false);
 
   useEffect(() => {
@@ -753,19 +756,41 @@ export default function TopGearResults({
     );
   }, [results, slotFilter]);
 
+  const sourceFilteredResults = useMemo(
+    () =>
+      sourceFilter
+        ? filterResultsByDropSource(filteredResults, sourceFilter, sourceInstances)
+        : filteredResults,
+    [filteredResults, sourceFilter, sourceInstances]
+  );
+
+  useEffect(() => {
+    if (
+      sourceFilter &&
+      filterResultsByDropSource(filteredResults, sourceFilter, sourceInstances).length === 0
+    ) {
+      setSourceFilter(null);
+    }
+  }, [filteredResults, sourceFilter, sourceInstances]);
+
   const filteredGroupedResults = useMemo(() => {
     if (!groupedResults) return null;
     return groupedResults
-      .map(([instance, group]) => [
-        instance,
-        group.filter((result) =>
-          slotFilter === 'all'
-            ? true
-            : result.items.some((item) => !item.is_kept && String(item.slot) === slotFilter)
-        ),
-      ] as [string, TopGearResult[]])
+      .map(([instance, group]) => {
+        const sourceGroup = sourceFilter
+          ? filterResultsByDropSource(group, sourceFilter, sourceInstances)
+          : group;
+        return [
+          instance,
+          sourceGroup.filter((result) =>
+            slotFilter === 'all'
+              ? true
+              : result.items.some((item) => !item.is_kept && String(item.slot) === slotFilter)
+          ),
+        ] as [string, TopGearResult[]];
+      })
       .filter(([, group]) => group.length > 0);
-  }, [groupedResults, slotFilter]);
+  }, [groupedResults, slotFilter, sourceFilter, sourceInstances]);
 
   return (
     <div className="space-y-6">
@@ -924,6 +949,14 @@ export default function TopGearResults({
       )}
 
       <CollapsibleSection title="Rankings">
+        {enableWishlistActions ? (
+          <DropSourcePriority
+            results={filteredResults}
+            sourceInstances={sourceInstances}
+            selectedSourceKey={sourceFilter}
+            onSelectSource={setSourceFilter}
+          />
+        ) : null}
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             {enableWishlistActions && (
@@ -937,7 +970,7 @@ export default function TopGearResults({
               </div>
             )}
             <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-400">
-              {filteredResults.length} results
+              {sourceFilteredResults.length} results
             </span>
           </div>
           <div className="ml-auto flex flex-wrap items-center justify-end gap-4">
@@ -992,7 +1025,7 @@ export default function TopGearResults({
         {groupMode === 'instance' ? (
           <div className="space-y-6">
             {(filteredGroupedResults ??
-              [[hasGroupingData ? 'Unknown' : 'All Results', filteredResults]]).map(
+              [[hasGroupingData ? 'Unknown' : 'All Results', sourceFilteredResults]]).map(
               ([instance, group]) => (
                 <div key={instance}>
                   {instance !== '__ungrouped__' && (
@@ -1027,7 +1060,7 @@ export default function TopGearResults({
                     sourceInstances={sourceInstances}
                     baselineTierBySlot={baselineTierBySlot}
                     showRanks={false}
-                    isBestResult={(result) => result === results[0] && result.delta > 0}
+                    isBestResult={(result) => result === sourceFilteredResults[0] && result.delta > 0}
                   />
                 </div>
               )
@@ -1035,7 +1068,7 @@ export default function TopGearResults({
           </div>
         ) : (
           <RankedResults
-            results={filteredResults}
+            results={sourceFilteredResults}
             maxDps={maxDps}
             baseDps={baseDps}
             dpsError={dpsError}
