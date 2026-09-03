@@ -17,8 +17,15 @@ import { readinessDataMessage } from '../lib/readiness';
 
 const AUTO_RETRY_DELAYS_MS = [2000, 5000, 10000] as const;
 
+function syncFailureMessage(error: unknown): string {
+  return error instanceof Error && error.message
+    ? error.message
+    : 'The backend could not complete data synchronization.';
+}
+
 export default function DataGuard({ children }: { children: ReactNode }) {
   const [dataStatus, setDataStatus] = useState<any>({ status: 'syncing', progress: '' });
+  const [syncError, setSyncError] = useState<string | null>(null);
   const [isReady, setIsReady] = useState(false);
   const { user, loading, lanAccessRequired, lightMode, checkCredentialsStatus } = useAuth();
   const [isGloballyConfigured, setIsGloballyConfigured] = useState<boolean | null>(null);
@@ -139,6 +146,18 @@ export default function DataGuard({ children }: { children: ReactNode }) {
     );
   };
 
+  const markSyncFailure = useCallback((error: unknown) => {
+    if (autoRetryTimerRef.current != null) {
+      window.clearTimeout(autoRetryTimerRef.current);
+      autoRetryTimerRef.current = null;
+    }
+    autoRetryAttemptRef.current = AUTO_RETRY_DELAYS_MS.length;
+    setAutoRetryAttempt(AUTO_RETRY_DELAYS_MS.length);
+    const message = syncFailureMessage(error);
+    setSyncError(message);
+    setDataStatus({ status: 'error', progress: message });
+  }, []);
+
   useEffect(() => {
     setIsReady(localStorage.getItem('whylowdps_data_ready') === 'true');
   }, []);
@@ -202,6 +221,7 @@ export default function DataGuard({ children }: { children: ReactNode }) {
         autoRetryAttemptRef.current = 0;
         setAutoRetryAttempt(0);
         setDataStatus(data);
+        setSyncError(null);
         setIsReady(true);
         try {
           localStorage.setItem('whylowdps_data_ready', 'true');
@@ -213,6 +233,7 @@ export default function DataGuard({ children }: { children: ReactNode }) {
         }
         autoRetryAttemptRef.current = 0;
         setAutoRetryAttempt(0);
+        setSyncError(null);
         if (lightMode) {
           setDataStatus(data);
           setIsReady(true);
@@ -223,7 +244,7 @@ export default function DataGuard({ children }: { children: ReactNode }) {
           localStorage.removeItem('whylowdps_data_ready');
         } catch {}
         setDataStatus({ status: 'syncing', progress: 'Initializing synchronization...' });
-        fetchJson(`${API_URL}/api/data/sync`, { method: 'POST' }).catch(() => {});
+        fetchJson(`${API_URL}/api/data/sync`, { method: 'POST' }).catch(markSyncFailure);
       } else {
         setIsReady(false);
         try {
@@ -231,8 +252,14 @@ export default function DataGuard({ children }: { children: ReactNode }) {
         } catch {}
         setDataStatus(data);
 
-        const statusText = safeText(data?.status, '').toLowerCase();
+        const statusText =
+          `${safeText(data?.status, '')} ${safeText(data?.progress, '')}`.toLowerCase();
         const isSyncError = statusText.includes('error') || statusText.includes('failed');
+        if (isSyncError) {
+          setSyncError(
+            safeText(data?.progress || data?.error || data?.status, 'Data synchronization failed.')
+          );
+        }
         if (isSyncError && autoRetryTimerRef.current == null) {
           const attempt = autoRetryAttemptRef.current;
           if (attempt < AUTO_RETRY_DELAYS_MS.length) {
@@ -242,7 +269,7 @@ export default function DataGuard({ children }: { children: ReactNode }) {
               autoRetryAttemptRef.current += 1;
               setAutoRetryAttempt(autoRetryAttemptRef.current);
               fetchJson(`${API_URL}/api/data/sync`, { method: 'POST' })
-                .catch(() => {})
+                .catch(markSyncFailure)
                 .finally(() => {
                   void checkStatus();
                 });
@@ -266,10 +293,10 @@ export default function DataGuard({ children }: { children: ReactNode }) {
         try {
           localStorage.removeItem('whylowdps_data_ready');
         } catch {}
-        setDataStatus({ status: 'syncing', progress: 'Waiting for backend to start...' });
+        markSyncFailure(new Error(`Unable to check data status: ${syncFailureMessage(err)}`));
       }
     }
-  }, [isSharedResultPage, lanAccessRequired, lightMode, missingDataDownloadBusy]);
+  }, [isSharedResultPage, lanAccessRequired, lightMode, markSyncFailure, missingDataDownloadBusy]);
 
   useEffect(() => {
     if (isSharedResultPage) return;
@@ -280,12 +307,12 @@ export default function DataGuard({ children }: { children: ReactNode }) {
     ) {
       setDataStatus({ status: 'syncing', progress: 'Initializing synchronization...' });
       fetchJson(`${API_URL}/api/data/sync`, { method: 'POST' })
-        .catch(() => {})
+        .catch(markSyncFailure)
         .finally(() => {
-          checkStatus();
+          void checkStatus();
         });
     }
-  }, [checkStatus, isReady, isSharedResultPage, lanAccessRequired]);
+  }, [checkStatus, isReady, isSharedResultPage, lanAccessRequired, markSyncFailure]);
 
   useEffect(() => {
     if (
@@ -297,7 +324,7 @@ export default function DataGuard({ children }: { children: ReactNode }) {
       return;
     }
     const interval = setInterval(() => {
-      checkStatus();
+      if (document.visibilityState !== 'hidden') void checkStatus();
     }, 2000);
     return () => clearInterval(interval);
   }, [checkStatus, isReady, isSharedResultPage, lanAccessRequired, missingDataDownloadBusy]);
@@ -309,9 +336,11 @@ export default function DataGuard({ children }: { children: ReactNode }) {
     }
     autoRetryAttemptRef.current = 0;
     setAutoRetryAttempt(0);
+    setSyncError(null);
+    setDataStatus({ status: 'syncing', progress: 'Retrying data synchronization...' });
     fetchJson(`${API_URL}/api/data/sync`, { method: 'POST' })
-      .catch(() => {})
-      .finally(() => checkStatus());
+      .catch(markSyncFailure)
+      .finally(() => void checkStatus());
   };
 
   const openDataFolder = useCallback(async () => {
@@ -413,6 +442,7 @@ export default function DataGuard({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     const checkMissingFiles = async () => {
+      if (document.visibilityState === 'hidden') return;
       try {
         const state = await fetchJson<any>(`${API_URL}/api/data/files`);
         if (cancelled || !Array.isArray(state?.files)) return;
@@ -445,7 +475,7 @@ export default function DataGuard({ children }: { children: ReactNode }) {
     window.addEventListener('whylowdps-cache-refresh-status', onCacheStatus as EventListener);
     const interval = showMissingFilesPopup
       ? window.setInterval(() => {
-          void checkMissingFiles();
+          if (document.visibilityState !== 'hidden') void checkMissingFiles();
         }, 2000)
       : null;
 
@@ -453,10 +483,7 @@ export default function DataGuard({ children }: { children: ReactNode }) {
       cancelled = true;
       window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onVisibilityChange);
-      window.removeEventListener(
-        'whylowdps-cache-refresh-status',
-        onCacheStatus as EventListener
-      );
+      window.removeEventListener('whylowdps-cache-refresh-status', onCacheStatus as EventListener);
       if (interval) window.clearInterval(interval);
     };
   }, [isSharedResultPage, lanAccessRequired, showMissingFilesPopup]);
@@ -467,7 +494,7 @@ export default function DataGuard({ children }: { children: ReactNode }) {
       normalizedPath === '/characters' ||
       normalizedPath.startsWith('/character') ||
       normalizedPath === '/wishlist' ||
-       normalizedPath === '/talent-playground');
+      normalizedPath === '/talent-playground');
   const shouldShowMissingFilesPopup = showMissingFilesPopup;
 
   useEffect(() => {
@@ -483,32 +510,27 @@ export default function DataGuard({ children }: { children: ReactNode }) {
   } else if (lightModeBlockedRoute) {
     content = (
       <main className="flex min-h-[calc(100vh-var(--app-header-height))] items-center justify-center px-4 py-12">
-        <section className="w-full max-w-md rounded-lg border border-border bg-surface p-5 text-center">
+        <section className="border-border bg-surface w-full max-w-md rounded-lg border p-5 text-center">
           <p className="text-sm font-semibold text-zinc-100">Unavailable in Light mode</p>
           <p className="mt-2 text-sm text-zinc-400">
             Battle.net character, vault, wishlist, and settings features are disabled.
           </p>
           <a
             href="/quick-sim"
-            className="mt-4 inline-flex rounded-md border border-gold/30 bg-gold/15 px-3 py-2 text-sm font-semibold text-gold transition-colors hover:bg-gold/25"
+            className="border-gold/30 bg-gold/15 text-gold hover:bg-gold/25 mt-4 inline-flex rounded-md border px-3 py-2 text-sm font-semibold transition-colors"
           >
             Open Quick Sim
           </a>
         </section>
       </main>
     );
-  } else if (
-    (loading || isChecking) &&
-    !isSettingsPage &&
-    !isSharedResultPage &&
-    !lightMode
-  ) {
+  } else if ((loading || isChecking) && !isSettingsPage && !isSharedResultPage && !lightMode) {
     content = null;
   } else if (user && !isSettingsPage && !isSharedResultPage && !isReady) {
     content = (
       <SplashScreen
-        status={toSplashStatus(dataStatus?.status)}
-        progress={toSplashProgress(dataStatus?.progress)}
+        status={syncError ? 'error' : toSplashStatus(dataStatus?.status)}
+        progress={syncError || toSplashProgress(dataStatus?.progress)}
         onRetry={handleRetry}
         retriesRemaining={Math.max(0, AUTO_RETRY_DELAYS_MS.length - autoRetryAttempt)}
         retriesDone={autoRetryAttempt}
@@ -528,8 +550,8 @@ export default function DataGuard({ children }: { children: ReactNode }) {
   } else if (!isReady && !isSettingsPage && !isSharedResultPage) {
     content = (
       <SplashScreen
-        status={toSplashStatus(dataStatus?.status)}
-        progress={toSplashProgress(dataStatus?.progress)}
+        status={syncError ? 'error' : toSplashStatus(dataStatus?.status)}
+        progress={syncError || toSplashProgress(dataStatus?.progress)}
         onRetry={handleRetry}
         retriesRemaining={Math.max(0, AUTO_RETRY_DELAYS_MS.length - autoRetryAttempt)}
         retriesDone={autoRetryAttempt}
@@ -543,22 +565,27 @@ export default function DataGuard({ children }: { children: ReactNode }) {
       {content}
       {dataStatus?.degraded && !isSettingsPage && !isSharedResultPage && (
         <div className="mobile-fixed-bottom fixed left-1/2 z-[180] w-[min(92vw,760px)] -translate-x-1/2 rounded-lg border border-amber-400/30 bg-amber-950/90 px-3 py-2 text-xs text-amber-100 shadow-xl backdrop-blur">
-          Using the last validated game-data snapshot. New seasonal data is temporarily degraded; simulations and unrelated browsing remain available.
+          Using the last validated game-data snapshot. New seasonal data is temporarily degraded;
+          simulations and unrelated browsing remain available.
         </div>
       )}
       {shouldShowMissingFilesPopup && !isSharedResultPage && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 p-4">
           <div className="w-full max-w-lg rounded-xl border border-amber-500/30 bg-[#1a1306] p-5 shadow-2xl">
-            <p className="text-base font-semibold text-amber-200">Critical data files are missing</p>
+            <p className="text-base font-semibold text-amber-200">
+              Critical data files are missing
+            </p>
             <p className="mt-1 text-sm text-amber-100/90">
               You need to download missing game data before continuing.
             </p>
             <p className="mt-3 max-h-24 overflow-auto text-xs text-amber-100/80">
-            {missingRequiredFiles.slice(0, 4).join(', ')}
-            {missingRequiredFiles.length > 4 ? ` +${missingRequiredFiles.length - 4} more` : ''}
+              {missingRequiredFiles.slice(0, 4).join(', ')}
+              {missingRequiredFiles.length > 4 ? ` +${missingRequiredFiles.length - 4} more` : ''}
             </p>
             <div className="mt-4 rounded-lg border border-white/10 bg-black/30 p-3 text-xs text-zinc-200">
-              <p>{missingDataProgress.details || 'Click Repair Missing Files to restore app data.'}</p>
+              <p>
+                {missingDataProgress.details || 'Click Repair Missing Files to restore app data.'}
+              </p>
               {(missingDataDownloadBusy || missingDataProgress.totalBytes > 0) && (
                 <div className="mt-2 space-y-1 text-zinc-300">
                   <p>
@@ -592,13 +619,11 @@ export default function DataGuard({ children }: { children: ReactNode }) {
                 </div>
               )}
             </div>
-            {missingDataError && (
-              <p className="mt-3 text-xs text-red-300">{missingDataError}</p>
-            )}
+            {missingDataError && <p className="mt-3 text-xs text-red-300">{missingDataError}</p>}
             <div className="mt-3 rounded-lg border border-white/10 bg-black/30 p-3 text-xs text-zinc-200">
               <p>
-                Repair restores packaged files first, then downloads a verified recovery snapshot. If
-                that snapshot is unavailable, it tries Raidbots automatically.
+                Repair restores packaged files first, then downloads a verified recovery snapshot.
+                If that snapshot is unavailable, it tries Raidbots automatically.
               </p>
             </div>
             <div className="mt-4 flex items-center gap-2">

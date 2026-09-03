@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { API_URL, fetchJson, isDesktop, isHostedPrivate } from '../lib/api';
 import { APP_VERSION } from '../lib/version';
 import {
@@ -36,6 +36,9 @@ export function useSettingsUpdater({
   >('unavailable');
   const [selectedAppVersion, setSelectedAppVersion] = useState('');
   const [selectedAppChannel, setSelectedAppChannelState] = useState<UpdateChannel>('stable');
+  const [appChannelLoaded, setAppChannelLoaded] = useState(!isDesktop);
+  const persistedAppChannelRef = useRef<UpdateChannel>('stable');
+  const skipAppChannelSaveRef = useRef(false);
   const [deploymentInfo, setDeploymentInfo] = useState<DeploymentInfo | null>(null);
   const [dockerReleases, setDockerReleases] = useState<DockerImageReleaseInfo[]>([]);
   const [dockerReleaseMetadataStatus, setDockerReleaseMetadataStatus] = useState<
@@ -86,12 +89,20 @@ export function useSettingsUpdater({
 
   useEffect(() => {
     if (isDesktop) {
-      setSelectedAppChannelState(readStoredUpdateChannel(APP_VERSION));
+      const storedChannel = readStoredUpdateChannel(APP_VERSION);
+      persistedAppChannelRef.current = storedChannel;
+      setSelectedAppChannelState(storedChannel);
     }
+    setAppChannelLoaded(true);
   }, []);
 
   useEffect(() => {
-    if (!isDesktop || !performanceSaved || !hasUser) return;
+    if (!isDesktop || !appChannelLoaded || !performanceSaved || !hasUser) return;
+    if (skipAppChannelSaveRef.current) {
+      skipAppChannelSaveRef.current = false;
+      return;
+    }
+    if (selectedAppChannel === persistedAppChannelRef.current) return;
     fetchJson(`${API_URL}/api/user/config`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -99,8 +110,25 @@ export function useSettingsUpdater({
         key: 'app_update_channel',
         value: selectedAppChannel,
       }),
-    }).catch(() => {});
-  }, [hasUser, performanceSaved, selectedAppChannel]);
+    })
+      .then(() => {
+        persistedAppChannelRef.current = selectedAppChannel;
+      })
+      .catch((error) => {
+        const previousChannel = persistedAppChannelRef.current;
+        skipAppChannelSaveRef.current = true;
+        setSelectedAppChannelState(previousChannel);
+        try {
+          localStorage.setItem('whylowdps_update_channel', previousChannel);
+        } catch {}
+        setUpdateMessage({
+          type: 'error',
+          text: `Could not save the app update channel. ${
+            error instanceof Error ? error.message : 'Retry by selecting it again.'
+          }`,
+        });
+      });
+  }, [appChannelLoaded, hasUser, performanceSaved, selectedAppChannel]);
 
   const loadAppReleases = useCallback(
     async (options?: { forceRefresh?: boolean }) => {

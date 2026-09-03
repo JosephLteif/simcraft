@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../components/AuthContext';
 import { useRouter } from 'next/navigation';
 import {
@@ -89,6 +89,38 @@ type SettingsTab =
   | 'updates'
   | 'about';
 
+type PerformanceSettingKey =
+  | 'sim_threads'
+  | 'max_gear_combinations'
+  | 'sim_timeout_seconds'
+  | 'sim_idle_timeout_seconds'
+  | 'max_parallel_jobs';
+
+type PerformanceError = {
+  key: string;
+  text: string;
+};
+
+function performanceSettingLabel(key: PerformanceSettingKey): string {
+  switch (key) {
+    case 'sim_threads':
+      return 'CPU thread setting';
+    case 'max_gear_combinations':
+      return 'maximum gear combinations';
+    case 'sim_timeout_seconds':
+      return 'simulation timeout';
+    case 'sim_idle_timeout_seconds':
+      return 'no-output timeout';
+    case 'max_parallel_jobs':
+      return 'parallel simulation setting';
+  }
+}
+
+function performanceErrorMessage(error: unknown, label: string): string {
+  const detail = error instanceof Error && error.message ? ` ${error.message}` : '';
+  return `Could not save ${label}.${detail}`;
+}
+
 function formatLanDeviceDate(timestamp?: number | null): string {
   if (!timestamp) return 'Never';
   return new Intl.DateTimeFormat(undefined, {
@@ -131,6 +163,12 @@ export default function SettingsPage() {
     text: string;
   } | null>(null);
   const [performanceSaved, setPerformanceSaved] = useState(false);
+  const [performanceLoadAttempt, setPerformanceLoadAttempt] = useState(0);
+  const [performanceError, setPerformanceError] = useState<PerformanceError | null>(null);
+  const performanceSaveTimersRef = useRef<Record<string, number>>({});
+  const performanceSaveVersionsRef = useRef<Record<string, number>>({});
+  const persistedPerformanceValuesRef = useRef<Partial<Record<PerformanceSettingKey, string>>>({});
+  const skipPerformanceSaveRef = useRef(new Set<PerformanceSettingKey>());
   const { cacheSyncing, cacheMessage, syncProgress, syncProgressPct, refreshDataCache } =
     useDataCacheRefresh();
   const {
@@ -222,6 +260,52 @@ export default function SettingsPage() {
   });
   const simcRuntimeControlAvailable = isDesktop || (isHostedPrivate && user?.role === 'admin');
 
+  const persistPerformanceSetting = useCallback(
+    (
+      key: PerformanceSettingKey,
+      value: string,
+      save: () => Promise<void>,
+      rollback: (value: string) => void
+    ) => {
+      if (skipPerformanceSaveRef.current.delete(key)) return;
+      if (persistedPerformanceValuesRef.current[key] === value) return;
+
+      const previousTimer = performanceSaveTimersRef.current[key];
+      if (previousTimer != null) window.clearTimeout(previousTimer);
+
+      const version = (performanceSaveVersionsRef.current[key] || 0) + 1;
+      performanceSaveVersionsRef.current[key] = version;
+      performanceSaveTimersRef.current[key] = window.setTimeout(async () => {
+        delete performanceSaveTimersRef.current[key];
+        try {
+          await save();
+          if (performanceSaveVersionsRef.current[key] !== version) return;
+          persistedPerformanceValuesRef.current[key] = value;
+          setPerformanceError((current) => (current?.key === key ? null : current));
+        } catch (error) {
+          if (performanceSaveVersionsRef.current[key] !== version) return;
+          setPerformanceError({
+            key,
+            text: performanceErrorMessage(error, performanceSettingLabel(key)),
+          });
+          const previousValue = persistedPerformanceValuesRef.current[key];
+          if (previousValue != null && previousValue !== value) {
+            skipPerformanceSaveRef.current.add(key);
+            rollback(previousValue);
+          }
+        }
+      }, 350);
+    },
+    []
+  );
+
+  useEffect(() => {
+    const timers = performanceSaveTimersRef.current;
+    return () => {
+      Object.values(timers).forEach((timer) => window.clearTimeout(timer));
+    };
+  }, []);
+
   const refreshReadiness = useCallback(async () => {
     setReadinessLoading(true);
     setReadinessError(null);
@@ -265,35 +349,64 @@ export default function SettingsPage() {
       return;
     }
 
+    setPageLoading(true);
+    setPerformanceSaved(false);
+    setPerformanceError(null);
+    Object.values(performanceSaveTimersRef.current).forEach((timer) => window.clearTimeout(timer));
+    performanceSaveTimersRef.current = {};
+    (Object.keys(performanceSaveVersionsRef.current) as PerformanceSettingKey[]).forEach((key) => {
+      performanceSaveVersionsRef.current[key] += 1;
+    });
+    persistedPerformanceValuesRef.current = {};
+    skipPerformanceSaveRef.current.clear();
+    let cancelled = false;
     fetchJson<any>(`${API_URL}/api/user/config`)
       .then((data) => {
+        if (cancelled) return;
         setClientId(data.blizzard_client_id || '');
         setHasSecret(data.has_blizzard_client_secret || false);
         const savedThreads = parseInt(data.sim_threads || '', 10);
         if (Number.isFinite(savedThreads) && savedThreads > 0) {
+          persistedPerformanceValuesRef.current.sim_threads = String(savedThreads);
           setThreads(savedThreads);
         }
         const savedSimTimeout = parseInt(data.sim_timeout_seconds || '', 10);
         if (Number.isFinite(savedSimTimeout) && savedSimTimeout > 0) {
+          persistedPerformanceValuesRef.current.sim_timeout_seconds = String(
+            clampSimTimeoutSeconds(savedSimTimeout)
+          );
           setSimTimeoutSeconds(clampSimTimeoutSeconds(savedSimTimeout));
         }
         const savedSimIdleTimeout = parseInt(data.sim_idle_timeout_seconds || '', 10);
         if (Number.isFinite(savedSimIdleTimeout) && savedSimIdleTimeout > 0) {
+          persistedPerformanceValuesRef.current.sim_idle_timeout_seconds = String(
+            clampSimIdleTimeoutSeconds(savedSimIdleTimeout)
+          );
           setSimIdleTimeoutSeconds(clampSimIdleTimeoutSeconds(savedSimIdleTimeout));
         }
         const savedMaxCombos = parseInt(data.max_gear_combinations || '', 10);
         if (Number.isFinite(savedMaxCombos) && savedMaxCombos > 0) {
+          persistedPerformanceValuesRef.current.max_gear_combinations = String(savedMaxCombos);
           setMaxCombinations(savedMaxCombos);
         }
         setPerformanceSaved(true);
       })
       .catch((err) => {
+        if (cancelled) return;
         console.error('Failed to load settings:', err);
-        setPerformanceSaved(true);
+        setPerformanceSaved(false);
+        setPerformanceError({
+          key: 'load',
+          text: 'Could not load saved simulation settings. Retry before changing them.',
+        });
       })
       .finally(() => {
-        setPageLoading(false);
+        if (!cancelled) setPageLoading(false);
       });
+
+    return () => {
+      cancelled = true;
+    };
   }, [
     authLoading,
     user,
@@ -302,6 +415,7 @@ export default function SettingsPage() {
     setSimIdleTimeoutSeconds,
     setSimTimeoutSeconds,
     setThreads,
+    performanceLoadAttempt,
   ]);
 
   useEffect(() => {
@@ -315,16 +429,32 @@ export default function SettingsPage() {
     getConfig()
       .then((config) => {
         if (cancelled) return;
-        if (!Number.isFinite(config.max_parallel_jobs) || config.max_parallel_jobs < 1) return;
-        setMaxParallelJobs(config.max_parallel_jobs);
+        if (!Number.isFinite(config.max_parallel_jobs) || config.max_parallel_jobs < 1) {
+          setPerformanceError({
+            key: 'max_parallel_jobs',
+            text: 'The server returned an invalid parallel simulation setting.',
+          });
+          return;
+        }
+        const savedMaxParallelJobs = Math.floor(config.max_parallel_jobs);
+        persistedPerformanceValuesRef.current.max_parallel_jobs = String(savedMaxParallelJobs);
+        setMaxParallelJobs(savedMaxParallelJobs);
         setParallelJobsSettingLoaded(true);
       })
-      .catch(() => {});
+      .catch((error) => {
+        if (cancelled) return;
+        setPerformanceError({
+          key: 'max_parallel_jobs',
+          text: `Could not load the parallel simulation setting. ${
+            error instanceof Error ? error.message : 'Retry by reloading Settings.'
+          }`,
+        });
+      });
 
     return () => {
       cancelled = true;
     };
-  }, [simcRuntimeControlAvailable, user]);
+  }, [performanceLoadAttempt, simcRuntimeControlAvailable, user]);
 
   useEffect(() => {
     if (!authLoading && user) void refreshReadiness();
@@ -369,59 +499,114 @@ export default function SettingsPage() {
           }
         }
       })
-      .catch(() => {});
-  }, [threads, setThreads]);
+      .catch((error) => {
+        setPerformanceError({
+          key: 'health',
+          text: `Could not read the available CPU thread limit. ${
+            error instanceof Error ? error.message : 'Retry to check again.'
+          }`,
+        });
+      });
+  }, [performanceLoadAttempt, setThreads, threads]);
 
   useEffect(() => {
     if (!performanceSaved || !user || threads <= 0) return;
-    fetchJson(`${API_URL}/api/user/config`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key: 'sim_threads', value: String(threads) }),
-    }).catch(() => {});
-  }, [threads, performanceSaved, user]);
+    persistPerformanceSetting(
+      'sim_threads',
+      String(threads),
+      async () => {
+        await fetchJson(`${API_URL}/api/user/config`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: 'sim_threads', value: String(threads) }),
+        });
+      },
+      (value) => setThreads(Number(value))
+    );
+  }, [persistPerformanceSetting, performanceSaved, setThreads, threads, user]);
 
   useEffect(() => {
     if (!performanceSaved || !user || (maxCombinations ?? 0) <= 0) return;
-    fetchJson(`${API_URL}/api/user/config`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        key: 'max_gear_combinations',
-        value: String(maxCombinations),
-      }),
-    }).catch(() => {});
-  }, [maxCombinations, performanceSaved, user]);
+    persistPerformanceSetting(
+      'max_gear_combinations',
+      String(maxCombinations),
+      async () => {
+        await fetchJson(`${API_URL}/api/user/config`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            key: 'max_gear_combinations',
+            value: String(maxCombinations),
+          }),
+        });
+      },
+      (value) => setMaxCombinations(Number(value))
+    );
+  }, [maxCombinations, performanceSaved, persistPerformanceSetting, setMaxCombinations, user]);
 
   useEffect(() => {
     if (!performanceSaved || !user || simTimeoutSeconds <= 0) return;
-    fetchJson(`${API_URL}/api/user/config`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        key: 'sim_timeout_seconds',
-        value: String(simTimeoutSeconds),
-      }),
-    }).catch(() => {});
-  }, [performanceSaved, simTimeoutSeconds, user]);
+    persistPerformanceSetting(
+      'sim_timeout_seconds',
+      String(simTimeoutSeconds),
+      async () => {
+        await fetchJson(`${API_URL}/api/user/config`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            key: 'sim_timeout_seconds',
+            value: String(simTimeoutSeconds),
+          }),
+        });
+      },
+      (value) => setSimTimeoutSeconds(Number(value))
+    );
+  }, [performanceSaved, persistPerformanceSetting, setSimTimeoutSeconds, simTimeoutSeconds, user]);
 
   useEffect(() => {
     if (!performanceSaved || !user || simIdleTimeoutSeconds <= 0) return;
-    fetchJson(`${API_URL}/api/user/config`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        key: 'sim_idle_timeout_seconds',
-        value: String(simIdleTimeoutSeconds),
-      }),
-    }).catch(() => {});
-  }, [performanceSaved, simIdleTimeoutSeconds, user]);
+    persistPerformanceSetting(
+      'sim_idle_timeout_seconds',
+      String(simIdleTimeoutSeconds),
+      async () => {
+        await fetchJson(`${API_URL}/api/user/config`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            key: 'sim_idle_timeout_seconds',
+            value: String(simIdleTimeoutSeconds),
+          }),
+        });
+      },
+      (value) => setSimIdleTimeoutSeconds(Number(value))
+    );
+  }, [
+    performanceSaved,
+    persistPerformanceSetting,
+    setSimIdleTimeoutSeconds,
+    simIdleTimeoutSeconds,
+    user,
+  ]);
 
   useEffect(() => {
     if (!simcRuntimeControlAvailable || !parallelJobsSettingLoaded || !performanceSaved) return;
     if (!Number.isFinite(maxParallelJobs) || maxParallelJobs < 1) return;
-    updateConfig({ max_parallel_jobs: Math.floor(maxParallelJobs) }).catch(() => {});
-  }, [maxParallelJobs, simcRuntimeControlAvailable, parallelJobsSettingLoaded, performanceSaved]);
+    persistPerformanceSetting(
+      'max_parallel_jobs',
+      String(Math.floor(maxParallelJobs)),
+      async () => {
+        await updateConfig({ max_parallel_jobs: Math.floor(maxParallelJobs) });
+      },
+      (value) => setMaxParallelJobs(Number(value))
+    );
+  }, [
+    maxParallelJobs,
+    parallelJobsSettingLoaded,
+    performanceSaved,
+    persistPerformanceSetting,
+    setMaxParallelJobs,
+    simcRuntimeControlAvailable,
+  ]);
 
   useEffect(() => {
     if (!isDesktop) return;
@@ -817,35 +1002,35 @@ export default function SettingsPage() {
     await invoke('restart_app');
   };
 
-  const loadSimcRuntimeInfo = useCallback(async (
-    channel: SimcUpdateChannel,
-    options?: { forceRefresh?: boolean }
-  ) => {
-    if (!simcRuntimeControlAvailable) return;
-    setSimcRuntimeInfoLoading(true);
-    try {
-      if (isDesktop) {
-        const info = await fetchSimcRuntimeInfo(channel, options);
-        setSimcRuntimeInfo(info);
-      } else {
-        const status = await fetchJson<SimcRuntimeStatusResponse>(
-          `${API_URL}/api/admin/simc-runtime`
-        );
-        setSimcRuntimeInfo({
-          channel: status?.channel === 'nightly' ? 'nightly' : 'weekly',
-          version: status?.version || 'Unavailable',
-          metadataStatus: status?.version ? 'available' : 'unavailable',
+  const loadSimcRuntimeInfo = useCallback(
+    async (channel: SimcUpdateChannel, options?: { forceRefresh?: boolean }) => {
+      if (!simcRuntimeControlAvailable) return;
+      setSimcRuntimeInfoLoading(true);
+      try {
+        if (isDesktop) {
+          const info = await fetchSimcRuntimeInfo(channel, options);
+          setSimcRuntimeInfo(info);
+        } else {
+          const status = await fetchJson<SimcRuntimeStatusResponse>(
+            `${API_URL}/api/admin/simc-runtime`
+          );
+          setSimcRuntimeInfo({
+            channel: status?.channel === 'nightly' ? 'nightly' : 'weekly',
+            version: status?.version || 'Unavailable',
+            metadataStatus: status?.version ? 'available' : 'unavailable',
+          });
+        }
+      } catch (err: any) {
+        setSimcChannelMessage({
+          type: 'error',
+          text: err?.message || err?.toString?.() || 'Failed to load SimC runtime status.',
         });
+      } finally {
+        setSimcRuntimeInfoLoading(false);
       }
-    } catch (err: any) {
-      setSimcChannelMessage({
-        type: 'error',
-        text: err?.message || err?.toString?.() || 'Failed to load SimC runtime status.',
-      });
-    } finally {
-      setSimcRuntimeInfoLoading(false);
-    }
-  }, [simcRuntimeControlAvailable]);
+    },
+    [simcRuntimeControlAvailable]
+  );
 
   const loadSimcRuntimeVersions = async () => {
     setSimcRuntimeVersionsLoading(true);
@@ -1018,7 +1203,7 @@ export default function SettingsPage() {
   if (authLoading || pageLoading) {
     return (
       <div className="flex min-h-[400px] items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-gold"></div>
+        <div className="border-gold h-8 w-8 animate-spin rounded-full border-b-2"></div>
       </div>
     );
   }
@@ -1058,6 +1243,25 @@ export default function SettingsPage() {
         ))}
       </div>
 
+      {performanceError && (
+        <div
+          role="alert"
+          className="flex items-center justify-between gap-3 rounded-lg border border-red-400/25 bg-red-400/10 px-4 py-3 text-sm text-red-100"
+        >
+          <span>{performanceError.text}</span>
+          <button
+            type="button"
+            onClick={() => {
+              setPageLoading(true);
+              setPerformanceLoadAttempt((attempt) => attempt + 1);
+            }}
+            className="shrink-0 font-semibold text-red-200 hover:text-white"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
       {activeTab === 'health' && (
         <ReadinessPanel
           variant="details"
@@ -1083,7 +1287,7 @@ export default function SettingsPage() {
       {activeTab === 'integrations' && (
         <div className="space-y-6">
           {isHostedPrivate ? (
-            <section className="rounded-xl border border-border/50 bg-surface/30 p-6 backdrop-blur-sm">
+            <section className="border-border/50 bg-surface/30 rounded-xl border p-6 backdrop-blur-sm">
               <h2 className="mb-3 text-xl font-semibold text-white">API Integrations</h2>
               <p className="max-w-2xl text-sm leading-relaxed text-zinc-400">
                 Blizzard API access is configured by the hosted server administrator. Client secrets
@@ -1120,14 +1324,14 @@ export default function SettingsPage() {
       )}
 
       {activeTab === 'simulation' && (
-        <section className="rounded-xl border border-border/50 bg-surface/30 p-6 backdrop-blur-sm">
+        <section className="border-border/50 bg-surface/30 rounded-xl border p-6 backdrop-blur-sm">
           <h2 className="mb-6 text-xl font-semibold text-white">Simulation Performance</h2>
           <div className="max-w-2xl space-y-6">
             {maxThreads > 0 && (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium text-zinc-300">CPU Threads</span>
-                  <span className="rounded border border-border bg-surface-2 px-2 py-0.5 font-mono text-[11px] tabular-nums text-white">
+                  <span className="border-border bg-surface-2 rounded border px-2 py-0.5 font-mono text-[11px] text-white tabular-nums">
                     {threads}/{maxThreads}
                   </span>
                 </div>
@@ -1153,7 +1357,7 @@ export default function SettingsPage() {
               </div>
             )}
 
-            <div className="flex items-center justify-between border-t border-border pt-4">
+            <div className="border-border flex items-center justify-between border-t pt-4">
               <div className="space-y-0.5">
                 <p className="text-sm font-medium text-zinc-300">Max Gear Combos</p>
                 <p className="text-[12px] text-zinc-500">Limits Top Gear simulation runtime.</p>
@@ -1168,7 +1372,7 @@ export default function SettingsPage() {
                   const val = parseInt(e.target.value, 10);
                   if (Number.isFinite(val) && val > 0) setMaxCombinations(val);
                 }}
-                className="w-24 rounded border border-border bg-surface-2 px-2 py-1 text-center font-mono text-xs tabular-nums text-white [appearance:textfield] focus:border-gold/50 focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                className="border-border bg-surface-2 focus:border-gold/50 w-24 [appearance:textfield] rounded border px-2 py-1 text-center font-mono text-xs text-white tabular-nums focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               />
             </div>
 
@@ -1199,7 +1403,7 @@ export default function SettingsPage() {
               </div>
             )}
 
-            <div className="space-y-3 border-t border-border pt-4">
+            <div className="border-border space-y-3 border-t pt-4">
               <div>
                 <h3 className="text-sm font-medium text-zinc-300">Simulation timeouts</h3>
                 <p className="mt-1 text-[12px] text-zinc-500">
@@ -1223,7 +1427,7 @@ export default function SettingsPage() {
                           setSimTimeoutSeconds(hours * 3600);
                         }
                       }}
-                      className="w-24 rounded border border-border bg-surface-2 px-2 py-1 text-center font-mono text-xs tabular-nums text-white [appearance:textfield] focus:border-gold/50 focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                      className="border-border bg-surface-2 focus:border-gold/50 w-24 [appearance:textfield] rounded border px-2 py-1 text-center font-mono text-xs text-white tabular-nums focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                     />
                     <span className="text-xs text-zinc-500">hours</span>
                   </div>
@@ -1243,7 +1447,7 @@ export default function SettingsPage() {
                           setSimIdleTimeoutSeconds(minutes * 60);
                         }
                       }}
-                      className="w-24 rounded border border-border bg-surface-2 px-2 py-1 text-center font-mono text-xs tabular-nums text-white [appearance:textfield] focus:border-gold/50 focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                      className="border-border bg-surface-2 focus:border-gold/50 w-24 [appearance:textfield] rounded border px-2 py-1 text-center font-mono text-xs text-white tabular-nums focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                     />
                     <span className="text-xs text-zinc-500">minutes</span>
                   </div>
@@ -1255,7 +1459,7 @@ export default function SettingsPage() {
       )}
 
       {activeTab === 'application' && (
-        <section className="rounded-xl border border-border/50 bg-surface/30 p-6 backdrop-blur-sm">
+        <section className="border-border/50 bg-surface/30 rounded-xl border p-6 backdrop-blur-sm">
           <h2 className="mb-3 text-xl font-semibold text-white">Clipboard Import</h2>
           <p className="mb-5 text-sm text-zinc-400">
             When the app regains focus, it can check the latest clipboard text and auto-fill the
@@ -1263,7 +1467,7 @@ export default function SettingsPage() {
           </p>
 
           <div className="space-y-4">
-            <div className="flex max-w-2xl items-center justify-between gap-4 rounded-lg border border-border/60 bg-surface-2/60 px-4 py-3">
+            <div className="border-border/60 bg-surface-2/60 flex max-w-2xl items-center justify-between gap-4 rounded-lg border px-4 py-3">
               <div className="space-y-1">
                 <p className="text-sm font-medium text-zinc-200">
                   Auto paste latest SimC from clipboard
@@ -1277,7 +1481,7 @@ export default function SettingsPage() {
                 type="button"
                 onClick={() => setAutoClipboardPasteSimc(!autoClipboardPasteSimc)}
                 className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
-                  autoClipboardPasteSimc ? 'bg-gold' : 'border border-border bg-surface'
+                  autoClipboardPasteSimc ? 'bg-gold' : 'border-border bg-surface border'
                 }`}
                 aria-pressed={autoClipboardPasteSimc}
               >
@@ -1293,14 +1497,14 @@ export default function SettingsPage() {
       )}
 
       {activeTab === 'application' && isDesktop && (
-        <section className="rounded-xl border border-border/50 bg-surface/30 p-6 backdrop-blur-sm">
+        <section className="border-border/50 bg-surface/30 rounded-xl border p-6 backdrop-blur-sm">
           <h2 className="mb-3 text-xl font-semibold text-white">Close Behavior</h2>
           <p className="mb-5 text-sm text-zinc-400">
             Choose what happens when you close the app window.
           </p>
 
           <div className="max-w-2xl space-y-4">
-            <div className="inline-flex rounded-lg border border-border bg-surface-2 p-1">
+            <div className="border-border bg-surface-2 inline-flex rounded-lg border p-1">
               <button
                 type="button"
                 disabled={closeBehaviorLoading}
@@ -1353,7 +1557,7 @@ export default function SettingsPage() {
       )}
 
       {activeTab === 'application' && isDesktop && (
-        <section className="rounded-xl border border-border/50 bg-surface/30 p-6 backdrop-blur-sm">
+        <section className="border-border/50 bg-surface/30 rounded-xl border p-6 backdrop-blur-sm">
           <h2 className="mb-3 text-xl font-semibold text-white">Share over LAN</h2>
           <p className="mb-5 max-w-2xl text-sm text-zinc-400">
             Open WhyLowDPS from your phone on the same private Wi-Fi network. Anyone with the
@@ -1361,7 +1565,7 @@ export default function SettingsPage() {
           </p>
 
           <div className="max-w-2xl space-y-4">
-            <div className="flex items-center justify-between gap-4 rounded-lg border border-border/60 bg-surface-2/60 px-4 py-3">
+            <div className="border-border/60 bg-surface-2/60 flex items-center justify-between gap-4 rounded-lg border px-4 py-3">
               <div className="space-y-1">
                 <p className="text-sm font-medium text-zinc-200">Share this app over LAN</p>
                 <p className="text-[13px] text-zinc-500">
@@ -1374,7 +1578,7 @@ export default function SettingsPage() {
                 disabled={lanSharingLoading}
                 onClick={() => void updateLanSharing(!lanSharingEnabled)}
                 className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
-                  lanSharingEnabled ? 'bg-gold' : 'border border-border bg-surface'
+                  lanSharingEnabled ? 'bg-gold' : 'border-border bg-surface border'
                 }`}
                 aria-label="Share this app over LAN"
                 aria-pressed={lanSharingEnabled}
@@ -1388,9 +1592,9 @@ export default function SettingsPage() {
             </div>
 
             {(lanSharingEnabled || lanSharingRestartRequired) && (
-              <div className="space-y-3 rounded-lg border border-gold/20 bg-gold/5 p-4">
+              <div className="border-gold/20 bg-gold/5 space-y-3 rounded-lg border p-4">
                 {lanSharingRestartRequired && (
-                  <p className="text-xs text-gold">
+                  <p className="text-gold text-xs">
                     Restart required before this LAN setting takes effect.
                   </p>
                 )}
@@ -1399,7 +1603,7 @@ export default function SettingsPage() {
                     <button
                       type="button"
                       onClick={() => void restartForLanSharing()}
-                      className="rounded-lg bg-gold px-3 py-2 text-xs font-semibold text-black transition-colors hover:bg-gold/90"
+                      className="bg-gold hover:bg-gold/90 rounded-lg px-3 py-2 text-xs font-semibold text-black transition-colors"
                     >
                       Restart WhyLowDPS
                     </button>
@@ -1409,7 +1613,7 @@ export default function SettingsPage() {
                       type="button"
                       disabled={lanSharingLoading}
                       onClick={() => void createLanPairingLink()}
-                      className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-xs font-semibold text-zinc-200 transition-colors hover:border-gold/40 hover:text-white disabled:opacity-50"
+                      className="border-border bg-surface-2 hover:border-gold/40 rounded-lg border px-3 py-2 text-xs font-semibold text-zinc-200 transition-colors hover:text-white disabled:opacity-50"
                     >
                       New pairing link
                     </button>
@@ -1445,12 +1649,12 @@ export default function SettingsPage() {
                           id="lan-pairing-url"
                           readOnly
                           value={lanPairingUrl}
-                          className="min-w-0 rounded-lg border border-border bg-surface px-3 py-2 font-mono text-xs text-zinc-200 focus:border-gold/50 focus:outline-none"
+                          className="border-border bg-surface focus:border-gold/50 min-w-0 rounded-lg border px-3 py-2 font-mono text-xs text-zinc-200 focus:outline-none"
                         />
                         <button
                           type="button"
                           onClick={() => void navigator.clipboard.writeText(lanPairingUrl)}
-                          className="w-fit rounded-lg border border-border bg-surface-2 px-3 py-2 text-xs font-semibold text-zinc-200 hover:border-gold/40 hover:text-white"
+                          className="border-border bg-surface-2 hover:border-gold/40 w-fit rounded-lg border px-3 py-2 text-xs font-semibold text-zinc-200 hover:text-white"
                         >
                           Copy link
                         </button>
@@ -1462,7 +1666,7 @@ export default function SettingsPage() {
             )}
 
             {lanSharingEnabled && (
-              <div className="space-y-3 rounded-lg border border-border/60 bg-surface-2/40 p-4">
+              <div className="border-border/60 bg-surface-2/40 space-y-3 rounded-lg border p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <h3 className="text-sm font-semibold text-zinc-200">Paired devices</h3>
@@ -1475,14 +1679,14 @@ export default function SettingsPage() {
                     type="button"
                     disabled={lanDevicesLoading}
                     onClick={() => void refreshLanDevices()}
-                    className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-xs font-semibold text-zinc-200 transition-colors hover:border-gold/40 hover:text-white disabled:opacity-50"
+                    className="border-border bg-surface-2 hover:border-gold/40 rounded-lg border px-3 py-2 text-xs font-semibold text-zinc-200 transition-colors hover:text-white disabled:opacity-50"
                   >
                     {lanDevicesLoading ? 'Refreshing…' : 'Refresh'}
                   </button>
                 </div>
 
                 {lanDevices.length === 0 && !lanDevicesLoading ? (
-                  <p className="rounded-lg border border-dashed border-border/70 px-3 py-4 text-xs text-zinc-500">
+                  <p className="border-border/70 rounded-lg border border-dashed px-3 py-4 text-xs text-zinc-500">
                     No phones or browsers have been paired yet. Create a new phone link above to add
                     one.
                   </p>
@@ -1492,7 +1696,7 @@ export default function SettingsPage() {
                   {lanDevices.map((device) => (
                     <div
                       key={device.id}
-                      className="flex flex-col gap-3 rounded-lg border border-border/60 bg-surface/50 px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
+                      className="border-border/60 bg-surface/50 flex flex-col gap-3 rounded-lg border px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
                     >
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
@@ -1500,7 +1704,7 @@ export default function SettingsPage() {
                             {device.name}
                           </p>
                           <span
-                            className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                            className={`rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide uppercase ${
                               device.active
                                 ? 'bg-emerald-400/10 text-emerald-300'
                                 : 'bg-zinc-700/40 text-zinc-500'
@@ -1519,7 +1723,7 @@ export default function SettingsPage() {
                           type="button"
                           disabled={lanSharingLoading || lanDeviceActionId === device.id}
                           onClick={() => void createLanPairingLink(device.id)}
-                          className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-xs font-semibold text-zinc-200 hover:border-gold/40 hover:text-white disabled:opacity-50"
+                          className="border-border bg-surface-2 hover:border-gold/40 rounded-lg border px-3 py-2 text-xs font-semibold text-zinc-200 hover:text-white disabled:opacity-50"
                         >
                           New link
                         </button>
@@ -1527,7 +1731,7 @@ export default function SettingsPage() {
                           type="button"
                           disabled={lanDeviceActionId === device.id}
                           onClick={() => void renameLanDevice(device)}
-                          className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-xs font-semibold text-zinc-200 hover:border-gold/40 hover:text-white disabled:opacity-50"
+                          className="border-border bg-surface-2 hover:border-gold/40 rounded-lg border px-3 py-2 text-xs font-semibold text-zinc-200 hover:text-white disabled:opacity-50"
                         >
                           Rename
                         </button>
@@ -1618,9 +1822,9 @@ export default function SettingsPage() {
       )}
 
       {activeTab === 'about' && (
-        <section className="space-y-6 rounded-xl border border-border/50 bg-surface/30 p-6 backdrop-blur-sm">
+        <section className="border-border/50 bg-surface/30 space-y-6 rounded-xl border p-6 backdrop-blur-sm">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gold">
+            <p className="text-gold text-xs font-semibold tracking-[0.2em] uppercase">
               About WhyLowDPS
             </p>
             <h2 className="mt-2 text-2xl font-semibold text-white">
@@ -1633,7 +1837,7 @@ export default function SettingsPage() {
             </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-lg border border-border/60 bg-surface-2/50 p-4">
+            <div className="border-border/60 bg-surface-2/50 rounded-lg border p-4">
               <p className="text-xs text-zinc-500">Version</p>
               <p className="mt-1 font-semibold text-zinc-100">
                 {readiness?.app.version || APP_VERSION_WITH_PREFIX}
@@ -1642,9 +1846,9 @@ export default function SettingsPage() {
                 Revision {readiness?.app.revision || 'unknown'}
               </p>
             </div>
-            <div className="rounded-lg border border-border/60 bg-surface-2/50 p-4">
+            <div className="border-border/60 bg-surface-2/50 rounded-lg border p-4">
               <p className="text-xs text-zinc-500">Deployment mode</p>
-              <p className="mt-1 font-semibold capitalize text-zinc-100">
+              <p className="mt-1 font-semibold text-zinc-100 capitalize">
                 {readiness?.app.mode || 'unknown'}
               </p>
               <p className="mt-1 text-xs text-zinc-500">
@@ -1652,7 +1856,7 @@ export default function SettingsPage() {
               </p>
             </div>
           </div>
-          <div className="rounded-lg border border-border/60 bg-surface-2/50 p-4">
+          <div className="border-border/60 bg-surface-2/50 rounded-lg border p-4">
             <h3 className="font-semibold text-zinc-100">Privacy and security</h3>
             <p className="mt-2 text-sm leading-relaxed text-zinc-400">
               Blizzard credentials are stored using the app&apos;s existing protected credential
@@ -1738,7 +1942,7 @@ export default function SettingsPage() {
             aria-labelledby="remove-lan-device-title"
             aria-describedby="remove-lan-device-description"
           >
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-red-300/80">
+            <p className="text-xs font-bold tracking-[0.18em] text-red-300/80 uppercase">
               Revoke device access
             </p>
             <h2 id="remove-lan-device-title" className="mt-2 text-xl font-semibold text-white">

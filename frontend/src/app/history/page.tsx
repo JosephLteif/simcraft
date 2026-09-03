@@ -24,6 +24,8 @@ import {
 import { useAuth } from '../components/AuthContext';
 import { useSimContext } from '../components/SimContext';
 import { useNotifications } from '../components/shared/NotificationSystem';
+import { simulationTypeRoute } from '../lib/simulation-routes';
+import { decodeHistoryCharacterFilter, encodeHistoryCharacterFilter } from './utils';
 
 interface JobSummary {
   id: string;
@@ -133,15 +135,6 @@ function formatDateHeader(dateStr: string): string {
     day: 'numeric',
     year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
   });
-}
-
-function simTypeRoute(simType: string): string {
-  const normalized = String(simType || '').toLowerCase();
-  if (normalized.includes('top_gear') || normalized.includes('top-gear')) return '/top-gear';
-  if (normalized.includes('droptimizer') || normalized.includes('drop_finder'))
-    return '/drop-finder';
-  if (normalized.includes('upgrade')) return '/upgrade';
-  return '/quick-sim';
 }
 
 function SimulationComparison({ sims, onClose }: { sims: JobSummary[]; onClose: () => void }) {
@@ -670,7 +663,7 @@ export default function HistoryPage() {
         } catch {
           // Shared context still carries the input when session storage is unavailable.
         }
-        router.push(simTypeRoute(sim.sim_type));
+        router.push(simulationTypeRoute(sim.sim_type));
       } catch {
         setRerunError(
           'This simulation input could not be loaded. The original result is still available.'
@@ -894,20 +887,14 @@ export default function HistoryPage() {
             <span className="text-xs text-zinc-500">Filter by Character:</span>
             <select
               className="border-border bg-surface-2 focus:border-gold min-w-0 flex-1 rounded-md border px-2 py-1.5 text-xs text-zinc-200 focus:outline-none xl:w-48 xl:flex-none"
-              value={character ? `${character.name}-${character.realm}` : 'all'}
+              value={character ? encodeHistoryCharacterFilter(character) : 'all'}
               onChange={(e) => {
-                const val = e.target.value;
-                if (val === 'all') {
-                  setCharacter(null);
-                } else {
-                  const [name, realm] = val.split('-');
-                  setCharacter({ name, realm });
-                }
+                setCharacter(decodeHistoryCharacterFilter(e.target.value));
               }}
             >
               <option value="all">All Sims</option>
               {bnetCharacters.map((c, i) => (
-                <option key={i} value={`${c.name}-${c.realm}`}>
+                <option key={i} value={encodeHistoryCharacterFilter(c)}>
                   {c.name} - {c.realm} {c.source === 'history' ? '(History)' : ''}
                 </option>
               ))}
