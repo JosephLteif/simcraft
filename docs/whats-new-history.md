@@ -19,6 +19,14 @@ Character pages can now combine Blizzard data with public Raider.IO and Warcraft
 
 ### Improvements
 
+#### Reduce header clutter
+
+The top bar now keeps its most useful actions compact without removing functionality.
+
+- Open What's New from the profile menu instead of a separate full-width header button.
+- Use App search to open the shared-result workflow; Import Result no longer occupies the top bar.
+- Start the current page tour from a standalone help icon outside the mobile More menu, which is reserved for App search.
+
 #### Make navigation and recovery easier
 
 Core pages are easier to discover and recover when runtime game data or a network request is unavailable.

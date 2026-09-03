@@ -1,5 +1,5 @@
 {
-  "contentRevision": "Unreleased-15b11de02bd2",
+  "contentRevision": "Unreleased-75a9da171e2c",
   "releases": [
     {
       "version": "Unreleased",
@@ -15,6 +15,16 @@
             "Warcraft Logs activates after valid credentials are saved and adds latest-zone rankings, five recent public reports with report dates and end times, and per-boss best and median parses, public kills, best amounts, metrics, and specs.",
             "The integration settings explain what belongs in each Warcraft Logs field and show the exact redirect host and port for the current app address; private reports and private OAuth/PKCE access are not used.",
             "Personal Warcraft Logs credentials take precedence over shared hosted credentials, while environment credentials take precedence over the administrator-managed fallback. Secrets remain protected and are never returned by the API."
+          ]
+        },
+        {
+          "category": "improvement",
+          "title": "Reduce header clutter",
+          "summary": "The top bar now keeps its most useful actions compact without removing functionality.",
+          "items": [
+            "Open What's New from the profile menu instead of a separate full-width header button.",
+            "Use App search to open the shared-result workflow; Import Result no longer occupies the top bar.",
+            "Start the current page tour from a standalone help icon outside the mobile More menu, which is reserved for App search."
           ]
         },
         {
