@@ -44,8 +44,6 @@ import { SIMULATION_PERFORMANCE_PRESETS, getPresetThreads } from '../lib/sim-per
 import {
   clampSimIdleTimeoutSeconds,
   clampSimTimeoutSeconds,
-  DEFAULT_SIM_IDLE_TIMEOUT_SECONDS,
-  DEFAULT_SIM_TIMEOUT_SECONDS,
   MAX_SIM_IDLE_TIMEOUT_SECONDS,
   MAX_SIM_TIMEOUT_SECONDS,
   MIN_SIM_IDLE_TIMEOUT_SECONDS,
@@ -819,7 +817,7 @@ export default function SettingsPage() {
     await invoke('restart_app');
   };
 
-  const loadSimcRuntimeInfo = async (
+  const loadSimcRuntimeInfo = useCallback(async (
     channel: SimcUpdateChannel,
     options?: { forceRefresh?: boolean }
   ) => {
@@ -847,7 +845,7 @@ export default function SettingsPage() {
     } finally {
       setSimcRuntimeInfoLoading(false);
     }
-  };
+  }, [simcRuntimeControlAvailable]);
 
   const loadSimcRuntimeVersions = async () => {
     setSimcRuntimeVersionsLoading(true);
@@ -859,7 +857,7 @@ export default function SettingsPage() {
   useEffect(() => {
     if (!simcRuntimeControlAvailable) return;
     void loadSimcRuntimeInfo(selectedSimcChannel);
-  }, [selectedSimcChannel, simcRuntimeControlAvailable]);
+  }, [loadSimcRuntimeInfo, selectedSimcChannel, simcRuntimeControlAvailable]);
 
   useEffect(() => {
     if (!isDesktop) return;

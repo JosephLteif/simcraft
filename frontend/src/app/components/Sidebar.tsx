@@ -95,6 +95,7 @@ const baseNavItems: NavItem[] = [
       '/analysis/stat-plot',
       '/analysis/consumable-matrix',
       '/analysis/tier-slot-matrix',
+      '/upgrade/trinkets',
     ],
     children: [
       {
@@ -476,7 +477,7 @@ export default function Sidebar() {
       )}
       <aside
         aria-label="App navigation"
-        className={`fixed bottom-0 left-0 z-50 flex flex-col justify-between border-r border-border bg-surface/95 pb-4 pt-3 shadow-2xl transition-all duration-200 ${
+        className={`border-border bg-surface/95 fixed bottom-0 left-0 z-50 flex flex-col justify-between border-r pt-3 pb-4 shadow-2xl transition-all duration-200 ${
           isCollapsed ? 'w-20' : 'w-[min(18rem,calc(100vw-1rem))] xl:w-72'
         } ${isNarrowViewport ? (isMobileOpen ? 'translate-x-0' : '-translate-x-full') : 'translate-x-0'}`}
         style={{ top: 'var(--app-header-height)' }}
@@ -486,7 +487,7 @@ export default function Sidebar() {
             ref={mobileCloseRef}
             type="button"
             onClick={() => setIsMobileOpen(false)}
-            className="mb-2 inline-flex min-h-11 items-center justify-between rounded-lg border border-border bg-surface-2 px-3 text-sm font-semibold text-zinc-200 xl:hidden"
+            className="border-border bg-surface-2 mb-2 inline-flex min-h-11 items-center justify-between rounded-lg border px-3 text-sm font-semibold text-zinc-200 xl:hidden"
             aria-label="Close navigation"
           >
             Close navigation
@@ -501,14 +502,14 @@ export default function Sidebar() {
                   <button
                     type="button"
                     onClick={() => setShowAddMenu((v) => !v)}
-                    className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-white/15 bg-white/[0.04] text-sm font-semibold leading-none text-zinc-200 transition-colors hover:bg-white/[0.1] hover:text-white"
+                    className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-white/15 bg-white/[0.04] text-sm leading-none font-semibold text-zinc-200 transition-colors hover:bg-white/[0.1] hover:text-white"
                     title="Add sidebar section"
                     aria-label="Add sidebar section"
                   >
                     +
                   </button>
                   {showAddMenu && (
-                    <div className="absolute left-0 z-50 mt-1 w-max min-w-44 max-w-[calc(100vw-2rem)] rounded-md border border-white/10 bg-[#111218] p-1 shadow-xl">
+                    <div className="absolute left-0 z-50 mt-1 w-max max-w-[calc(100vw-2rem)] min-w-44 rounded-md border border-white/10 bg-[#111218] p-1 shadow-xl">
                       {addableNavItems.length === 0 ? (
                         <div className="px-2 py-1.5 text-xs text-zinc-500">No sections to add</div>
                       ) : (
@@ -591,7 +592,7 @@ export default function Sidebar() {
                   {dragOverLabel === item.label &&
                     draggingLabel !== item.label &&
                     dragOverPosition === 'before' && (
-                      <div className="mx-2 h-[2px] rounded-full bg-gold shadow-[0_0_8px_rgba(212,175,55,0.6)]" />
+                      <div className="bg-gold mx-2 h-[2px] rounded-full shadow-[0_0_8px_rgba(212,175,55,0.6)]" />
                     )}
                   <div className="flex items-stretch gap-1">
                     {isEditMode && !isCollapsed && (
@@ -662,7 +663,7 @@ export default function Sidebar() {
                       } ${
                         isActive
                           ? 'bg-gold/15 text-gold'
-                          : 'text-zinc-200 hover:bg-surface-2 hover:text-white'
+                          : 'hover:bg-surface-2 text-zinc-200 hover:text-white'
                       }`}
                       title={item.label}
                     >
@@ -703,10 +704,10 @@ export default function Sidebar() {
                   {dragOverLabel === item.label &&
                     draggingLabel !== item.label &&
                     dragOverPosition === 'after' && (
-                      <div className="mx-2 h-[2px] rounded-full bg-gold shadow-[0_0_8px_rgba(212,175,55,0.6)]" />
+                      <div className="bg-gold mx-2 h-[2px] rounded-full shadow-[0_0_8px_rgba(212,175,55,0.6)]" />
                     )}
                   {hasChildren && isOpen && !isCollapsed && (
-                    <div className="ml-10 flex flex-col border-l-2 border-border/50 pl-2">
+                    <div className="border-border/50 ml-10 flex flex-col border-l-2 pl-2">
                       {item.children!.map((child) => {
                         const childActive =
                           pathname === child.href || pathname.startsWith(child.href + '/');
@@ -728,7 +729,7 @@ export default function Sidebar() {
                             className={`flex min-h-11 flex-col justify-center rounded-md px-3 py-2 transition-colors ${
                               childActive
                                 ? 'text-gold'
-                                : 'text-zinc-200 hover:bg-surface-2 hover:text-white'
+                                : 'hover:bg-surface-2 text-zinc-200 hover:text-white'
                             }`}
                           >
                             <span className="text-[15px] font-medium">{child.label}</span>
@@ -743,7 +744,7 @@ export default function Sidebar() {
           </div>
           {draggingLabel && dragPointer && (
             <div
-              className="pointer-events-none fixed z-[70] rounded-lg border border-gold/40 bg-[#14151d]/95 px-4 py-3 shadow-[0_16px_30px_rgba(0,0,0,0.45)] ring-1 ring-gold/20"
+              className="border-gold/40 ring-gold/20 pointer-events-none fixed z-[70] rounded-lg border bg-[#14151d]/95 px-4 py-3 shadow-[0_16px_30px_rgba(0,0,0,0.45)] ring-1"
               style={{
                 left: dragPointer.x - dragPointer.offsetX,
                 top: dragPointer.y - dragPointer.offsetY,
@@ -755,7 +756,7 @@ export default function Sidebar() {
             </div>
           )}
           {!isNarrowViewport && (
-            <div className="mb-2 mt-3 flex items-end justify-end">
+            <div className="mt-3 mb-2 flex items-end justify-end">
               <button
                 type="button"
                 onClick={() => setIsCollapsed((v) => !v)}
@@ -768,7 +769,7 @@ export default function Sidebar() {
           )}
         </nav>
 
-        <div className="mt-auto flex flex-col gap-2 border-t border-border/50 px-4 pt-4">
+        <div className="border-border/50 mt-auto flex flex-col gap-2 border-t px-4 pt-4">
           <div className="mt-2 px-2 text-center text-xs text-zinc-400">
             {!isCollapsed ? APP_VERSION_WITH_PREFIX : 'v'}
           </div>
