@@ -18,6 +18,7 @@ The format is based on Keep a Changelog and this project uses semantic versionin
 
 ### Changed
 
+- Header actions are now less crowded: What's New lives in the profile menu, shared-result import is available through App search, and the current page tour uses a standalone help icon outside the mobile More menu.
 - App search now includes Queue, Raids, Saved Routes, Wishlist, Crest Upgrades, analysis tools, and Trinket Heatmaps, while the Analysis navigation group correctly stays active on Trinket Heatmaps.
 - The Raids page now prefers the runtime expansion and raid catalog data shared with Dungeons, while retaining artwork fallbacks and a retry action.
 - The Raids page now retains the complete Blizzard raid catalog across all expansions, assigns missing current-expansion metadata from game context, and shares resilient artwork fallbacks with Drop Finder.

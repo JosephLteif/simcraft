@@ -57,6 +57,12 @@ const commands: PaletteCommand[] = [
     href: '/history',
   },
   {
+    id: 'shared-result',
+    label: 'Open Shared Result',
+    description: 'Import or review a portable simulation result.',
+    href: '/shared-result',
+  },
+  {
     id: 'queue',
     label: 'Open Simulation Queue',
     description: 'Manage pending simulations.',
