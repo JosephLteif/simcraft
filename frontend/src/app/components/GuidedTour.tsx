@@ -126,10 +126,10 @@ export const GUIDED_TOURS: GuidedTourDefinition[] = [
       },
       {
         id: 'whats-new',
-        target: 'whats-new',
-        title: 'Keep up with changes',
+        target: 'profile-menu',
+        title: 'Open What’s New from your profile',
         description:
-          'Open What’s new to read release notes and see the latest improvements without leaving the app.',
+          'Open your profile menu, then choose What’s new to read the latest improvements without leaving the app.',
         placement: 'bottom',
       },
       {
@@ -137,7 +137,7 @@ export const GUIDED_TOURS: GuidedTourDefinition[] = [
         target: 'guided-tour-trigger',
         title: 'Replay tours any time',
         description:
-          'Use this help button whenever you want a refresher. More page-specific tours can be added here as each workflow grows.',
+          'Use this help icon whenever you want a refresher. More page-specific tours can be added here as each workflow grows.',
         placement: 'bottom',
       },
     ],
