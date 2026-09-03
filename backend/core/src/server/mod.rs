@@ -132,8 +132,21 @@ fn admin_security_path(path: &str, method: &Method) -> bool {
 fn public_light_mode_request(req: &ServiceRequest) -> bool {
     let path = req.path();
     let method = req.method();
+    let is_options = *method == Method::OPTIONS;
     let is_read = matches!(*method, Method::GET | Method::OPTIONS);
     let is_write = *method == Method::POST;
+    let is_public_gear_read = matches!(
+        path,
+        "/api/gear/enchant-options"
+            | "/api/gear/gem-options"
+            | "/api/gear/embellishment-options"
+            | "/api/gear/consumable-options"
+    );
+    let is_public_gear_write = matches!(path, "/api/gear/resolve" | "/api/gear/catalyst-convert");
+
+    if is_options && (is_public_gear_read || is_public_gear_write) {
+        return true;
+    }
 
     if path == "/api/sim" {
         return is_write || *method == Method::OPTIONS;
@@ -173,13 +186,13 @@ fn public_light_mode_request(req: &ServiceRequest) -> bool {
             || path.starts_with("/api/instances/")
             || path.starts_with("/api/item-info/")
             || path.starts_with("/api/talent-tree/")
-            || path.starts_with("/api/gear/"))
+            || is_public_gear_read)
     {
         return true;
     }
 
     is_write
-        && matches!(
+        && (matches!(
             path,
             "/api/droptimizer/sim"
                 | "/api/item-info/batch"
@@ -189,8 +202,7 @@ fn public_light_mode_request(req: &ServiceRequest) -> bool {
                 | "/api/upgrade-compare/combo-count"
                 | "/api/upgrade-compare/prepare"
                 | "/api/upgrade-compare/sim"
-        )
-        || path.starts_with("/api/gear/")
+        ) || is_public_gear_write)
 }
 
 fn is_loopback_peer(req: &ServiceRequest) -> bool {
@@ -383,6 +395,39 @@ mod tests {
         assert!(!admin_security_path("/api/config", &Method::GET));
         assert!(admin_security_path("/api/config", &Method::POST));
         assert!(admin_security_path("/api/config", &Method::PUT));
+    }
+
+    #[test]
+    fn light_mode_gear_allowlist_is_method_specific() {
+        assert!(public_light_mode_request(
+            &TestRequest::get()
+                .uri("/api/gear/enchant-options")
+                .to_srv_request()
+        ));
+        assert!(public_light_mode_request(
+            &TestRequest::post()
+                .uri("/api/gear/catalyst-convert")
+                .to_srv_request()
+        ));
+        assert!(public_light_mode_request(
+            &TestRequest::default()
+                .method(Method::OPTIONS)
+                .uri("/api/gear/resolve")
+                .to_srv_request()
+        ));
+        assert!(!public_light_mode_request(
+            &TestRequest::get().uri("/api/gear/resolve").to_srv_request()
+        ));
+        assert!(!public_light_mode_request(
+            &TestRequest::get()
+                .uri("/api/gear/future-read")
+                .to_srv_request()
+        ));
+        assert!(!public_light_mode_request(
+            &TestRequest::post()
+                .uri("/api/gear/future-mutation")
+                .to_srv_request()
+        ));
     }
 
     #[test]

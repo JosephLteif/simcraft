@@ -143,6 +143,8 @@ export default function CommandPalette() {
   const router = useRouter();
   const pathname = usePathname();
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const dialogRef = useRef<HTMLElement | null>(null);
+  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -204,7 +206,39 @@ export default function CommandPalette() {
     if (!open) return;
     setQuery('');
     setSelectedIndex(0);
-    window.setTimeout(() => inputRef.current?.focus(), 0);
+
+    previouslyFocusedRef.current = document.activeElement as HTMLElement | null;
+    const focusable = () =>
+      Array.from(
+        dialogRef.current?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
+        ) || []
+      );
+    const focusTimer = window.setTimeout(() => inputRef.current?.focus(), 0);
+    const handleTab = (event: KeyboardEvent) => {
+      if (event.key !== 'Tab') return;
+      const elements = focusable();
+      if (elements.length === 0) {
+        event.preventDefault();
+        dialogRef.current?.focus();
+        return;
+      }
+      const first = elements[0];
+      const last = elements[elements.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener('keydown', handleTab);
+    return () => {
+      window.clearTimeout(focusTimer);
+      window.removeEventListener('keydown', handleTab);
+      previouslyFocusedRef.current?.focus();
+    };
   }, [open]);
 
   useEffect(() => {
@@ -219,9 +253,11 @@ export default function CommandPalette() {
       onMouseDown={() => setOpen(false)}
     >
       <section
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="command-palette-title"
+        tabIndex={-1}
         className="border-border bg-surface w-full max-w-xl overflow-hidden rounded-xl border shadow-2xl"
         onMouseDown={(event) => event.stopPropagation()}
       >

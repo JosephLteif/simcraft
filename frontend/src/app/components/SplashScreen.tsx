@@ -58,6 +58,7 @@ export default function SplashScreen({
   const [selectedCredentialId, setSelectedCredentialId] = useState('');
   const [saveNewCredentials, setSaveNewCredentials] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [credentialError, setCredentialError] = useState('');
   const [showDebug, setShowDebug] = useState(false);
   const [debugInfo, setDebugInfo] = useState<any>(null);
   const [showDebugButton, setShowDebugButton] = useState(false);
@@ -138,10 +139,11 @@ export default function SplashScreen({
 
   const handleSaveAndLogin = async () => {
     setIsSaving(true);
+    setCredentialError('');
     try {
       if (selectedCredentialId) {
         if (selectedProfile?.has_secret === false) {
-          alert(
+          setCredentialError(
             'These saved Blizzard credentials are missing their secure secret on this device. Re-enter the client secret and save again.'
           );
           setSelectedCredentialId('');
@@ -158,11 +160,15 @@ export default function SplashScreen({
 
       const success = await setSystemCredentials(clientId, clientSecret);
       if (!success) {
-        alert('Failed to save Blizzard API credentials. Please check your inputs.');
+        setCredentialError('Failed to save Blizzard API credentials. Please check your inputs.');
         return;
       }
 
       await login(clientId, clientSecret);
+    } catch (error) {
+      setCredentialError(
+        error instanceof Error ? error.message : 'Could not complete the Blizzard login setup.'
+      );
     } finally {
       setIsSaving(false);
     }
@@ -242,13 +248,13 @@ export default function SplashScreen({
       <DesktopWindowTitleBar overlay />
 
       {/* Background Glows */}
-      <div className="absolute left-1/4 top-1/4 h-96 w-96 animate-pulse rounded-full bg-gold/10 blur-[120px]" />
-      <div className="absolute bottom-1/4 right-1/4 h-96 w-96 animate-pulse rounded-full bg-gold-dark/10 blur-[120px] delay-1000" />
+      <div className="bg-gold/10 absolute top-1/4 left-1/4 h-96 w-96 animate-pulse rounded-full blur-[120px]" />
+      <div className="bg-gold-dark/10 absolute right-1/4 bottom-1/4 h-96 w-96 animate-pulse rounded-full blur-[120px] delay-1000" />
 
       <div className="relative flex min-h-full w-full max-w-md shrink-0 flex-col items-center justify-center px-6 py-12">
         {/* Animated Logo Container */}
         <div className="relative mb-12">
-          <div className="absolute inset-0 animate-pulse rounded-full bg-gold/20 blur-2xl" />
+          <div className="bg-gold/20 absolute inset-0 animate-pulse rounded-full blur-2xl" />
           <img
             src="/icon.png"
             alt="WhyLowDps"
@@ -260,7 +266,7 @@ export default function SplashScreen({
           WhyLowDps
         </h1>
 
-        <p className="mb-8 text-center text-sm font-medium uppercase tracking-wide text-zinc-400">
+        <p className="mb-8 text-center text-sm font-medium tracking-wide text-zinc-400 uppercase">
           Initial Synchronization
         </p>
 
@@ -269,7 +275,7 @@ export default function SplashScreen({
           <div className="flex flex-col items-center">
             {isSyncing ? (
               <div className="w-full">
-                <div className="mb-2 flex items-center justify-between text-[11px] font-bold uppercase tracking-wider">
+                <div className="mb-2 flex items-center justify-between text-[11px] font-bold tracking-wider uppercase">
                   <span className="text-gold">{progressData.task || 'Initializing'}</span>
                   <span className="text-zinc-500">
                     {progressData.total > 0
@@ -281,11 +287,11 @@ export default function SplashScreen({
                 <div className="mb-4 h-2 w-full overflow-hidden rounded-full bg-white/5 ring-1 ring-white/10">
                   {progressData.total > 0 ? (
                     <div
-                      className="shadow-glow-sm h-full bg-gradient-to-r from-gold-dark to-gold transition-all duration-500 ease-out"
+                      className="shadow-glow-sm from-gold-dark to-gold h-full bg-gradient-to-r transition-all duration-500 ease-out"
                       style={{ width: `${progressPercent}%` }}
                     />
                   ) : (
-                    <div className="animate-progress-indefinite shadow-glow-sm h-full bg-gold" />
+                    <div className="animate-progress-indefinite shadow-glow-sm bg-gold h-full" />
                   )}
                 </div>
 
@@ -335,7 +341,7 @@ export default function SplashScreen({
                   <select
                     value={selectedCredentialId}
                     onChange={(event) => setSelectedCredentialId(event.target.value)}
-                    className="mb-3 w-full rounded-xl border border-white/10 bg-zinc-900 px-4 py-3 text-sm text-zinc-100 focus:border-gold/50 focus:outline-none"
+                    className="focus:border-gold/50 mb-3 w-full rounded-xl border border-white/10 bg-zinc-900 px-4 py-3 text-sm text-zinc-100 focus:outline-none"
                     aria-label="Blizzard application credentials"
                   >
                     {usableCredentialProfiles.map((profile) => (
@@ -363,7 +369,7 @@ export default function SplashScreen({
               </div>
             ) : status === 'unauthenticated_needs_keys' ? (
               <div className="w-full space-y-4 text-center">
-                <p className="mb-2 text-xs font-bold uppercase tracking-widest text-zinc-400">
+                <p className="mb-2 text-xs font-bold tracking-widest text-zinc-400 uppercase">
                   Blizzard API Credentials Required
                 </p>
 
@@ -430,14 +436,14 @@ export default function SplashScreen({
                         placeholder="Client ID"
                         value={clientId}
                         onChange={(e) => setClientId(e.target.value)}
-                        className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-zinc-500 transition-colors focus:border-gold/50 focus:outline-none"
+                        className="focus:border-gold/50 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-zinc-500 transition-colors focus:outline-none"
                       />
                       <input
                         type="password"
                         placeholder="Client Secret"
                         value={clientSecret}
                         onChange={(e) => setClientSecret(e.target.value)}
-                        className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-zinc-500 transition-colors focus:border-gold/50 focus:outline-none"
+                        className="focus:border-gold/50 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-zinc-500 transition-colors focus:outline-none"
                       />
                       <label className="flex items-center gap-2 text-left text-[12px] text-zinc-400">
                         <input
@@ -485,7 +491,7 @@ export default function SplashScreen({
                 <button
                   onClick={handleSaveAndLogin}
                   disabled={(!selectedCredentialId && (!clientId || !clientSecret)) || isSaving}
-                  className="flex w-full items-center justify-center gap-3 rounded-xl bg-gold px-4 py-4 text-sm font-bold text-black shadow-lg shadow-gold/20 transition-all hover:bg-gold-light active:scale-95 disabled:opacity-50 disabled:grayscale"
+                  className="bg-gold shadow-gold/20 hover:bg-gold-light flex w-full items-center justify-center gap-3 rounded-xl px-4 py-4 text-sm font-bold text-black shadow-lg transition-all active:scale-95 disabled:opacity-50 disabled:grayscale"
                 >
                   {isSaving ? (
                     <div className="flex items-center gap-2">
@@ -501,6 +507,11 @@ export default function SplashScreen({
                     </>
                   )}
                 </button>
+                {credentialError && (
+                  <p role="alert" className="mt-3 text-left text-xs leading-relaxed text-red-300">
+                    {credentialError}
+                  </p>
+                )}
                 {!isHostedPrivate && (
                   <button
                     onClick={enableLightMode}
@@ -522,7 +533,7 @@ export default function SplashScreen({
                   {!isAutoRetrying && (
                     <>
                       <div className="max-h-16 overflow-auto rounded-lg border border-red-500/20 bg-red-500/5 p-2">
-                        <p className="break-all text-[11px] leading-tight text-red-300">{status}</p>
+                        <p className="text-[11px] leading-tight break-all text-red-300">{status}</p>
                       </div>
                       <div className="space-y-1 text-xs text-zinc-300">
                         <p className="font-semibold text-zinc-200">Manual recovery</p>
@@ -592,18 +603,18 @@ export default function SplashScreen({
         </div>
 
         <div className="mt-12 flex flex-col items-center gap-4">
-          <div className="hidden text-[10px] uppercase tracking-[0.2em] text-zinc-500">
+          <div className="hidden text-[10px] tracking-[0.2em] text-zinc-500 uppercase">
             Version 0.2.4-STABILITY-V2 • Production Ready
           </div>
 
-          <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">
+          <div className="text-[10px] tracking-[0.2em] text-zinc-500 uppercase">
             Version {APP_VERSION_WITH_PREFIX} • Production Ready
           </div>
 
           {showDebugButton && isDesktop && isDebugMode && (
             <button
               onClick={fetchDebugInfo}
-              className="text-[9px] font-bold uppercase tracking-widest text-zinc-700 transition-colors hover:text-gold"
+              className="hover:text-gold text-[9px] font-bold tracking-widest text-zinc-700 uppercase transition-colors"
             >
               Show System Info
             </button>
@@ -632,7 +643,7 @@ export default function SplashScreen({
 
             <div className="space-y-4 font-mono text-xs leading-relaxed">
               <div className="rounded-lg border border-white/5 bg-black/40 p-4">
-                <p className="mb-2 font-bold uppercase tracking-widest text-zinc-500">Data Path</p>
+                <p className="mb-2 font-bold tracking-widest text-zinc-500 uppercase">Data Path</p>
                 <p className={debugInfo.data_exists ? 'text-emerald-400' : 'text-red-400'}>
                   {debugInfo.data_dir}
                 </p>
@@ -642,7 +653,7 @@ export default function SplashScreen({
               </div>
 
               <div className="rounded-lg border border-white/5 bg-black/40 p-4">
-                <p className="mb-2 font-bold uppercase tracking-widest text-zinc-500">SimC Path</p>
+                <p className="mb-2 font-bold tracking-widest text-zinc-500 uppercase">SimC Path</p>
                 <p className={debugInfo.simc_exists ? 'text-emerald-400' : 'text-red-400'}>
                   {debugInfo.simc_dir}
                 </p>
@@ -685,21 +696,21 @@ export default function SplashScreen({
                     {typeof window !== 'undefined' ? window.location.href : 'N/A'}
                   </span>
                 </div>
-                <div className="overflow-hidden whitespace-nowrap rounded-lg border border-white/5 bg-black/40 p-4">
-                  <p className="mb-1 font-bold uppercase tracking-widest text-zinc-500">API URL</p>
+                <div className="overflow-hidden rounded-lg border border-white/5 bg-black/40 p-4 whitespace-nowrap">
+                  <p className="mb-1 font-bold tracking-widest text-zinc-500 uppercase">API URL</p>
                   <p className="text-zinc-300">{API_URL}</p>
                 </div>
               </div>
 
               <div className="rounded-lg border border-white/5 bg-black/40 p-4">
-                <p className="mb-1 font-bold uppercase tracking-widest text-zinc-500">
+                <p className="mb-1 font-bold tracking-widest text-zinc-500 uppercase">
                   Executable Path
                 </p>
-                <p className="break-all text-[10px] text-zinc-400">{debugInfo.exe_path}</p>
+                <p className="text-[10px] break-all text-zinc-400">{debugInfo.exe_path}</p>
               </div>
             </div>
 
-            <p className="mt-6 text-center text-[10px] italic text-zinc-600">
+            <p className="mt-6 text-center text-[10px] text-zinc-600 italic">
               Please provide a screenshot of this screen if you are still experiencing issues.
             </p>
           </div>

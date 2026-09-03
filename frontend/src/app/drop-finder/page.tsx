@@ -50,11 +50,7 @@ import {
   resolveUpgrade,
 } from './types';
 import { parseCharacterInfo } from '@/lib/simc-parser';
-import {
-  buildWishlistOwnerKey,
-  loadDropWishlist,
-  toggleWishlistEntry,
-} from '../lib/wishlist';
+import { buildWishlistOwnerKey, loadDropWishlist, toggleWishlistEntry } from '../lib/wishlist';
 
 type Category = 'raids' | string;
 type SimDropItem = DropItem & { slot?: string };
@@ -80,7 +76,7 @@ interface DropFinderSimAgainState {
 function Spinner() {
   return (
     <div className="flex justify-center py-8">
-      <Loader2 className="h-6 w-6 animate-spin text-gold" strokeWidth={2} />
+      <Loader2 className="text-gold h-6 w-6 animate-spin" strokeWidth={2} />
     </div>
   );
 }
@@ -106,7 +102,10 @@ export default function DropFinderPage() {
     const detected = detectSpec(simcInput);
     if (detected) return detected;
     if (parsedCharacter?.kind !== 'character' || parsedCharacter.spec === 'unknown') return null;
-    return parsedCharacter.spec.trim().toLowerCase().replace(/[\s-]+/g, '_');
+    return parsedCharacter.spec
+      .trim()
+      .toLowerCase()
+      .replace(/[\s-]+/g, '_');
   }, [simcInput, parsedCharacter]);
   const [runtimeClasses, setRuntimeClasses] = useState<RuntimeClassInfo[]>([]);
 
@@ -175,21 +174,27 @@ export default function DropFinderPage() {
     setSelectedId,
     drops,
     loading,
+    dropState,
+    dropError,
+    catalogLoading,
+    catalogError,
+    retryCatalog,
     raids,
     dungeonCats,
     className,
   } = useDropFinderData(simcInput, activeSpecs);
 
-  const hasCharacter = simcInput.trim().length >= 10;
+  const hasCharacter = parsedCharacter?.kind === 'character';
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [wishlistIds, setWishlistIds] = useState<Set<number>>(new Set());
   const [difficulty, setDifficulty] = useState('heroic');
   const [dungeonDiff, setDungeonDiff] = useState('mythic+10');
   const [upgradeLevel, setUpgradeLevel] = useState(0);
-  const [upgradeSimulationMode, setUpgradeSimulationMode] = useState<UpgradeSimulationMode>(() =>
-    getAppDefaultOption('dropfinder.upgradeMode', {
-      characterKey: characterDefaultsKey,
-    }) as UpgradeSimulationMode
+  const [upgradeSimulationMode, setUpgradeSimulationMode] = useState<UpgradeSimulationMode>(
+    () =>
+      getAppDefaultOption('dropfinder.upgradeMode', {
+        characterKey: characterDefaultsKey,
+      }) as UpgradeSimulationMode
   );
   const [autoCatalyze, setAutoCatalyze] = useState(() =>
     getAppDefaultOption('dropfinder.autoCatalyst', { characterKey: characterDefaultsKey })
@@ -330,9 +335,7 @@ export default function DropFinderPage() {
   const allRaidsSelected = isRaid && selectedId === allKey;
 
   const selectedInstance =
-    selectedId &&
-    !selectedId.startsWith('type:') &&
-    !selectedId.startsWith('ids:')
+    selectedId && !selectedId.startsWith('type:') && !selectedId.startsWith('ids:')
       ? instances.find((i) => String(i.id) === selectedId)
       : null;
 
@@ -466,16 +469,13 @@ export default function DropFinderPage() {
 
           if (autoCatalyze && item.can_catalyst) {
             const convertSlot =
-              slot === 'Other' ? slotFromInventoryType(item.inventory_type) : slotLabelToSimSlot(slot);
+              slot === 'Other'
+                ? slotFromInventoryType(item.inventory_type)
+                : slotLabelToSimSlot(slot);
             if (!convertSlot) continue;
             // Catalyst conversion for a given class/slot resolves to the same tier target item.
             // Count one catalyst candidate per resulting slot+upgrade state, not per source item.
-            const catalystKey = [
-              convertSlot,
-              resolved.ilvl,
-              baseBonusKey,
-              1,
-            ].join('|');
+            const catalystKey = [convertSlot, resolved.ilvl, baseBonusKey, 1].join('|');
             if (!seen.has(catalystKey)) {
               seen.add(catalystKey);
               autoCatalystCombos += 1;
@@ -533,8 +533,7 @@ export default function DropFinderPage() {
   const toggleDungeonSelection = useCallback(
     (instanceId: string) => {
       if (!isDungeon) return;
-      const next =
-        selectedId === allKey ? new Set<string>() : new Set(selectedDungeonIds);
+      const next = selectedId === allKey ? new Set<string>() : new Set(selectedDungeonIds);
       if (next.has(instanceId)) next.delete(instanceId);
       else next.add(instanceId);
 
@@ -597,9 +596,7 @@ export default function DropFinderPage() {
   const selectionChips = useMemo(() => {
     if (isRaid) {
       if (allRaidsSelected) return ['All Raids'];
-      return raids
-        .filter((inst) => selectedRaidIds.has(String(inst.id)))
-        .map((inst) => inst.name);
+      return raids.filter((inst) => selectedRaidIds.has(String(inst.id))).map((inst) => inst.name);
     }
     if (isDungeon) {
       const allLabel = `All ${activeDungeonCat?.cat.label ?? 'Dungeons'}`;
@@ -631,7 +628,8 @@ export default function DropFinderPage() {
       const inst = raids.find((item) => String(item.id) === onlyId);
       return inst?.name ?? '';
     }
-    if (isDungeon && selectedId === allKey) return `All ${activeDungeonCat?.cat.label ?? 'Dungeons'}`;
+    if (isDungeon && selectedId === allKey)
+      return `All ${activeDungeonCat?.cat.label ?? 'Dungeons'}`;
     if (isDungeon && selectedDungeonIds.size > 1) return `${selectedDungeonIds.size} Dungeons`;
     if (isDungeon && selectedDungeonIds.size === 1) {
       const [onlyId] = [...selectedDungeonIds];
@@ -708,19 +706,22 @@ export default function DropFinderPage() {
                   : slotLabelToSimSlot(slot);
               if (convertSlot) {
                 try {
-                  const catalyzed = await fetchJson<SimDropItem>(`${API_URL}/api/gear/catalyst-convert`, {
-                    method: 'POST',
-                    body: JSON.stringify({
-                      class_name: className,
-                      slot: convertSlot,
-                      item: {
-                        ...item,
-                        ilevel: resolved.ilvl,
-                        quality: resolved.quality,
-                        bonus_ids: resolved.bonus_id ? [resolved.bonus_id] : [],
-                      },
-                    }),
-                  });
+                  const catalyzed = await fetchJson<SimDropItem>(
+                    `${API_URL}/api/gear/catalyst-convert`,
+                    {
+                      method: 'POST',
+                      body: JSON.stringify({
+                        class_name: className,
+                        slot: convertSlot,
+                        item: {
+                          ...item,
+                          ilevel: resolved.ilvl,
+                          quality: resolved.quality,
+                          bonus_ids: resolved.bonus_id ? [resolved.bonus_id] : [],
+                        },
+                      }),
+                    }
+                  );
                   pushCandidate({
                     ...catalyzed,
                     slot: catalyzed.slot || convertSlot,
@@ -755,16 +756,12 @@ export default function DropFinderPage() {
   ]);
 
   const validate = useCallback(() => {
+    if (!hasCharacter) return 'Paste a full SimC character export before simulating drops.';
     if (!drops || selected.size === 0) return 'Select at least one item to sim.';
     return null;
-  }, [drops, selected]);
+  }, [drops, hasCharacter, selected]);
 
-  const {
-    submit,
-    submitting,
-    error,
-    buttonLabel,
-  } = useSimSubmit({
+  const { submit, submitting, error, buttonLabel } = useSimSubmit({
     endpoint: '/api/droptimizer/sim',
     buildPayload,
     validate,
@@ -785,9 +782,12 @@ export default function DropFinderPage() {
     },
   });
 
-  const handleSubmit = useCallback((threadsOverride?: number) => {
-    void submit({ threadsOverride });
-  }, [submit]);
+  const handleSubmit = useCallback(
+    (threadsOverride?: number) => {
+      void submit({ threadsOverride });
+    },
+    [submit]
+  );
 
   const submitLabel = !hasCharacter
     ? 'Paste SimC export to simulate'
@@ -804,6 +804,26 @@ export default function DropFinderPage() {
           onDismiss={() => setReturnNotice(null)}
         />
       ) : null}
+      {catalogError && (
+        <div
+          role="alert"
+          className="flex items-center justify-between gap-3 rounded-lg border border-amber-400/25 bg-amber-400/10 px-4 py-3 text-sm text-amber-100"
+        >
+          <span>{catalogError}</span>
+          <button
+            type="button"
+            onClick={retryCatalog}
+            className="shrink-0 font-semibold text-amber-200 hover:text-white"
+          >
+            Try again
+          </button>
+        </div>
+      )}
+      {catalogLoading && (
+        <p className="text-xs text-zinc-500" role="status" aria-live="polite">
+          Loading current raid and dungeon data...
+        </p>
+      )}
       <CategorySelector
         category={category}
         onChange={(key) => {
@@ -831,7 +851,7 @@ export default function DropFinderPage() {
           />
           {(isRaid || isDungeon) && (
             <div className="card space-y-3 p-4">
-              <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+              <p className="text-xs font-semibold tracking-wider text-zinc-400 uppercase">
                 {selectionSummaryLabel}
               </p>
               {selectionChips.length > 0 && (
@@ -839,7 +859,7 @@ export default function DropFinderPage() {
                   {selectionChips.map((chip) => (
                     <span
                       key={chip}
-                      className="rounded-md border border-gold/30 bg-gold/10 px-2 py-1 text-xs font-semibold text-gold"
+                      className="border-gold/30 bg-gold/10 text-gold rounded-md border px-2 py-1 text-xs font-semibold"
                     >
                       {chip}
                     </span>
@@ -913,7 +933,7 @@ export default function DropFinderPage() {
           )}
           {(isRaid || isDungeon) && (
             <div className="mt-4 space-y-3 rounded-lg border border-white/10 bg-white/[0.02] p-3">
-              <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+              <p className="text-xs font-semibold tracking-wider text-zinc-400 uppercase">
                 {selectionSummaryLabel}
               </p>
               {selectionChips.length > 0 && (
@@ -921,7 +941,7 @@ export default function DropFinderPage() {
                   {selectionChips.map((chip) => (
                     <span
                       key={chip}
-                      className="rounded-md border border-gold/30 bg-gold/10 px-2 py-1 text-xs font-semibold text-gold"
+                      className="border-gold/30 bg-gold/10 text-gold rounded-md border px-2 py-1 text-xs font-semibold"
                     >
                       {chip}
                     </span>
@@ -965,13 +985,13 @@ export default function DropFinderPage() {
                     }`}
                   >
                     <span
-                      className={`text-lg font-black leading-none ${isActive && tc ? tc.text : isActive ? 'text-gold' : 'text-zinc-200'}`}
+                      className={`text-lg leading-none font-black ${isActive && tc ? tc.text : isActive ? 'text-gold' : 'text-zinc-200'}`}
                     >
                       {d.label}
                     </span>
                     {ilvl && (
                       <span
-                        className={`mt-1.5 text-[13px] font-semibold tabular-nums tracking-wide ${isActive ? 'text-zinc-100' : 'text-zinc-300'}`}
+                        className={`mt-1.5 text-[13px] font-semibold tracking-wide tabular-nums ${isActive ? 'text-zinc-100' : 'text-zinc-300'}`}
                       >
                         ilvl {ilvl}
                       </span>
@@ -990,7 +1010,6 @@ export default function DropFinderPage() {
               })}
             </div>
           </div>
-
         </div>
       )}
 
@@ -1009,8 +1028,9 @@ export default function DropFinderPage() {
                 <div className="mt-1.5 flex flex-col gap-1 text-[13px] sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                   <p className="truncate text-zinc-300">
                     {
-                      UPGRADE_SIMULATION_MODE_OPTIONS.find((mode) => mode.value === upgradeSimulationMode)
-                        ?.desc
+                      UPGRADE_SIMULATION_MODE_OPTIONS.find(
+                        (mode) => mode.value === upgradeSimulationMode
+                      )?.desc
                     }
                   </p>
                   {currentTrackInfo?.name && (
@@ -1043,11 +1063,11 @@ export default function DropFinderPage() {
         <div className="flex flex-wrap items-center gap-2">
           <p className="text-sm text-zinc-300">
             Showing loot for{' '}
-            <span className="font-semibold text-gold">{className.replace('_', ' ')}</span>
+            <span className="text-gold font-semibold">{className.replace('_', ' ')}</span>
           </p>
           {allSpecs.length > 1 && (
             <>
-              <span className="h-3.5 w-px bg-border" />
+              <span className="bg-border h-3.5 w-px" />
               <div className="flex flex-wrap gap-1">
                 {allSpecs.map((spec) => {
                   const isActive = activeSpecs.has(spec);
@@ -1072,21 +1092,23 @@ export default function DropFinderPage() {
           )}
         </div>
       ) : (
-        <p className="text-sm text-muted">
+        <p className="text-muted text-sm">
           Paste a SimC export above to filter drops for your class.
         </p>
       )}
 
-      {loading && !drops && <Spinner />}
+      {dropState === 'loading' && !drops && <Spinner />}
 
-      {loading && drops && (
+      {dropState === 'loading' && drops && (
         <div className="flex items-center justify-center py-2">
-          <Loader2 className="h-4 w-4 animate-spin text-gold" strokeWidth={2} />
+          <Loader2 className="text-gold h-4 w-4 animate-spin" strokeWidth={2} />
         </div>
       )}
 
-      {!loading && selectedId && !drops && (
-        <p className="py-6 text-center text-sm text-muted">
+      {dropState === 'error' && <ErrorAlert message={dropError || 'Could not load drops.'} />}
+
+      {dropState === 'empty' && selectedId && (
+        <p className="text-muted py-6 text-center text-sm">
           No equippable drops found for this instance.
         </p>
       )}
@@ -1147,7 +1169,7 @@ export default function DropFinderPage() {
 
           <ErrorAlert message={error} />
 
-          <div className="mobile-safe-bottom sticky bottom-0 z-50 -mx-4 bg-gradient-to-t from-[#111] via-[#111] to-transparent px-4 pb-4 pt-6 sm:-mx-6 sm:px-6">
+          <div className="mobile-safe-bottom sticky bottom-0 z-50 -mx-4 bg-gradient-to-t from-[#111] via-[#111] to-transparent px-4 pt-6 pb-4 sm:-mx-6 sm:px-6">
             <SimulationLaunchButton
               onSubmit={handleSubmit}
               dataTour="drop-finder-submit"
@@ -1168,7 +1190,7 @@ export default function DropFinderPage() {
       )}
 
       {!selectedId && !loading && !category && (
-        <p className="py-6 text-center text-sm text-muted">Select a category to get started.</p>
+        <p className="text-muted py-6 text-center text-sm">Select a category to get started.</p>
       )}
     </div>
   );

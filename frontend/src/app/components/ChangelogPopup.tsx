@@ -1,7 +1,7 @@
 'use client';
 
 import { X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   CHANGELOG_CATEGORY_LABELS,
   CHANGELOG_CATEGORY_ORDER,
@@ -20,6 +20,8 @@ const releaseNotes = LATEST_CHANGELOG_RELEASE.entries;
 
 export default function ChangelogPopup() {
   const [isOpen, setIsOpen] = useState(false);
+  const dialogRef = useRef<HTMLElement | null>(null);
+  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     const seen = localStorage.getItem(seenKey) === '1';
@@ -32,10 +34,55 @@ export default function ChangelogPopup() {
     return () => window.removeEventListener(CHANGELOG_OPEN_EVENT, open);
   }, []);
 
-  const dismiss = () => {
-    localStorage.setItem(seenKey, '1');
+  const dismiss = useCallback(() => {
+    try {
+      localStorage.setItem(seenKey, '1');
+    } catch {}
     setIsOpen(false);
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    previouslyFocusedRef.current = document.activeElement as HTMLElement | null;
+    const dialog = dialogRef.current;
+    const focusable = () =>
+      Array.from(
+        dialog?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        ) || []
+      );
+    focusable()[0]?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        dismiss();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const elements = focusable();
+      if (elements.length === 0) {
+        event.preventDefault();
+        dialog?.focus();
+        return;
+      }
+      const first = elements[0];
+      const last = elements[elements.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      previouslyFocusedRef.current?.focus();
+    };
+  }, [dismiss, isOpen]);
 
   if (!isOpen) return null;
 
@@ -45,9 +92,11 @@ export default function ChangelogPopup() {
       style={{ top: 'var(--app-header-height)' }}
     >
       <section
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="changelog-title"
+        tabIndex={-1}
         className="flex max-h-[min(800px,calc(100vh-var(--app-header-height)-3rem))] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-white/10 bg-[#111218] shadow-2xl"
       >
         <header className="relative isolate z-10 shrink-0 overflow-hidden border-b border-white/10 bg-[#111218] px-6 py-8 shadow-[0_8px_20px_-18px_rgba(0,0,0,0.9)] sm:px-8 sm:py-9">
@@ -57,14 +106,14 @@ export default function ChangelogPopup() {
           />
           <div className="relative flex items-start justify-between gap-6">
             <div className="flex items-center gap-4">
-              <span className="inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-gold/40 bg-gold/10 font-mono text-lg font-black tracking-tight text-gold shadow-[0_0_24px_rgba(212,168,67,0.14)]">
+              <span className="border-gold/40 bg-gold/10 text-gold inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border font-mono text-lg font-black tracking-tight shadow-[0_0_24px_rgba(212,168,67,0.14)]">
                 v
               </span>
               <div>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-gold/75">
+                <p className="text-gold/75 text-[10px] font-semibold tracking-[0.2em] uppercase">
                   What&apos;s new · WhyLowDPS release
                 </p>
-                <p className="mt-0.5 font-mono text-2xl font-black tracking-tight text-gold">
+                <p className="text-gold mt-0.5 font-mono text-2xl font-black tracking-tight">
                   {LATEST_CHANGELOG_RELEASE.version}
                 </p>
                 <p className="mt-2 text-sm text-zinc-400">
@@ -97,23 +146,23 @@ export default function ChangelogPopup() {
                   <div className="mb-3 flex items-center gap-3">
                     <h3
                       id={`changelog-${category}`}
-                      className="text-xs font-bold uppercase tracking-[0.18em] text-gold"
+                      className="text-gold text-xs font-bold tracking-[0.18em] uppercase"
                     >
                       {CHANGELOG_CATEGORY_LABELS[category]}
                     </h3>
-                    <div className="h-px flex-1 bg-gradient-to-r from-gold/25 to-transparent" />
+                    <div className="from-gold/25 h-px flex-1 bg-gradient-to-r to-transparent" />
                   </div>
                   <div className="space-y-3">
                     {notes.map((note) => (
                       <div
                         key={note.title}
-                        className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-4 transition-colors hover:border-gold/25"
+                        className="hover:border-gold/25 rounded-xl border border-white/[0.08] bg-white/[0.025] p-4 transition-colors"
                       >
                         <h4 className="text-base font-semibold text-zinc-100">{note.title}</h4>
                         <div className="mt-3 space-y-3 text-sm leading-6 text-zinc-300">
                           <p>{note.summary}</p>
                           {note.items && (
-                            <ul className="list-disc space-y-2 pl-5 marker:text-gold">
+                            <ul className="marker:text-gold list-disc space-y-2 pl-5">
                               {note.items.map((item) => (
                                 <li key={item}>{item}</li>
                               ))}
@@ -141,7 +190,7 @@ export default function ChangelogPopup() {
           <button
             type="button"
             onClick={dismiss}
-            className="rounded-md border border-gold/35 bg-gold/15 px-4 py-2 text-sm font-semibold text-gold transition-colors hover:bg-gold/25"
+            className="border-gold/35 bg-gold/15 text-gold hover:bg-gold/25 rounded-md border px-4 py-2 text-sm font-semibold transition-colors"
           >
             Got it
           </button>

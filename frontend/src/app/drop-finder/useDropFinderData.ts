@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { API_URL, fetchJson } from '../lib/api';
 import type { SeasonConfigResponse, DungeonCategory } from '../lib/types';
 import { parseCharacterInfo } from '../../lib/simc-parser';
@@ -12,15 +12,28 @@ import {
 } from './types';
 import { coerceDropsResponse, FALLBACK_SEASON_CONFIG, parseInstanceSelectionIds } from './utils';
 
+function errorMessage(error: unknown, fallback: string): string {
+  if (typeof error === 'string' && error.trim()) return error;
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
 export function useDropFinderData(simcInput: string, activeSpecs: Set<string>) {
   const [instances, setInstances] = useState<Instance[]>([]);
   const [seasonConfig, setSeasonConfig] = useState<SeasonConfigResponse | null>(
-    FALLBACK_SEASON_CONFIG,
+    FALLBACK_SEASON_CONFIG
   );
   const [upgradeTracks, setUpgradeTracks] = useState<UpgradeTracks>({});
   const [selectedId, setSelectedId] = useState('');
   const [drops, setDrops] = useState<Record<string, DropItem[]> | null>(null);
   const [loading, setLoading] = useState(false);
+  const [dropState, setDropState] = useState<'idle' | 'loading' | 'ready' | 'empty' | 'error'>(
+    'idle'
+  );
+  const [dropError, setDropError] = useState<string | null>(null);
+  const [catalogLoading, setCatalogLoading] = useState(true);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [catalogReloadKey, setCatalogReloadKey] = useState(0);
+  const dropRequestIdRef = useRef(0);
 
   const parsedCharacter = useMemo(() => parseCharacterInfo(simcInput), [simcInput]);
   const className = useMemo(() => {
@@ -38,7 +51,10 @@ export function useDropFinderData(simcInput: string, activeSpecs: Set<string>) {
     const detected = detectSpec(simcInput);
     if (detected) return detected;
     if (parsedCharacter?.kind !== 'character' || parsedCharacter.spec === 'unknown') return null;
-    return parsedCharacter.spec.trim().toLowerCase().replace(/[\s-]+/g, '_');
+    return parsedCharacter.spec
+      .trim()
+      .toLowerCase()
+      .replace(/[\s-]+/g, '_');
   }, [simcInput, parsedCharacter]);
 
   const specParam = useMemo(() => [...activeSpecs].sort().join(','), [activeSpecs]);
@@ -46,44 +62,61 @@ export function useDropFinderData(simcInput: string, activeSpecs: Set<string>) {
   useEffect(() => {
     let cancelled = false;
 
-    const loadSeasonConfig = async () => {
-      for (let attempt = 0; attempt < 3; attempt += 1) {
+    async function fetchWithRetries<T>(url: string, attempts: number, delayMs: number): Promise<T> {
+      let lastError: unknown = new Error('Request failed');
+      for (let attempt = 0; attempt < attempts; attempt += 1) {
         try {
-          const data = await fetchJson<SeasonConfigResponse>(`${API_URL}/api/season-config`);
-          if (!cancelled) setSeasonConfig(data);
-          return;
-        } catch {
-          if (attempt < 2) {
-            await new Promise((resolve) => window.setTimeout(resolve, 400 * (attempt + 1)));
+          return await fetchJson<T>(url);
+        } catch (error) {
+          lastError = error;
+          if (attempt + 1 < attempts) {
+            await new Promise((resolve) => window.setTimeout(resolve, delayMs * (attempt + 1)));
           }
         }
       }
-    };
+      throw lastError;
+    }
 
-    const loadUpgradeTracks = async () => {
-      for (let attempt = 0; attempt < 5; attempt += 1) {
-        try {
-          const data = await fetchJson<unknown>(`${API_URL}/api/upgrade-tracks`);
+    setCatalogLoading(true);
+    setCatalogError(null);
+
+    const loadCatalog = async () => {
+      const [seasonResult, tracksResult, instancesResult] = await Promise.allSettled([
+        fetchWithRetries<SeasonConfigResponse>(`${API_URL}/api/season-config`, 3, 400),
+        fetchWithRetries<unknown>(`${API_URL}/api/upgrade-tracks`, 5, 350).then((data) => {
           const normalized = normalizeUpgradeTracks(data);
-          if (!cancelled) setUpgradeTracks(normalized);
-          if (Object.keys(normalized).length > 0) return;
-        } catch {
-          // retry below
-        }
-        if (attempt < 4) {
-          await new Promise((resolve) => window.setTimeout(resolve, 350 * (attempt + 1)));
-        }
-      }
+          if (Object.keys(normalized).length === 0) {
+            throw new Error('Upgrade-track data was empty.');
+          }
+          return normalized;
+        }),
+        fetchWithRetries<Instance[]>(`${API_URL}/api/instances`, 3, 400),
+      ]);
+
+      if (cancelled) return;
+
+      const failures: string[] = [];
+      if (seasonResult.status === 'fulfilled') setSeasonConfig(seasonResult.value);
+      else failures.push('season configuration');
+      if (tracksResult.status === 'fulfilled') setUpgradeTracks(tracksResult.value);
+      else failures.push('upgrade tracks');
+      if (instancesResult.status === 'fulfilled') setInstances(instancesResult.value);
+      else failures.push('raid and dungeon catalog');
+
+      setCatalogError(
+        failures.length > 0
+          ? `Could not load ${failures.join(', ')}. Some drop-finder options may be unavailable.`
+          : null
+      );
+      setCatalogLoading(false);
     };
 
-    void loadSeasonConfig();
-    void loadUpgradeTracks();
-    fetchJson<Instance[]>(`${API_URL}/api/instances`).then(setInstances).catch(() => {});
+    void loadCatalog();
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [catalogReloadKey]);
 
   const { raids, dungeonCats } = useMemo(() => {
     if (!seasonConfig) {
@@ -145,12 +178,22 @@ export function useDropFinderData(simcInput: string, activeSpecs: Set<string>) {
   }, [instances, seasonConfig]);
 
   useEffect(() => {
+    const requestId = ++dropRequestIdRef.current;
+    const isCurrentRequest = () => dropRequestIdRef.current === requestId;
+
     if (!selectedId) {
       setDrops(null);
-      return;
+      setLoading(false);
+      setDropState('idle');
+      setDropError(null);
+      return () => {
+        if (isCurrentRequest()) dropRequestIdRef.current += 1;
+      };
     }
 
     setLoading(true);
+    setDropState('loading');
+    setDropError(null);
     const params = new URLSearchParams();
     if (className) params.set('class_name', className);
     if (specParam) params.set('spec', specParam);
@@ -165,7 +208,11 @@ export function useDropFinderData(simcInput: string, activeSpecs: Set<string>) {
       if (!ids) {
         setDrops(null);
         setLoading(false);
-        return;
+        setDropState('empty');
+        setDropError(null);
+        return () => {
+          if (isCurrentRequest()) dropRequestIdRef.current += 1;
+        };
       }
       params.set('ids', ids);
       url = `${API_URL}/api/instances/drops`;
@@ -176,12 +223,33 @@ export function useDropFinderData(simcInput: string, activeSpecs: Set<string>) {
     const query = params.toString();
     fetchJson<unknown>(`${url}${query ? `?${query}` : ''}`)
       .then((data) => {
+        if (!isCurrentRequest()) return;
         const maybeDetail = (data as { detail?: unknown })?.detail;
-        setDrops(maybeDetail ? null : coerceDropsResponse(data));
+        if (maybeDetail) {
+          throw new Error(errorMessage(maybeDetail, 'The drop list could not be loaded.'));
+        }
+        const nextDrops = coerceDropsResponse(data);
+        setDrops(nextDrops);
+        setDropState(nextDrops ? 'ready' : 'empty');
       })
-      .catch(() => setDrops(null))
-      .finally(() => setLoading(false));
+      .catch((error) => {
+        if (!isCurrentRequest()) return;
+        setDrops(null);
+        setDropState('error');
+        setDropError(errorMessage(error, 'Could not load drops for this selection.'));
+      })
+      .finally(() => {
+        if (isCurrentRequest()) setLoading(false);
+      });
+
+    return () => {
+      if (isCurrentRequest()) dropRequestIdRef.current += 1;
+    };
   }, [selectedId, className, specParam]);
+
+  const retryCatalog = useCallback(() => {
+    setCatalogReloadKey((key) => key + 1);
+  }, []);
 
   return {
     instances,
@@ -191,6 +259,11 @@ export function useDropFinderData(simcInput: string, activeSpecs: Set<string>) {
     setSelectedId,
     drops,
     loading,
+    dropState,
+    dropError,
+    catalogLoading,
+    catalogError,
+    retryCatalog,
     raids,
     dungeonCats,
     className,

@@ -28,6 +28,14 @@ Core pages are easier to discover and recover when runtime game data or a networ
 - Raids now prefer the same runtime expansion and raid catalog data used by Dungeons, while retaining artwork fallbacks and a retry action.
 - Saved Routes now reports load, save, delete, and clipboard failures through in-app notifications instead of browser alerts.
 
+#### Make simulation recovery states actionable
+
+Simulation workflows now expose the state needed to recover from unavailable services, saved-input edge cases, and failed settings updates.
+
+- History character filters preserve names and realms containing hyphens, and reruns open the matching tool for Top Gear, Drop Finder, analysis, and upgrade simulations.
+- Drop Finder distinguishes catalog loading, empty results, and request failures, retries catalog requests, ignores stale responses, and blocks launch until a full character export is parsed.
+- Settings now reports failed simulation-setting loads and saves, retries stale loads safely, and rolls failed changes back to the last confirmed value.
+
 #### Monitor and manage simulation queues
 
 Simulation runs now support a configurable parallel-job limit, with clear queue visibility across desktop, hosted Docker, and the dashboard.
@@ -128,6 +136,14 @@ The login screen now keeps the WhyLowDps logo visible on short desktop and mobil
 
 - Prevented overflowing login content from being centered above the viewport.
 - Preserved the centered layout when the full screen fits.
+
+#### Surface data and UI failures safely
+
+Data synchronization and common dialogs now make failures visible and keep keyboard users oriented.
+
+- Initial game-data synchronization reports backend and status failures with a manual recovery action instead of leaving a misleading automatic-retry state; hidden tabs no longer continue background polling.
+- Light mode now exposes only the explicit public gear catalog and conversion endpoints, keeping other gear paths protected.
+- Route copy and credential setup errors use in-app feedback, while changelog, command-palette, loot, and route dialogs restore focus and support keyboard dismissal.
 
 ## v5.0.1 — 2026-08-31 — Release notes for v5.0.1
 

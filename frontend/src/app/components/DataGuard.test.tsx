@@ -30,7 +30,21 @@ vi.mock('@tauri-apps/api/core', () => ({
 }));
 
 vi.mock('./SplashScreen', () => ({
-  default: ({ status }: { status: string }) => <div data-testid="splash">{status}</div>,
+  default: ({
+    status,
+    retriesRemaining,
+    onRetry,
+  }: {
+    status: string;
+    retriesRemaining?: number;
+    onRetry?: () => void;
+  }) => (
+    <>
+      <div data-testid="splash">{status}</div>
+      <div data-testid="retries-remaining">{retriesRemaining ?? 0}</div>
+      {onRetry && <button onClick={onRetry}>Retry</button>}
+    </>
+  ),
 }));
 
 import DataGuard from './DataGuard';
@@ -66,6 +80,31 @@ describe('DataGuard auth gating', () => {
       expect(screen.getByText('App content')).toBeInTheDocument();
     });
     expect(screen.queryByTestId('splash')).not.toBeInTheDocument();
+  });
+
+  it('shows a failed sync POST as a manual-retry error instead of a stuck auto-retry state', async () => {
+    mocks.useAuth.mockReturnValue({
+      user: { battletag: 'User#1234' },
+      loading: false,
+      lightMode: false,
+      checkCredentialsStatus: vi.fn().mockResolvedValue({ globally_configured: true }),
+    });
+    mocks.fetchJson.mockImplementation((url: string) => {
+      if (url.endsWith('/api/data/status')) return Promise.reject(new Error('status unavailable'));
+      if (url.endsWith('/api/data/sync')) return Promise.reject(new Error('sync unavailable'));
+      if (url.endsWith('/api/data/files')) return Promise.resolve({ files: [] });
+      return Promise.resolve({});
+    });
+
+    render(
+      <DataGuard>
+        <div>App content</div>
+      </DataGuard>
+    );
+
+    await waitFor(() => expect(screen.getByTestId('splash')).toHaveTextContent('error'));
+    expect(screen.getByTestId('retries-remaining')).toHaveTextContent('0');
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
   });
 
   it('prioritizes LAN pairing over credential entry and Light mode', () => {
@@ -130,9 +169,7 @@ describe('DataGuard auth gating', () => {
     );
 
     await waitFor(() => {
-      expect(mocks.fetchJson).toHaveBeenCalledWith(
-        expect.stringContaining('/api/data/files')
-      );
+      expect(mocks.fetchJson).toHaveBeenCalledWith(expect.stringContaining('/api/data/files'));
     });
     act(() => {
       window.dispatchEvent(
@@ -288,7 +325,7 @@ describe('DataGuard auth gating', () => {
 
     expect(mocks.fetchJson).toHaveBeenCalledWith(
       expect.stringContaining('/api/data/files/missing/download'),
-      { method: 'POST', timeoutMs: 120_000 },
+      { method: 'POST', timeoutMs: 120_000 }
     );
   });
 
