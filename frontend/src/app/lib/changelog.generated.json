@@ -1,5 +1,5 @@
 {
-  "contentRevision": "Unreleased-5cf9f99a1c82",
+  "contentRevision": "Unreleased-15b11de02bd2",
   "releases": [
     {
       "version": "Unreleased",
@@ -26,6 +26,16 @@
             "The Analysis navigation group stays active while browsing Trinket Heatmaps.",
             "Raids now prefer the same runtime expansion and raid catalog data used by Dungeons, while retaining artwork fallbacks and a retry action.",
             "Saved Routes now reports load, save, delete, and clipboard failures through in-app notifications instead of browser alerts."
+          ]
+        },
+        {
+          "category": "improvement",
+          "title": "Preserve complete raid catalogs and artwork",
+          "summary": "Raid browsing now keeps historical and current content available even when runtime data is incomplete.",
+          "items": [
+            "The Raids page retains the complete Blizzard raid catalog across every expansion instead of replacing it with only active-season rows.",
+            "Current raids identified by game-context encounter or instance IDs are assigned to the active expansion when the catalog omits that metadata.",
+            "Drop Finder and Raids share ordered artwork fallbacks and recover from failed image requests instead of leaving current raid tiles blank."
           ]
         },
         {

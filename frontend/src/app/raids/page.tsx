@@ -2,38 +2,21 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
-import { API_URL, getGameContext, listInstances } from '../lib/api';
+import { getGameContext, listInstances } from '../lib/api';
 import {
   getRuntimeWowSeasonContent,
   wowExpansions,
-  wowInstances,
   type WowExpansion,
   type WowInstance,
 } from '../lib/wow-season-content';
+import { getCurrentRaidInstances, getRaidCatalog } from '../lib/raid-catalog';
+import { getInstanceImageSources } from '../lib/instance-artwork';
 import type { Instance } from '../drop-finder/types';
 
 type RaidEncounter = {
   id: number;
   name: string;
 };
-
-const FALLBACK_RAID_IMAGES: Record<string, string> = {
-  'the tidebound grotto':
-    'https://bnetcmsus-a.akamaihd.net/cms/blog_header/7t/7TRTKV368HRY1785353626933.jpg',
-  'the venomous abyss':
-    'https://bnetcmsus-a.akamaihd.net/cms/content_entry_media/SSA6NR4LD1VX1785170429186.png',
-};
-
-const DEFAULT_RAID_IMAGE = FALLBACK_RAID_IMAGES['the tidebound grotto'];
-
-function normalizeRaidName(value: string): string {
-  return value.trim().toLowerCase();
-}
-
-function resolveAssetUrl(url?: string): string | undefined {
-  if (!url) return undefined;
-  return url.startsWith('/') ? `${API_URL}${url}` : url;
-}
 
 function normalizeEncounter(raw: unknown): RaidEncounter | null {
   if (raw && typeof raw === 'object') {
@@ -53,14 +36,6 @@ function normalizeEncounter(raw: unknown): RaidEncounter | null {
   return null;
 }
 
-function fallbackRaidImages(raid: Instance): string[] {
-  return [
-    FALLBACK_RAID_IMAGES[normalizeRaidName(raid.name)],
-    wowInstances.find((instance) => instance.id === raid.id)?.imageUrl,
-    DEFAULT_RAID_IMAGE,
-  ].filter((url): url is string => Boolean(url));
-}
-
 function toApiRaid(instance: WowInstance): Instance {
   return {
     id: instance.id,
@@ -76,13 +51,9 @@ function toApiRaid(instance: WowInstance): Instance {
 }
 
 function RaidArtwork({ raid }: { raid: Instance }) {
-  const apiImageUrl = resolveAssetUrl(raid.image_url);
-  const fallbackImageUrls = fallbackRaidImages(raid);
-  const [imageUrl, setImageUrl] = useState(
-    apiImageUrl && !apiImageUrl.includes('/api/data/images/')
-      ? apiImageUrl
-      : (fallbackImageUrls[0] ?? apiImageUrl)
-  );
+  const imageSources = getInstanceImageSources(raid);
+  const [sourceIndex, setSourceIndex] = useState(0);
+  const imageUrl = imageSources[sourceIndex];
 
   return imageUrl ? (
     <img
@@ -91,10 +62,7 @@ function RaidArtwork({ raid }: { raid: Instance }) {
       className="h-40 w-full object-cover"
       loading="lazy"
       onError={() => {
-        setImageUrl((current) => {
-          const nextFallbackIndex = fallbackImageUrls.indexOf(current) + 1;
-          return fallbackImageUrls[nextFallbackIndex] ?? undefined;
-        });
+        setSourceIndex((index) => index + 1);
       }}
     />
   ) : (
@@ -154,19 +122,32 @@ export default function RaidsPage() {
         if (cancelled) return;
         setInstances(data);
         if (runtimeWow.expansions.length > 0) setExpansions(runtimeWow.expansions);
+        const availableExpansions =
+          runtimeWow.expansions.length > 0 ? runtimeWow.expansions : wowExpansions;
         const seasonName = context?.active_season?.name?.toLocaleLowerCase() ?? '';
         const currentContent = runtimeWow.result.content.find(
           (content) =>
             content.season.source?.gameContext === true ||
             seasonName.includes(content.season.name.toLocaleLowerCase())
         );
-        if (currentContent) setRuntimeRaids(currentContent.raids.map(toApiRaid));
+        const contextExpansionId = availableExpansions.find((expansion) =>
+          seasonName.includes(expansion.name.toLocaleLowerCase())
+        )?.id;
+        const currentApiRaids = getCurrentRaidInstances(data, context);
+        const activeExpansionId =
+          contextExpansionId ??
+          currentContent?.season.expansionId ??
+          currentApiRaids.find((raid) => raid.expansion != null)?.expansion;
+        const apiRaids = getRaidCatalog(data, context, activeExpansionId ?? null);
+        setRuntimeRaids(
+          apiRaids.length > 0 ? apiRaids : (currentContent?.raids.map(toApiRaid) ?? [])
+        );
         const expansionName = currentContent?.season.expansion?.name?.toLocaleLowerCase();
         setCurrentExpansionId(
-          runtimeWow.expansions.find((expansion) =>
+          availableExpansions.find((expansion) =>
             expansionName?.includes(expansion.name.toLocaleLowerCase())
           )?.id ??
-            currentContent?.season.expansionId ??
+            activeExpansionId ??
             null
         );
       })
