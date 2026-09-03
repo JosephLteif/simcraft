@@ -105,6 +105,13 @@ The character Raiding tab now displays current-season raid progress when the act
 
 - Active raid filters now match both raid instance IDs and boss encounter IDs returned by the game data context.
 
+#### Keep the login screen in view
+
+The login screen now keeps the WhyLowDps logo visible on short desktop and mobile windows while allowing longer credential setup content to scroll.
+
+- Prevented overflowing login content from being centered above the viewport.
+- Preserved the centered layout when the full screen fits.
+
 ## v5.0.1 — 2026-08-31 — Release notes for v5.0.1
 
 ### Bug fixes

@@ -245,7 +245,7 @@ export default function SplashScreen({
       <div className="absolute left-1/4 top-1/4 h-96 w-96 animate-pulse rounded-full bg-gold/10 blur-[120px]" />
       <div className="absolute bottom-1/4 right-1/4 h-96 w-96 animate-pulse rounded-full bg-gold-dark/10 blur-[120px] delay-1000" />
 
-      <div className="relative flex min-h-full w-full max-w-md flex-col items-center justify-center px-6 py-12">
+      <div className="relative flex min-h-full w-full max-w-md shrink-0 flex-col items-center justify-center px-6 py-12">
         {/* Animated Logo Container */}
         <div className="relative mb-12">
           <div className="absolute inset-0 animate-pulse rounded-full bg-gold/20 blur-2xl" />
