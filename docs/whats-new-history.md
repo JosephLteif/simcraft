@@ -26,6 +26,22 @@ Character pages can now combine Blizzard data with public Raider.IO and Warcraft
 
 ### Improvements
 
+#### Make tracked characters easier to scan
+
+The dashboard's tracked-character card now uses its available space more effectively, keeping the character overview compact while giving the vault a clear vertical home.
+
+- Review tracked characters, profile links, level, class, item level, and actions in a compact overview column.
+- View Raid Vault above Mythic+ Vault in an aligned vault column with equal-height containers and responsive mobile stacking.
+- Keep vault rewards inside the same aligned container without repeating the weekly progress summary.
+
+#### Make Simulation History selection and actions clearer
+
+Simulation History now keeps row actions visible and makes multi-row selection, filtering, and mobile scanning easier.
+
+- Select day groups or individual rows, use Shift to select a range, and use Ctrl or Cmd to add or remove individual rows.
+- Use the simulation-type filter alongside character, pin, and search filters, with the controls reordered for quicker scanning.
+- Keep Pin, Rerun, and Delete actions in the row layout with clear colored buttons instead of hiding them behind hover state.
+
 #### Reduce header clutter
 
 The top bar now keeps its most useful actions compact without removing functionality.

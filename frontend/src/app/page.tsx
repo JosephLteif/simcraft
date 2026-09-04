@@ -2126,12 +2126,20 @@ export default function Home() {
             'tracked-characters',
             <>
               <section
-                className={`card flex h-full min-h-0 flex-col ${trackedCompact ? 'p-2.5' : 'p-3'}`}
+                data-tracked-character-card
+                className={`card flex h-full min-h-0 flex-col ${trackedCompact ? 'p-2.5' : trackedCharacters.length > 0 && mainCharacterOpen ? 'min-h-[24rem] p-4' : 'p-4'}`}
               >
                 <div
-                  className={`mb-2 flex items-center justify-between ${trackedCompact ? 'gap-2' : ''}`}
+                  className={`mb-3 flex items-start justify-between ${trackedCompact ? 'gap-2' : 'gap-3'}`}
                 >
-                  <h2 className="text-sm font-semibold text-zinc-200">Tracked Characters</h2>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <h2 className="text-sm font-semibold text-zinc-200">Tracked Characters</h2>
+                    {trackedCharacters.length > 0 && (
+                      <span className="border-gold/25 bg-gold/10 text-gold rounded-full border px-2 py-0.5 text-[10px] font-semibold">
+                        {trackedCharacters.length} tracked
+                      </span>
+                    )}
+                  </div>
                   <div
                     className={`flex items-center gap-2 ${trackedCompact ? 'flex-wrap justify-end' : ''}`}
                   >
@@ -2180,7 +2188,7 @@ export default function Home() {
                     </p>
                   );
                 })()}
-                <div>
+                <div className="flex min-h-0 flex-1 flex-col">
                   {mainCharacterOpen && trackedCharacters.length === 0 ? (
                     <p className="text-sm text-zinc-500">
                       No tracked characters yet. Open a character and click Track Character.
@@ -2193,64 +2201,82 @@ export default function Home() {
                         ];
                       if (!active) return null;
                       return (
-                        <div className={`space-y-2 ${trackedCompact ? 'text-[13px]' : ''}`}>
-                          <div className={`flex flex-wrap ${trackedCompact ? 'gap-1.5' : 'gap-2'}`}>
-                            {trackedCharacters.map((c, idx) => (
-                              <div
-                                key={`${c.region}|${c.realm}|${c.name}`}
-                                onPointerEnter={() => {
-                                  const currentDragged = draggedTrackedIndexRef.current;
-                                  if (currentDragged == null || currentDragged === idx) return;
-                                  moveTrackedCharacter(currentDragged, idx);
-                                  setDraggedTrackedIndex(idx);
-                                  setDragOverTrackedIndex(idx);
-                                }}
-                                className={`inline-flex items-center rounded-md border transition-all duration-200 ${idx === activeTrackedIndex ? 'border-gold/40 bg-gold/10' : 'border-border bg-surface-2'} ${draggedTrackedIndex === idx ? 'pointer-events-none opacity-0' : ''} ${dragOverTrackedIndex === idx && draggedTrackedIndex !== idx ? 'border-gold/50' : ''}`}
-                                style={{
-                                  cursor: draggedTrackedIndex != null ? 'grabbing' : 'grab',
-                                }}
-                              >
-                                {(() => {
-                                  const key = `${c.region.toLowerCase()}|${c.realm.toLowerCase()}|${c.name.toLowerCase()}`;
-                                  const className = trackedClassByCharacter[key];
-                                  const classColor = className
-                                    ? CLASS_COLORS[
-                                        className.toLowerCase().replace(/[\s-]+/g, '_')
-                                      ] || '#d4d4d8'
-                                    : '#d4d4d8';
-                                  return (
-                                    <button
-                                      type="button"
-                                      onClick={() => setActiveTrackedIndex(idx)}
-                                      onPointerDown={(e) => {
-                                        if (e.button !== 0) return;
-                                        const rect = (e.currentTarget as HTMLButtonElement)
-                                          .closest('div')
-                                          ?.getBoundingClientRect();
-                                        if (rect) {
-                                          pendingDragRef.current = {
-                                            idx,
-                                            startX: e.clientX,
-                                            startY: e.clientY,
-                                            offsetX: e.clientX - rect.left,
-                                            offsetY: e.clientY - rect.top,
-                                            width: rect.width,
-                                            label: c.name,
-                                            color: classColor,
-                                          };
-                                        }
-                                      }}
-                                      className={`px-2 py-1 text-xs ${idx === activeTrackedIndex ? 'font-semibold' : 'hover:text-zinc-100'}`}
-                                      style={{ color: classColor }}
-                                      title="Drag to reorder"
-                                    >
-                                      {c.name}
-                                    </button>
-                                  );
-                                })()}
-                              </div>
-                            ))}
-                          </div>
+                        <div
+                          className={`grid min-h-0 flex-1 items-stretch gap-4 ${
+                            trackedCompact
+                              ? 'grid-cols-1'
+                              : 'grid-cols-1 lg:grid-cols-[minmax(0,1.45fr)_minmax(18rem,0.95fr)]'
+                          }`}
+                        >
+                          <div
+                            data-tracked-overview
+                            className="flex h-full min-w-0 flex-col gap-3 rounded-xl border border-white/10 bg-black/15 p-3"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                                Character overview
+                              </p>
+                              <span className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] text-zinc-500">
+                                Profile
+                              </span>
+                            </div>
+                            <div className={`flex flex-wrap ${trackedCompact ? 'gap-1.5' : 'gap-2'}`}>
+                              {trackedCharacters.map((c, idx) => (
+                                <div
+                                  key={`${c.region}|${c.realm}|${c.name}`}
+                                  onPointerEnter={() => {
+                                    const currentDragged = draggedTrackedIndexRef.current;
+                                    if (currentDragged == null || currentDragged === idx) return;
+                                    moveTrackedCharacter(currentDragged, idx);
+                                    setDraggedTrackedIndex(idx);
+                                    setDragOverTrackedIndex(idx);
+                                  }}
+                                  className={`inline-flex items-center rounded-md border transition-all duration-200 ${idx === activeTrackedIndex ? 'border-gold/40 bg-gold/10' : 'border-border bg-surface-2'} ${draggedTrackedIndex === idx ? 'pointer-events-none opacity-0' : ''} ${dragOverTrackedIndex === idx && draggedTrackedIndex !== idx ? 'border-gold/50' : ''}`}
+                                  style={{
+                                    cursor: draggedTrackedIndex != null ? 'grabbing' : 'grab',
+                                  }}
+                                >
+                                  {(() => {
+                                    const key = `${c.region.toLowerCase()}|${c.realm.toLowerCase()}|${c.name.toLowerCase()}`;
+                                    const className = trackedClassByCharacter[key];
+                                    const classColor = className
+                                      ? CLASS_COLORS[
+                                          className.toLowerCase().replace(/[\s-]+/g, '_')
+                                        ] || '#d4d4d8'
+                                      : '#d4d4d8';
+                                    return (
+                                      <button
+                                        type="button"
+                                        onClick={() => setActiveTrackedIndex(idx)}
+                                        onPointerDown={(e) => {
+                                          if (e.button !== 0) return;
+                                          const rect = (e.currentTarget as HTMLButtonElement)
+                                            .closest('div')
+                                            ?.getBoundingClientRect();
+                                          if (rect) {
+                                            pendingDragRef.current = {
+                                              idx,
+                                              startX: e.clientX,
+                                              startY: e.clientY,
+                                              offsetX: e.clientX - rect.left,
+                                              offsetY: e.clientY - rect.top,
+                                              width: rect.width,
+                                              label: c.name,
+                                              color: classColor,
+                                            };
+                                          }
+                                        }}
+                                        className={`px-2 py-1 text-xs ${idx === activeTrackedIndex ? 'font-semibold' : 'hover:text-zinc-100'}`}
+                                        style={{ color: classColor }}
+                                        title="Drag to reorder"
+                                      >
+                                        {c.name}
+                                      </button>
+                                    );
+                                  })()}
+                                </div>
+                              ))}
+                            </div>
                           {dragPointer && (
                             <div
                               className="pointer-events-none fixed z-[90] inline-flex items-center rounded-md border border-gold/60 bg-[#14151d]/95 px-2.5 py-1 text-xs font-semibold shadow-[0_12px_24px_rgba(0,0,0,0.45)] transition-transform duration-150"
@@ -2265,29 +2291,18 @@ export default function Home() {
                               {dragPointer.label}
                             </div>
                           )}
-                          <div
-                            className={`flex flex-wrap items-center gap-2 text-zinc-200 ${trackedCompact ? 'text-[13px]' : 'text-sm'}`}
-                          >
-                            <span className="font-semibold">
-                              {
-                                trackedCharacters[
-                                  Math.min(activeTrackedIndex, trackedCharacters.length - 1)
-                                ]?.name
-                              }
-                            </span>
-                            <span className="text-zinc-500">
-                              {' '}
-                              ·{' '}
-                              {
-                                trackedCharacters[
-                                  Math.min(activeTrackedIndex, trackedCharacters.length - 1)
-                                ]?.realm
-                              }{' '}
-                              ·{' '}
-                              {trackedCharacters[
-                                Math.min(activeTrackedIndex, trackedCharacters.length - 1)
-                              ]?.region.toUpperCase()}
-                            </span>
+                          <div className="rounded-lg border border-gold/20 bg-gold/[0.04] p-3">
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                              Selected character
+                            </p>
+                            <div
+                              className={`mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-zinc-200 ${trackedCompact ? 'text-[13px]' : 'text-sm'}`}
+                            >
+                              <span className="font-semibold">{active.name}</span>
+                              <span className="text-zinc-500">
+                                {active.realm} · {active.region.toUpperCase()}
+                              </span>
+                            </div>
                           </div>
                           <CharacterQuickLinks
                             armoryUrl={`https://${active.region.toLowerCase()}.battle.net/wow/en/character/${active.realm.toLowerCase()}/${active.name.toLowerCase()}`}
@@ -2295,153 +2310,51 @@ export default function Home() {
                             raiderIoUrl={`https://raider.io/characters/${active.region.toLowerCase()}/${active.realm.toLowerCase()}/${active.name.toLowerCase()}`}
                           />
                           <div
-                            className={`grid gap-2 ${trackedCompact ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-3'}`}
+                            className={`grid grid-cols-3 gap-2 ${trackedCompact ? 'text-[11px]' : ''}`}
                           >
-                            <div className="rounded border border-white/10 bg-black/20 p-2 text-xs text-zinc-300">
-                              Level:{' '}
-                              <span className="font-semibold text-zinc-100">
+                            <div className="min-w-0 rounded-lg border border-white/10 bg-black/20 p-2">
+                              <span className="block text-[10px] uppercase tracking-wide text-zinc-500">
+                                Level
+                              </span>
+                              <span className="mt-1 block truncate text-xs font-semibold text-zinc-100">
                                 {mainMeta?.level ?? '-'}
                               </span>
                             </div>
-                            <div className="rounded border border-white/10 bg-black/20 p-2 text-xs text-zinc-300">
-                              Class:{' '}
-                              <span className="font-semibold text-zinc-100">
+                            <div className="min-w-0 rounded-lg border border-white/10 bg-black/20 p-2">
+                              <span className="block text-[10px] uppercase tracking-wide text-zinc-500">
+                                Class
+                              </span>
+                              <span className="mt-1 block truncate text-xs font-semibold text-zinc-100">
                                 {mainMeta?.className ?? '-'}
                               </span>
                             </div>
-                            <div className="rounded border border-white/10 bg-black/20 p-2 text-xs text-zinc-300">
-                              iLvl:{' '}
-                              <span className="font-semibold text-zinc-100">
+                            <div className="min-w-0 rounded-lg border border-white/10 bg-black/20 p-2">
+                              <span className="block text-[10px] uppercase tracking-wide text-zinc-500">
+                                iLvl
+                              </span>
+                              <span className="mt-1 block truncate text-xs font-semibold text-zinc-100">
                                 {mainMeta?.ilvl ?? '-'}
                               </span>
                             </div>
                           </div>
-                          <div
-                            className={`grid grid-cols-1 gap-2 ${trackedCompact ? '' : 'md:grid-cols-2'}`}
-                          >
-                            <div className="rounded border border-white/10 bg-black/20 p-2">
-                              <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-zinc-500">
-                                Mythic+ Vault
-                              </p>
-                              <div
-                                className={`grid gap-1.5 ${trackedCompact ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-3'}`}
-                              >
-                                {MYTHIC_VAULT_THRESHOLDS.map((threshold, idx) => {
-                                  const current = mainVault?.mplusRuns ?? 0;
-                                  const unlocked = current >= threshold;
-                                  const progress = Math.min(1, current / threshold);
-                                  return (
-                                    <div
-                                      key={`main-mplus-${threshold}`}
-                                      className="rounded border border-white/10 bg-black/25 p-1.5"
-                                    >
-                                      <div className="mb-1 flex items-center justify-between text-[11px]">
-                                        <span className="font-semibold text-zinc-200">
-                                          Slot {idx + 1}
-                                        </span>
-                                        <span
-                                          className={
-                                            unlocked
-                                              ? 'font-bold text-emerald-400'
-                                              : 'text-zinc-500'
-                                          }
-                                        >
-                                          {unlocked
-                                            ? 'Unlocked'
-                                            : `${Math.max(0, threshold - current)} more`}
-                                        </span>
-                                      </div>
-                                      <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
-                                        <div
-                                          className={`h-full rounded-full ${unlocked ? 'bg-emerald-400' : 'bg-gold/70'}`}
-                                          style={{ width: `${Math.max(6, progress * 100)}%` }}
-                                        />
-                                      </div>
-                                      <p className="mt-1 text-[10px] text-zinc-500">
-                                        Requires {threshold} runs
-                                      </p>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                              <p className="mt-2 text-[11px] text-zinc-500">
-                                {mainVault?.mplusRuns ?? 0} runs completed this week.
-                              </p>
-                            </div>
-                            <div className="rounded border border-white/10 bg-black/20 p-2">
-                              <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-zinc-500">
-                                Raid Vault
-                              </p>
-                              <div
-                                className={`grid gap-1.5 ${trackedCompact ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-3'}`}
-                              >
-                                {RAID_VAULT_THRESHOLDS.map((threshold, idx) => {
-                                  const current = mainVault?.raidKills ?? 0;
-                                  const unlocked = current >= threshold;
-                                  const progress = Math.min(1, current / threshold);
-                                  return (
-                                    <div
-                                      key={`main-raid-${threshold}`}
-                                      className="rounded border border-white/10 bg-black/25 p-1.5"
-                                    >
-                                      <div className="mb-1 flex items-center justify-between text-[11px]">
-                                        <span className="font-semibold text-zinc-200">
-                                          Slot {idx + 1}
-                                        </span>
-                                        <span
-                                          className={
-                                            unlocked
-                                              ? 'font-bold text-emerald-400'
-                                              : 'text-zinc-500'
-                                          }
-                                        >
-                                          {unlocked
-                                            ? 'Unlocked'
-                                            : `${Math.max(0, threshold - current)} more`}
-                                        </span>
-                                      </div>
-                                      <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
-                                        <div
-                                          className={`h-full rounded-full ${unlocked ? 'bg-emerald-400' : 'bg-gold/70'}`}
-                                          style={{ width: `${Math.max(6, progress * 100)}%` }}
-                                        />
-                                      </div>
-                                      <p className="mt-1 text-[10px] text-zinc-500">
-                                        Requires {threshold} boss kills
-                                      </p>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                              <p className="mt-2 text-[11px] text-zinc-500">
-                                {mainVault?.raidKills ?? 0} boss kills completed this week.
-                              </p>
-                            </div>
-                          </div>
-                          {mainVaultRewards.length > 0 && (
-                            <div className="rounded border border-white/10 bg-black/20 p-2">
-                              <div className="mb-2 text-xs font-semibold text-zinc-200">
-                                Vault Rewards
-                              </div>
-                              <VaultRewardsGrid items={mainVaultRewards} />
-                            </div>
-                          )}
-                          <div className={`flex flex-wrap gap-2 ${trackedCompact ? 'pt-1' : ''}`}>
+                          <div className="grid grid-cols-2 gap-2 pt-1">
                             <Link
                               href={characterHref(active.region, active.realm, active.name)}
-                              className="rounded-md border border-border bg-surface-2 px-3 py-1.5 text-xs text-zinc-200 hover:bg-surface"
+                              className="inline-flex items-center justify-center rounded-md border border-border bg-surface-2 px-2.5 py-1.5 text-center text-xs text-zinc-200 hover:bg-surface"
                             >
                               Open Character
                             </Link>
                             <button
+                              type="button"
                               onClick={() => openMainWorkflow('/quick-sim')}
-                              className="rounded-md border border-border bg-surface-2 px-3 py-1.5 text-xs text-zinc-200 hover:bg-surface"
+                              className="inline-flex items-center justify-center rounded-md border border-border bg-surface-2 px-2.5 py-1.5 text-center text-xs text-zinc-200 hover:bg-surface"
                             >
                               Run Sim
                             </button>
                             <button
+                              type="button"
                               onClick={() => openMainWorkflow('/top-gear')}
-                              className="rounded-md border border-border bg-surface-2 px-3 py-1.5 text-xs text-zinc-200 hover:bg-surface"
+                              className="inline-flex items-center justify-center rounded-md border border-border bg-surface-2 px-2.5 py-1.5 text-center text-xs text-zinc-200 hover:bg-surface"
                             >
                               Top Gear
                             </button>
@@ -2452,11 +2365,145 @@ export default function Home() {
                                 active.name,
                                 'vault'
                               )}
-                              className="rounded-md border border-border bg-surface-2 px-3 py-1.5 text-xs text-zinc-200 hover:bg-surface"
+                              className="inline-flex items-center justify-center rounded-md border border-gold/25 bg-gold/10 px-2.5 py-1.5 text-center text-xs text-gold hover:bg-gold/15"
                             >
                               Open Vault
                             </Link>
                           </div>
+                        </div>
+                        <div
+                          data-tracked-vault
+                          className="flex h-full min-w-0 flex-col gap-3 rounded-xl border border-gold/20 bg-gradient-to-b from-gold/[0.03] via-black/15 to-black/15 p-3"
+                        >
+                            <div className="grid min-h-0 flex-1 auto-rows-fr gap-3">
+                              <div className="order-2 border-gold/25 from-gold/[0.06] flex min-h-[12rem] min-w-0 flex-col rounded-xl border bg-gradient-to-b via-black/20 to-black/20 p-3">
+                                <div className="mb-3 flex items-center justify-between gap-2">
+                                  <div className="flex items-center gap-2">
+                                    <Gem className="text-gold h-4 w-4" strokeWidth={2} />
+                                    <p className="text-xs font-semibold text-zinc-200">
+                                      Mythic+ Vault
+                                    </p>
+                                  </div>
+                                  <span className="text-[10px] text-zinc-500">
+                                    {mainVault?.mplusRuns ?? 0} runs
+                                  </span>
+                                </div>
+                                <div
+                                  className={`grid flex-1 gap-2 ${trackedCompact ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-3'}`}
+                                >
+                                  {MYTHIC_VAULT_THRESHOLDS.map((threshold, idx) => {
+                                    const current = mainVault?.mplusRuns ?? 0;
+                                    const unlocked = current >= threshold;
+                                    const progress = Math.min(1, current / threshold);
+                                    return (
+                                      <div
+                                        key={`main-mplus-${threshold}`}
+                                        className={`flex min-h-[7rem] flex-col rounded-lg border p-2.5 ${unlocked ? 'border-emerald-400/25 bg-emerald-400/[0.06]' : 'border-white/10 bg-black/25'}`}
+                                      >
+                                        <div className="mb-1 flex items-center justify-between text-[11px]">
+                                          <span className="font-semibold text-zinc-200">
+                                            Slot {idx + 1}
+                                          </span>
+                                          <span
+                                            className={
+                                              unlocked
+                                                ? 'font-bold text-emerald-400'
+                                                : 'text-zinc-500'
+                                            }
+                                          >
+                                            {unlocked
+                                              ? 'Unlocked'
+                                              : `${Math.max(0, threshold - current)} more`}
+                                          </span>
+                                        </div>
+                                        <div className="mt-auto pt-3">
+                                          <div className="h-2 overflow-hidden rounded-full bg-white/10">
+                                            <div
+                                              className={`h-full rounded-full ${unlocked ? 'bg-emerald-400' : 'bg-gold/70'}`}
+                                              style={{ width: `${Math.max(6, progress * 100)}%` }}
+                                            />
+                                          </div>
+                                          <p className="mt-1 text-[10px] text-zinc-500">
+                                            Requires {threshold} runs
+                                          </p>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                                <p className="mt-2 text-[11px] text-zinc-500">
+                                  {mainVault?.mplusRuns ?? 0} runs completed this week.
+                                </p>
+                              </div>
+                              <div className="order-1 flex min-h-[12rem] min-w-0 flex-col rounded-xl border border-emerald-400/20 bg-gradient-to-b from-emerald-400/[0.05] via-black/20 to-black/20 p-3">
+                                <div className="mb-3 flex items-center justify-between gap-2">
+                                  <div className="flex items-center gap-2">
+                                    <Trophy className="h-4 w-4 text-emerald-300" strokeWidth={2} />
+                                    <p className="text-xs font-semibold text-zinc-200">
+                                      Raid Vault
+                                    </p>
+                                  </div>
+                                  <span className="text-[10px] text-zinc-500">
+                                    {mainVault?.raidKills ?? 0} kills
+                                  </span>
+                                </div>
+                                <div
+                                  className={`grid flex-1 gap-2 ${trackedCompact ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-3'}`}
+                                >
+                                  {RAID_VAULT_THRESHOLDS.map((threshold, idx) => {
+                                    const current = mainVault?.raidKills ?? 0;
+                                    const unlocked = current >= threshold;
+                                    const progress = Math.min(1, current / threshold);
+                                    return (
+                                      <div
+                                        key={`main-raid-${threshold}`}
+                                        className={`flex min-h-[7rem] flex-col rounded-lg border p-2.5 ${unlocked ? 'border-emerald-400/25 bg-emerald-400/[0.06]' : 'border-white/10 bg-black/25'}`}
+                                      >
+                                        <div className="mb-1 flex items-center justify-between text-[11px]">
+                                          <span className="font-semibold text-zinc-200">
+                                            Slot {idx + 1}
+                                          </span>
+                                          <span
+                                            className={
+                                              unlocked
+                                                ? 'font-bold text-emerald-400'
+                                                : 'text-zinc-500'
+                                            }
+                                          >
+                                            {unlocked
+                                              ? 'Unlocked'
+                                              : `${Math.max(0, threshold - current)} more`}
+                                          </span>
+                                        </div>
+                                        <div className="mt-auto pt-3">
+                                          <div className="h-2 overflow-hidden rounded-full bg-white/10">
+                                            <div
+                                              className={`h-full rounded-full ${unlocked ? 'bg-emerald-400' : 'bg-gold/70'}`}
+                                              style={{ width: `${Math.max(6, progress * 100)}%` }}
+                                            />
+                                          </div>
+                                          <p className="mt-1 text-[10px] text-zinc-500">
+                                            Requires {threshold} boss kills
+                                          </p>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                                <p className="mt-2 text-[11px] text-zinc-500">
+                                  {mainVault?.raidKills ?? 0} boss kills completed this week.
+                                </p>
+                              </div>
+                            </div>
+                          {mainVaultRewards.length > 0 && (
+                            <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                              <div className="mb-2 text-xs font-semibold text-zinc-200">
+                                Vault Rewards
+                              </div>
+                              <VaultRewardsGrid items={mainVaultRewards} />
+                            </div>
+                          )}
+                        </div>
                         </div>
                       );
                     })()

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, GitCompareArrows, Pin, Search, Trash2, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import {
@@ -44,6 +44,11 @@ interface JobSummary {
   upgrades?: number | null;
   downgrades?: number | null;
   pinned?: boolean;
+}
+
+interface SelectionIntent {
+  shiftKey?: boolean;
+  additive?: boolean;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -222,18 +227,30 @@ function SimRow({
   siblingGroup?: JobSummary[];
   selectable?: boolean;
   selected?: boolean;
-  onSelectToggle?: (id: string, checked: boolean) => void;
+  onSelectToggle?: (id: string, checked: boolean, intent?: SelectionIntent) => void;
   onTogglePinned?: (id: string, pinned: boolean) => void;
   onRerun?: (sim: JobSummary) => void;
 }) {
   return (
-    <div className="group relative flex items-center">
+    <div
+      className={`group flex min-w-0 items-center transition-colors ${
+        selected ? 'bg-gold/[0.08] ring-gold/20 ring-1 ring-inset' : 'hover:bg-white/[0.03]'
+      }`}
+      aria-selected={selected}
+      data-history-row
+    >
       {selectable && (
         <div className={`shrink-0 ${compact ? 'pl-3' : 'pl-4'}`}>
           <input
             type="checkbox"
             checked={!!selected}
-            onChange={(e) => onSelectToggle?.(sim.id, e.target.checked)}
+            onChange={(e) => {
+              const event = e.nativeEvent as MouseEvent;
+              onSelectToggle?.(sim.id, e.target.checked, {
+                shiftKey: event.shiftKey,
+                additive: event.ctrlKey || event.metaKey,
+              });
+            }}
             onClick={(e) => e.stopPropagation()}
             className="border-border bg-surface-2 text-gold focus:ring-gold h-4 w-4 rounded"
             aria-label={`Select simulation ${sim.id}`}
@@ -242,7 +259,16 @@ function SimRow({
       )}
       <Link
         href={simResultHref(sim.id)}
-        onClick={() => {
+        onClick={(e) => {
+          if (selectable && (e.shiftKey || e.ctrlKey || e.metaKey)) {
+            e.preventDefault();
+            e.stopPropagation();
+            onSelectToggle?.(sim.id, e.shiftKey ? true : !selected, {
+              shiftKey: e.shiftKey,
+              additive: e.ctrlKey || e.metaKey,
+            });
+            return;
+          }
           if (!siblingGroup || siblingGroup.length <= 1) {
             clearScenarioSiblings();
             return;
@@ -311,7 +337,7 @@ function SimRow({
         <span className="hidden w-20 shrink-0 text-right text-[13px] text-zinc-500 sm:block">
           {FIGHT_STYLE_SHORT[sim.fight_style] || sim.fight_style}
         </span>
-        <div className="hidden w-20 shrink-0 text-right group-hover:opacity-0 sm:block">
+        <div className="hidden w-20 shrink-0 text-right sm:block">
           <div className="text-[12px] text-zinc-500">{timeAgo(sim.created_at)}</div>
           {sim.size_bytes > 0 && (
             <div className="text-[10px] text-zinc-600 tabular-nums">
@@ -320,42 +346,48 @@ function SimRow({
           )}
         </div>
       </Link>
-      <div className="absolute top-1/2 right-3 flex -translate-y-1/2 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+      <div className="mr-3 ml-2 flex shrink-0 items-center gap-1">
         {onTogglePinned && (
           <button
+            type="button"
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
               onTogglePinned(sim.id, !(sim.pinned ?? false));
             }}
-            className={`hover:bg-gold/10 rounded p-1 ${sim.pinned ? 'text-gold' : 'hover:text-gold text-zinc-500'}`}
+            className={`inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors focus-visible:ring-2 focus-visible:outline-none ${sim.pinned ? 'border-gold/40 bg-gold/10 text-gold hover:bg-gold/20 focus-visible:ring-gold/60' : 'hover:border-gold/30 hover:bg-gold/10 hover:text-gold focus-visible:ring-gold/60 border-white/10 bg-white/[0.03] text-zinc-400'}`}
             title={sim.pinned ? 'Unpin' : 'Pin'}
+            aria-label={sim.pinned ? 'Unpin simulation' : 'Pin simulation'}
           >
             <PinIcon pinned={!!sim.pinned} />
           </button>
         )}
         {onRerun && sim.status !== 'running' && sim.status !== 'pending' && (
           <button
+            type="button"
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
               onRerun(sim);
             }}
-            className="rounded px-2 py-1 text-[11px] font-semibold text-zinc-300 hover:bg-white/10 hover:text-white"
+            className="inline-flex h-7 items-center justify-center rounded-md border border-sky-400/30 bg-sky-500/10 px-2 text-[11px] font-semibold text-sky-200 transition-colors hover:bg-sky-500/20 focus-visible:ring-2 focus-visible:ring-sky-300/60 focus-visible:outline-none"
             title="Rerun this simulation input"
+            aria-label="Rerun simulation"
           >
             Rerun
           </button>
         )}
         {onDelete && (
           <button
+            type="button"
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
               onDelete(sim.id);
             }}
-            className="rounded p-1 text-zinc-500 hover:bg-red-500/10 hover:text-red-400"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-red-400/30 bg-red-500/10 text-red-300 transition-colors hover:bg-red-500/20 hover:text-red-200 focus-visible:ring-2 focus-visible:ring-red-300/60 focus-visible:outline-none"
             title="Delete Record"
+            aria-label="Delete simulation"
           >
             <TrashIcon />
           </button>
@@ -367,6 +399,12 @@ function SimRow({
 
 type HistoryEntry =
   { type: 'single'; sim: JobSummary } | { type: 'batch'; batchId: string; sims: JobSummary[] };
+
+function historyEntryIds(entries: HistoryEntry[]): string[] {
+  return entries.flatMap((entry) =>
+    entry.type === 'single' ? [entry.sim.id] : entry.sims.map((sim) => sim.id)
+  );
+}
 
 function groupByBatch(sims: JobSummary[]): HistoryEntry[] {
   const topGearExactType = 'top_gear_exact_stats';
@@ -443,8 +481,8 @@ function BatchGroup({
   entry: Extract<HistoryEntry, { type: 'batch' }>;
   onDelete?: (id: string) => void;
   selectedIds?: Set<string>;
-  onBatchSelectToggle?: (ids: string[], checked: boolean) => void;
-  onRowSelectToggle?: (id: string, checked: boolean) => void;
+  onBatchSelectToggle?: (ids: string[], checked: boolean, intent?: SelectionIntent) => void;
+  onRowSelectToggle?: (id: string, checked: boolean, intent?: SelectionIntent) => void;
   onTogglePinned?: (id: string, pinned: boolean) => void;
   onRerun?: (sim: JobSummary) => void;
 }) {
@@ -461,8 +499,14 @@ function BatchGroup({
   return (
     <div className="border-border border-b last:border-b-0">
       <div
-        className="group relative flex cursor-pointer items-center gap-2 px-3 py-3 transition-colors hover:bg-white/[0.03] sm:gap-3 sm:px-5"
+        className={`group relative flex min-w-0 cursor-pointer items-center gap-2 px-3 py-3 transition-colors sm:gap-3 sm:px-5 ${
+          selectedCount > 0
+            ? 'bg-gold/[0.08] ring-gold/20 ring-1 ring-inset'
+            : 'hover:bg-white/[0.03]'
+        }`}
         onClick={() => setIsOpen(!isOpen)}
+        aria-selected={selectedCount > 0}
+        data-history-row
       >
         <input
           type="checkbox"
@@ -471,7 +515,13 @@ function BatchGroup({
             if (!el) return;
             el.indeterminate = isBatchIndeterminate;
           }}
-          onChange={(e) => onBatchSelectToggle?.(batchIds, e.target.checked)}
+          onChange={(e) => {
+            const event = e.nativeEvent as MouseEvent;
+            onBatchSelectToggle?.(batchIds, e.target.checked, {
+              shiftKey: event.shiftKey,
+              additive: event.ctrlKey || event.metaKey,
+            });
+          }}
           onClick={(e) => e.stopPropagation()}
           className="border-border bg-surface-2 text-gold focus:ring-gold h-4 w-4 shrink-0 rounded"
           aria-label={`Select batch ${entry.batchId}`}
@@ -494,24 +544,26 @@ function BatchGroup({
 
         <span className="hidden w-20 shrink-0 sm:block" />
 
-        <div className="hidden w-20 shrink-0 text-right group-hover:opacity-0 sm:block">
+        <div className="hidden w-20 shrink-0 text-right sm:block">
           <div className="text-[12px] text-zinc-600">{timeAgo(first?.created_at)}</div>
           {batchSize > 0 && (
             <div className="text-[10px] text-zinc-700 tabular-nums">{formatSize(batchSize)}</div>
           )}
         </div>
 
-        <div className="absolute top-1/2 right-3 flex -translate-y-1/2 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+        <div className="mr-3 ml-2 flex shrink-0 items-center gap-1">
           {onDelete && (
             <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 if (confirm(`Delete all ${entry.sims.length} scenarios in this batch?`)) {
                   entry.sims.forEach((s) => onDelete(s.id));
                 }
               }}
-              className="rounded p-1 text-zinc-500 hover:bg-red-500/10 hover:text-red-400"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-red-400/30 bg-red-500/10 text-red-300 transition-colors hover:bg-red-500/20 hover:text-red-200 focus-visible:ring-2 focus-visible:ring-red-300/60 focus-visible:outline-none"
               title="Delete Entire Batch"
+              aria-label="Delete entire batch"
             >
               <TrashIcon />
             </button>
@@ -551,6 +603,8 @@ export default function HistoryPage() {
   const [sims, setSims] = useState<JobSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [pinFilter, setPinFilter] = useState<'all' | 'pinned' | 'unpinned'>('all');
+  const [simTypeFilter, setSimTypeFilter] = useState('all');
+  const selectionAnchorId = useRef<string | null>(null);
   const [character, setCharacter] = useState<{
     name: string;
     realm: string;
@@ -619,6 +673,7 @@ export default function HistoryPage() {
       ]);
       setSims(simsData);
       setStats(statsData);
+      selectionAnchorId.current = null;
       setSelectedIds(new Set());
       setError(null);
     } catch (err) {
@@ -682,26 +737,6 @@ export default function HistoryPage() {
     }
   };
 
-  const handleToggleSelection = useCallback((id: string, checked: boolean) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (checked) next.add(id);
-      else next.delete(id);
-      return next;
-    });
-  }, []);
-
-  const handleToggleBatchSelection = useCallback((ids: string[], checked: boolean) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      ids.forEach((id) => {
-        if (checked) next.add(id);
-        else next.delete(id);
-      });
-      return next;
-    });
-  }, []);
-
   const handleClear = async () => {
     if (!confirm('Are you sure you want to clear ALL history?')) return;
     try {
@@ -734,15 +769,17 @@ export default function HistoryPage() {
 
   const filteredEntries = useMemo(() => {
     const query = search.toLowerCase().trim();
+    const typeFiltered =
+      simTypeFilter === 'all' ? sims : sims.filter((s) => s.sim_type === simTypeFilter);
     const filtered = query
-      ? sims.filter(
+      ? typeFiltered.filter(
           (s) =>
             s.player_name?.toLowerCase().includes(query) ||
             s.sim_type.toLowerCase().includes(query) ||
             SIM_TYPE_LABELS[s.sim_type]?.toLowerCase().includes(query) ||
             s.player_class?.toLowerCase().includes(query)
         )
-      : sims;
+      : typeFiltered;
     const pinFiltered =
       pinFilter === 'all'
         ? filtered
@@ -762,21 +799,57 @@ export default function HistoryPage() {
     });
 
     return dateGroups;
-  }, [sims, search, pinFilter]);
+  }, [sims, search, pinFilter, simTypeFilter]);
+
+  const availableSimTypes = useMemo(() => {
+    return Array.from(new Set(sims.map((sim) => sim.sim_type))).sort((a, b) => {
+      const labelA = SIM_TYPE_LABELS[a] || a;
+      const labelB = SIM_TYPE_LABELS[b] || b;
+      return labelA.localeCompare(labelB);
+    });
+  }, [sims]);
 
   const pinnedCount = useMemo(() => sims.filter((s) => !!s.pinned).length, [sims]);
   const unpinnedCount = useMemo(() => sims.filter((s) => !s.pinned).length, [sims]);
 
   const visibleIds = useMemo(() => {
-    const ids: string[] = [];
-    Object.values(filteredEntries).forEach((entries) => {
-      entries.forEach((entry) => {
-        if (entry.type === 'single') ids.push(entry.sim.id);
-        else ids.push(...entry.sims.map((s) => s.id));
-      });
-    });
-    return ids;
+    return Object.values(filteredEntries).flatMap(historyEntryIds);
   }, [filteredEntries]);
+
+  const handleToggleSelectionForIds = useCallback(
+    (ids: string[], checked: boolean, intent: SelectionIntent = {}) => {
+      const anchorId = selectionAnchorId.current;
+      selectionAnchorId.current = ids.length > 0 ? ids[ids.length - 1] : anchorId;
+
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        const anchorIndex = intent.shiftKey && anchorId ? visibleIds.indexOf(anchorId) : -1;
+        const targetIndex = intent.shiftKey && ids.length > 0 ? visibleIds.indexOf(ids[0]) : -1;
+        const selectedRange =
+          anchorIndex >= 0 && targetIndex >= 0
+            ? visibleIds.slice(
+                Math.min(anchorIndex, targetIndex),
+                Math.max(anchorIndex, targetIndex) + 1
+              )
+            : ids;
+
+        if (checked && !intent.additive) next.clear();
+        selectedRange.forEach((id) => {
+          if (checked) next.add(id);
+          else next.delete(id);
+        });
+        return next;
+      });
+    },
+    [visibleIds]
+  );
+
+  const handleToggleSelection = useCallback(
+    (id: string, checked: boolean, intent?: SelectionIntent) => {
+      handleToggleSelectionForIds([id], checked, intent);
+    },
+    [handleToggleSelectionForIds]
+  );
 
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id));
   const someVisibleSelected = visibleIds.some((id) => selectedIds.has(id));
@@ -790,6 +863,7 @@ export default function HistoryPage() {
 
   const handleToggleSelectAllVisible = useCallback(
     (checked: boolean) => {
+      selectionAnchorId.current = visibleIds.length > 0 ? visibleIds[visibleIds.length - 1] : null;
       setSelectedIds((prev) => {
         const next = new Set(prev);
         visibleIds.forEach((id) => {
@@ -883,10 +957,16 @@ export default function HistoryPage() {
           </div>
         )}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:flex xl:flex-wrap xl:items-center">
-          <div className="xl:border-border flex min-w-0 items-center gap-2 xl:border-r xl:pr-2">
-            <span className="text-xs text-zinc-500">Filter by Character:</span>
+          <div className="xl:border-border grid min-w-0 grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-2 xl:border-r xl:pr-2">
+            <label
+              htmlFor="history-character-filter"
+              className="text-right text-xs whitespace-nowrap text-zinc-500"
+            >
+              Filter by Character:
+            </label>
             <select
-              className="border-border bg-surface-2 focus:border-gold min-w-0 flex-1 rounded-md border px-2 py-1.5 text-xs text-zinc-200 focus:outline-none xl:w-48 xl:flex-none"
+              id="history-character-filter"
+              className="border-border bg-surface-2 focus:border-gold w-full min-w-0 rounded-md border px-2 py-1.5 text-xs text-zinc-200 focus:outline-none xl:w-48"
               value={character ? encodeHistoryCharacterFilter(character) : 'all'}
               onChange={(e) => {
                 setCharacter(decodeHistoryCharacterFilter(e.target.value));
@@ -900,10 +980,16 @@ export default function HistoryPage() {
               ))}
             </select>
           </div>
-          <div className="xl:border-border flex min-w-0 items-center gap-2 xl:border-r xl:pr-2">
-            <span className="text-xs text-zinc-500">Pin Filter:</span>
+          <div className="xl:border-border grid min-w-0 grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-2 xl:border-r xl:pr-2">
+            <label
+              htmlFor="history-pin-filter"
+              className="text-right text-xs whitespace-nowrap text-zinc-500"
+            >
+              Pin Filter:
+            </label>
             <select
-              className="border-border bg-surface-2 focus:border-gold min-w-0 flex-1 rounded-md border px-2 py-1.5 text-xs text-zinc-200 focus:outline-none xl:w-28 xl:flex-none"
+              id="history-pin-filter"
+              className="border-border bg-surface-2 focus:border-gold w-full min-w-0 rounded-md border px-2 py-1.5 text-xs text-zinc-200 focus:outline-none xl:w-28"
               value={pinFilter}
               onChange={(e) => {
                 const val = e.target.value as 'all' | 'pinned' | 'unpinned';
@@ -916,21 +1002,36 @@ export default function HistoryPage() {
               <option value="unpinned">Not Pinned</option>
             </select>
           </div>
-          <div className="relative min-w-0">
-            <div className="pointer-events-none absolute inset-y-0 left-2.5 flex items-center">
-              <SearchIcon />
-            </div>
-            <input
-              type="text"
-              placeholder="Search history..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="border-border bg-surface-2 focus:border-gold w-full rounded-md border py-1.5 pr-3 pl-8 text-xs text-zinc-200 placeholder:text-zinc-500 focus:outline-none xl:w-48"
-            />
+          <div className="xl:border-border grid min-w-0 grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-2 xl:border-r xl:pr-2">
+            <label
+              htmlFor="history-sim-type-filter"
+              className="text-right text-xs whitespace-nowrap text-zinc-500"
+            >
+              Sim Type:
+            </label>
+            <select
+              id="history-sim-type-filter"
+              className="border-border bg-surface-2 focus:border-gold w-full min-w-0 rounded-md border px-2 py-1.5 text-xs text-zinc-200 focus:outline-none xl:w-40"
+              value={simTypeFilter}
+              onChange={(e) => setSimTypeFilter(e.target.value)}
+            >
+              <option value="all">All Sim Types</option>
+              {availableSimTypes.map((simType) => (
+                <option key={simType} value={simType}>
+                  {SIM_TYPE_LABELS[simType] || simType.replaceAll('_', ' ')}
+                </option>
+              ))}
+            </select>
           </div>
-          <div className="flex items-center gap-2">
-            <label className="text-xs text-zinc-500">Keep last:</label>
+          <div className="grid grid-cols-[7.5rem_auto] items-center gap-2">
+            <label
+              htmlFor="history-max-jobs"
+              className="text-right text-xs whitespace-nowrap text-zinc-500"
+            >
+              Keep last:
+            </label>
             <input
+              id="history-max-jobs"
               type="number"
               value={maxJobs}
               onChange={(e) => setMaxJobs(parseInt(e.target.value) || 0)}
@@ -938,10 +1039,23 @@ export default function HistoryPage() {
               className="border-border bg-surface-2 focus:border-gold w-16 rounded border px-1.5 py-1 text-xs text-zinc-300 focus:outline-none"
             />
           </div>
+          <div className="relative min-w-0">
+            <div className="pointer-events-none absolute inset-y-0 left-2.5 flex items-center">
+              <SearchIcon />
+            </div>
+            <input
+              aria-label="Search history"
+              type="text"
+              placeholder="Search history..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="border-border bg-surface-2 focus:border-gold w-full rounded-md border py-1.5 pr-3 pl-8 text-xs text-zinc-200 placeholder:text-zinc-500 focus:outline-none xl:w-48"
+            />
+          </div>
           {sims.length > 0 && (
             <button
               onClick={handleClear}
-              className="rounded bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20 xl:ml-auto"
+              className="w-full rounded bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20 xl:ml-auto xl:w-auto"
             >
               Clear All
             </button>
@@ -993,47 +1107,76 @@ export default function HistoryPage() {
             </label>
             <span className="text-xs text-zinc-500">{selectedIds.size} selected</span>
           </div>
-          {groupKeys.map((group) => (
-            <div key={group} className="space-y-2">
-              <h3 className="px-1 text-[11px] font-bold tracking-wider text-zinc-500 uppercase">
-                {group}
-              </h3>
-              <div className="card overflow-hidden">
-                {filteredEntries[group].map((entry, idx) => {
-                  const id =
-                    entry.type === 'single'
-                      ? `single-${entry.sim.id}-${idx}`
-                      : `batch-${entry.batchId}-${idx}`;
-                  const isLast = idx === filteredEntries[group].length - 1;
-                  return (
-                    <div key={id} className={!isLast ? 'border-border border-b' : ''}>
-                      {entry.type === 'single' ? (
-                        <SimRow
-                          sim={entry.sim}
-                          onDelete={handleDelete}
-                          selectable
-                          selected={selectedIds.has(entry.sim.id)}
-                          onSelectToggle={handleToggleSelection}
-                          onTogglePinned={handleTogglePinned}
-                          onRerun={handleRerun}
-                        />
-                      ) : (
-                        <BatchGroup
-                          entry={entry}
-                          onDelete={handleDelete}
-                          selectedIds={selectedIds}
-                          onBatchSelectToggle={handleToggleBatchSelection}
-                          onRowSelectToggle={handleToggleSelection}
-                          onTogglePinned={handleTogglePinned}
-                          onRerun={handleRerun}
-                        />
-                      )}
-                    </div>
-                  );
-                })}
+          {groupKeys.map((group) => {
+            const groupIds = historyEntryIds(filteredEntries[group]);
+            const groupSelectedCount = groupIds.filter((id) => selectedIds.has(id)).length;
+            const groupAllSelected = groupIds.length > 0 && groupSelectedCount === groupIds.length;
+
+            return (
+              <div key={group} className="space-y-2">
+                <h3 className="flex items-center px-1 text-[11px] font-bold tracking-wider text-zinc-500 uppercase">
+                  <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={groupAllSelected}
+                      ref={(el) => {
+                        if (!el) return;
+                        el.indeterminate = groupSelectedCount > 0 && !groupAllSelected;
+                      }}
+                      onChange={(e) => {
+                        const event = e.nativeEvent as MouseEvent;
+                        handleToggleSelectionForIds(groupIds, e.target.checked, {
+                          additive: event.ctrlKey || event.metaKey,
+                        });
+                      }}
+                      aria-label={`Select all simulations from ${group}`}
+                      className="border-border bg-surface-2 text-gold focus:ring-gold h-4 w-4 shrink-0 rounded"
+                    />
+                    <span className="truncate">{group}</span>
+                    <span className="ml-auto shrink-0 text-[10px] font-normal tracking-normal text-zinc-600 normal-case">
+                      {groupSelectedCount > 0
+                        ? `${groupSelectedCount}/${groupIds.length} selected`
+                        : `${groupIds.length} rows`}
+                    </span>
+                  </label>
+                </h3>
+                <div className="card overflow-hidden">
+                  {filteredEntries[group].map((entry, idx) => {
+                    const id =
+                      entry.type === 'single'
+                        ? `single-${entry.sim.id}-${idx}`
+                        : `batch-${entry.batchId}-${idx}`;
+                    const isLast = idx === filteredEntries[group].length - 1;
+                    return (
+                      <div key={id} className={!isLast ? 'border-border border-b' : ''}>
+                        {entry.type === 'single' ? (
+                          <SimRow
+                            sim={entry.sim}
+                            onDelete={handleDelete}
+                            selectable
+                            selected={selectedIds.has(entry.sim.id)}
+                            onSelectToggle={handleToggleSelection}
+                            onTogglePinned={handleTogglePinned}
+                            onRerun={handleRerun}
+                          />
+                        ) : (
+                          <BatchGroup
+                            entry={entry}
+                            onDelete={handleDelete}
+                            selectedIds={selectedIds}
+                            onBatchSelectToggle={handleToggleSelectionForIds}
+                            onRowSelectToggle={handleToggleSelection}
+                            onTogglePinned={handleTogglePinned}
+                            onRerun={handleRerun}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
       {selectedIds.size > 0 && (

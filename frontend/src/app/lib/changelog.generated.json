@@ -1,5 +1,5 @@
 {
-  "contentRevision": "Unreleased-957eb37d685f",
+  "contentRevision": "Unreleased-450b6c1ca409",
   "releases": [
     {
       "version": "Unreleased",
@@ -24,6 +24,26 @@
             "Warcraft Logs activates after valid credentials are saved and adds latest-zone rankings, five recent public reports with report dates and end times, and per-boss best and median parses, public kills, best amounts, metrics, and specs.",
             "The integration settings explain what belongs in each Warcraft Logs field and show the exact redirect host and port for the current app address; private reports and private OAuth/PKCE access are not used.",
             "Personal Warcraft Logs credentials take precedence over shared hosted credentials, while environment credentials take precedence over the administrator-managed fallback. Secrets remain protected and are never returned by the API."
+          ]
+        },
+        {
+          "category": "improvement",
+          "title": "Make tracked characters easier to scan",
+          "summary": "The dashboard's tracked-character card now uses its available space more effectively, keeping the character overview compact while giving the vault a clear vertical home.",
+          "items": [
+            "Review tracked characters, profile links, level, class, item level, and actions in a compact overview column.",
+            "View Raid Vault above Mythic+ Vault in an aligned vault column with equal-height containers and responsive mobile stacking.",
+            "Keep vault rewards inside the same aligned container without repeating the weekly progress summary."
+          ]
+        },
+        {
+          "category": "improvement",
+          "title": "Make Simulation History selection and actions clearer",
+          "summary": "Simulation History now keeps row actions visible and makes multi-row selection, filtering, and mobile scanning easier.",
+          "items": [
+            "Select day groups or individual rows, use Shift to select a range, and use Ctrl or Cmd to add or remove individual rows.",
+            "Use the simulation-type filter alongside character, pin, and search filters, with the controls reordered for quicker scanning.",
+            "Keep Pin, Rerun, and Delete actions in the row layout with clear colored buttons instead of hiding them behind hover state."
           ]
         },
         {
