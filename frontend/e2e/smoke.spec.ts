@@ -5,6 +5,7 @@ async function mockBackend(page: Page) {
     localStorage.setItem('whylowdps_data_ready', 'true');
     localStorage.setItem('whylowdps_discord_prompt_dismissed', '1');
     localStorage.setItem('whylowdps_changelog_seen_3.6.0', '1');
+    localStorage.setItem('whylowdps_pwa_install_prompt_seen', '1');
   });
 
   await page.route('**/api/**', async (route) => {
@@ -33,6 +34,64 @@ async function mockBackend(page: Page) {
     }
     if (path === '/api/character-profiles') {
       return route.fulfill({ json: [] });
+    }
+    if (path.endsWith('/profile') && path.includes('/api/blizzard/character/')) {
+      return route.fulfill({
+        json: {
+          level: 90,
+          character_class: { name: 'Mage' },
+          equipped_item_level: 310,
+        },
+      });
+    }
+    if (path.endsWith('/mythic-keystone-profile')) {
+      const now = Date.now();
+      return route.fulfill({
+        json: {
+          recent_runs: [
+            {
+              keystone_level: 10,
+              keystone_dungeon: { name: 'Halls of Valor' },
+              completed_timestamp: now,
+            },
+            {
+              keystone_level: 8,
+              keystone_dungeon: { name: 'Ara-Kara' },
+              completed_timestamp: now - 10_000,
+            },
+          ],
+        },
+      });
+    }
+    if (path.endsWith('/encounters/raids')) {
+      return route.fulfill({
+        json: {
+          expansions: [
+            {
+              name: 'Current Season',
+              instances: [
+                {
+                  name: 'The Current Raid',
+                  modes: [
+                    {
+                      difficulty: { type: 'NORMAL' },
+                      progress: {
+                        encounters: [
+                          {
+                            id: 1,
+                            name: 'First Boss',
+                            last_kill_timestamp: Math.floor(Date.now() / 1000),
+                          },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      });
     }
     if (path === '/api/routes') {
       return route.fulfill({ json: [] });
@@ -173,6 +232,29 @@ test('tracked character dashboard gives the vault room to breathe', async ({ pag
     await expect(overview).toBeVisible();
     await expect(vault).toBeVisible();
     await expect(vault.getByText('Weekly Vault Progress', { exact: true })).toHaveCount(0);
+    const mythicActivities = card.locator('[data-vault-activity="mythic"]');
+    const raidActivities = card.locator('[data-vault-activity="raid"]');
+    const mythicActivity = mythicActivities.first();
+    const raidActivity = raidActivities.first();
+    await expect(mythicActivities).toHaveCount(3);
+    await expect(raidActivities).toHaveCount(3);
+    await expect(mythicActivity).toBeVisible();
+    await expect(raidActivity).toBeVisible();
+    await expect(mythicActivity.locator('[data-vault-activity-panel]')).toBeHidden();
+    await mythicActivity.hover();
+    await expect(mythicActivity.locator('[data-vault-activity-panel]')).toBeVisible();
+    await expect(mythicActivity.locator('[data-vault-activity-panel]')).toContainText(
+      'Halls of Valor'
+    );
+    const mythicPanelBox = await mythicActivity
+      .locator('[data-vault-activity-panel]')
+      .boundingBox();
+    expect(mythicPanelBox).not.toBeNull();
+    expect(mythicPanelBox!.x).toBeGreaterThanOrEqual(0);
+    expect(mythicPanelBox!.x + mythicPanelBox!.width).toBeLessThanOrEqual(viewport.width);
+    await raidActivity.hover();
+    await expect(raidActivity.locator('[data-vault-activity-panel]')).toBeVisible();
+    await expect(raidActivity.locator('[data-vault-activity-panel]')).toContainText('First Boss');
 
     const [cardBox, overviewBox, vaultBox] = await Promise.all([
       card.boundingBox(),
@@ -197,6 +279,29 @@ test('tracked character dashboard gives the vault room to breathe', async ({ pag
       expect(Math.abs(overviewBox!.height - vaultBox!.height)).toBeLessThanOrEqual(2);
     }
   }
+});
+
+test('character vault reveals weekly activity on hover', async ({ page }) => {
+  await page.goto('/character/us/Illidan/Alice?tab=vault');
+  await dismissOptionalPrompts(page);
+
+  await expect(page.getByText('Overall Vault Progress', { exact: true })).toBeVisible();
+  const mythicActivities = page.locator('[data-vault-activity="mythic"]');
+  const raidActivities = page.locator('[data-vault-activity="raid"]');
+  const mythicActivity = mythicActivities.first();
+  const raidActivity = raidActivities.first();
+  await expect(mythicActivities).toHaveCount(3);
+  await expect(raidActivities).toHaveCount(3);
+  await expect(mythicActivity).toBeVisible();
+  await expect(raidActivity).toBeVisible();
+
+  await mythicActivity.hover();
+  await expect(mythicActivity.locator('[data-vault-activity-panel]')).toContainText(
+    'Halls of Valor'
+  );
+  await dismissOptionalPrompts(page);
+  await raidActivity.hover();
+  await expect(raidActivity.locator('[data-vault-activity-panel]')).toContainText('First Boss');
 });
 
 test('dashboard quick links can be reordered and persist their order', async ({ page }) => {
