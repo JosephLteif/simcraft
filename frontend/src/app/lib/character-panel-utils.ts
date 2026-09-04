@@ -180,7 +180,7 @@ function getRunTimestamp(run: MythicRun): number {
   );
 }
 
-function periodTimestampMs(value: unknown): number {
+function timestampToMs(value: unknown): number {
   if (typeof value === 'number' || (typeof value === 'string' && /^\d+(?:\.\d+)?$/.test(value))) {
     const numeric = Number(value);
     if (Number.isFinite(numeric) && numeric > 0)
@@ -191,6 +191,10 @@ function periodTimestampMs(value: unknown): number {
     if (Number.isFinite(parsed) && parsed > 0) return parsed;
   }
   return 0;
+}
+
+function periodTimestampMs(value: unknown): number {
+  return timestampToMs(value);
 }
 
 export function getWeeklyResetStartMs(
@@ -232,6 +236,59 @@ export function getWeeklyResetStartMs(
   return reset.getTime();
 }
 
+export type WeeklyVaultMythicRun = {
+  id: string;
+  dungeon: string;
+  level: number;
+  timestamp: number;
+};
+
+function getWeeklyMythicVaultRuns(
+  mythicPlus: MythicPlusPayload,
+  region?: string,
+  periods?: Array<Record<string, unknown>>
+): WeeklyVaultMythicRun[] {
+  if (!mythicPlus || typeof mythicPlus !== 'object') return [];
+
+  const mythicPlusObject = mythicPlus as Record<string, unknown>;
+  const allRuns = collectRuns(mythicPlus).filter((run) => getRunLevel(run) > 0);
+  const recentRunsValue = mythicPlusObject.recent_runs ?? mythicPlusObject.recentRuns;
+  const currentPeriodValue = mythicPlusObject.current_period ?? mythicPlusObject.currentPeriod;
+  const recentSource = Array.isArray(recentRunsValue)
+    ? (recentRunsValue as MythicRun[])
+    : allRuns;
+  const recentRuns = [...recentSource]
+    .filter((run) => getRunLevel(run) > 0)
+    .sort((a, b) => getRunTimestamp(b) - getRunTimestamp(a))
+    .slice(0, 20);
+  const currentPeriodRuns = collectRuns(currentPeriodValue || {}).filter(
+    (run) => getRunLevel(run) > 0
+  );
+  const weekStart = getWeeklyResetStartMs(region, new Date(), periods);
+
+  const toWeeklyRuns = (runs: MythicRun[]): WeeklyVaultMythicRun[] =>
+    runs
+      .map((run, index) => ({
+        run,
+        index,
+        timestamp: timestampToMs(getRunTimestamp(run)),
+      }))
+      .filter(({ timestamp }) => timestamp >= weekStart)
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .map(({ run, index, timestamp }) => ({
+        id: `${getMythicRunName(run)}-${getRunLevel(run)}-${timestamp}-${index}`,
+        dungeon: getMythicRunName(run),
+        level: getRunLevel(run),
+        timestamp,
+      }));
+
+  const recentWeekRuns = toWeeklyRuns(recentRuns);
+  const currentPeriodWeekRuns = toWeeklyRuns(currentPeriodRuns);
+  return recentWeekRuns.length >= currentPeriodWeekRuns.length
+    ? recentWeekRuns
+    : currentPeriodWeekRuns;
+}
+
 export function computeMythicVaultProgress(
   mythicPlus: MythicPlusPayload,
   region?: string,
@@ -262,23 +319,7 @@ export function computeMythicVaultProgress(
     };
   }
 
-  const allRuns = collectRuns(mythicPlus).filter((run) => getRunLevel(run) > 0);
-  const recentSource = Array.isArray(mythicPlus?.recent_runs) ? mythicPlus.recent_runs : allRuns;
-  const recentRuns = [...recentSource]
-    .sort((a, b) => getRunTimestamp(b) - getRunTimestamp(a))
-    .slice(0, 20);
-  const weekStart = getWeeklyResetStartMs(region, new Date(), periods);
-  const recentWeekCount = recentRuns.filter((run) => {
-    const ts = getRunTimestamp(run);
-    const tsMs = ts > 0 && ts < 1_000_000_000_000 ? ts * 1000 : ts;
-    return tsMs > 0 && tsMs >= weekStart;
-  }).length;
-  const currentPeriodCount = collectRuns(mythicPlus?.current_period || {}).filter((run) => {
-    const ts = getRunTimestamp(run);
-    const tsMs = ts > 0 && ts < 1_000_000_000_000 ? ts * 1000 : ts;
-    return tsMs > 0 && tsMs >= weekStart;
-  }).length;
-  const runsForVault = Math.max(recentWeekCount, currentPeriodCount);
+  const runsForVault = getWeeklyMythicVaultRuns(mythicPlus, region, periods).length;
 
   const slotThresholds = [...MYTHIC_VAULT_THRESHOLDS];
   const slots = slotThresholds.map((threshold, idx) => ({
@@ -690,42 +731,109 @@ function normalizeRaidKey(value: unknown): string {
     .replace(/\s+/g, ' ');
 }
 
-export function computeWeeklyRaidBossKills(
+export type WeeklyVaultRaidBoss = {
+  key: string;
+  raid: string;
+  boss: string;
+  timestamp: number;
+  difficulties: string[];
+};
+
+function getWeeklyRaidBossActivity(
   raidEncounters: RaidEncountersPayload,
   region?: string,
   periods?: Array<Record<string, unknown>>
-): number {
+): WeeklyVaultRaidBoss[] {
   const expansions = Array.isArray(raidEncounters?.expansions) ? raidEncounters.expansions : [];
   const weekStart = getWeeklyResetStartMs(region, new Date(), periods);
-  const killedBosses = new Set<string>();
+  const killedBosses = new Map<string, WeeklyVaultRaidBoss>();
 
   for (const expansion of expansions) {
     for (const instance of Array.isArray(expansion?.instances) ? expansion.instances : []) {
-      const raidName = instance?.instance?.name || instance?.name || 'raid';
+      const raidName =
+        String(instance?.instance?.name || instance?.name || 'Raid').trim() || 'Raid';
       const raidKey = normalizeRaidKey(raidName);
       for (const mode of Array.isArray(instance?.modes) ? instance.modes : []) {
-        const encounters = Array.isArray(mode?.progress?.encounters)
-          ? mode.progress.encounters
-          : [];
+        const progress = mode?.progress;
+        const encounters = Array.isArray(progress?.encounters)
+          ? progress.encounters
+          : Array.isArray(mode?.encounters)
+            ? mode.encounters
+            : [];
+        const difficulty = getCharacterValueLabel(mode?.difficulty);
+
         for (let index = 0; index < encounters.length; index += 1) {
-          const encounter = encounters[index] as any;
-          const ts = Number(encounter?.last_kill_timestamp ?? 0);
-          const tsMs = ts > 0 && ts < 1_000_000_000_000 ? ts * 1000 : ts;
-          if (!(tsMs >= weekStart)) continue;
-          const bossId = Number(encounter?.encounter?.id ?? encounter?.id ?? 0);
+          const encounter = encounters[index] as RaidEncounterProgress;
+          const timestamp = timestampToMs(
+            encounter?.last_kill_timestamp ?? encounter?.lastKillTimestamp
+          );
+          if (timestamp < weekStart) continue;
+
+          const bossId = Number(
+            encounter?.encounter?.id ?? encounter?.id ?? encounter?.journal_encounter_id ?? 0
+          );
           const bossName =
-            encounter?.encounter?.name || encounter?.name || encounter?.encounter_name || '';
-          const stableBossKey =
-            bossId > 0
-              ? `id:${bossId}`
-              : `name:${normalizeRaidKey(bossName || `boss-${index + 1}`)}`;
-          killedBosses.add(`${raidKey}::${stableBossKey}`);
+            String(
+              encounter?.encounter?.name ||
+                encounter?.name ||
+                encounter?.encounter_name ||
+                `Boss ${index + 1}`
+            ).trim() || `Boss ${index + 1}`;
+          const stableBossKey = bossId > 0 ? `id:${bossId}` : `name:${normalizeRaidKey(bossName)}`;
+          const key = `${raidKey}::${stableBossKey}`;
+          const existing = killedBosses.get(key);
+          if (!existing) {
+            killedBosses.set(key, {
+              key,
+              raid: raidName,
+              boss: bossName,
+              timestamp,
+              difficulties: difficulty ? [difficulty] : [],
+            });
+            continue;
+          }
+
+          existing.timestamp = Math.max(existing.timestamp, timestamp);
+          if (difficulty && !existing.difficulties.includes(difficulty)) {
+            existing.difficulties.push(difficulty);
+          }
         }
       }
     }
   }
 
-  return killedBosses.size;
+  return Array.from(killedBosses.values()).sort((a, b) => b.timestamp - a.timestamp);
+}
+
+export function computeWeeklyRaidBossKills(
+  raidEncounters: RaidEncountersPayload,
+  region?: string,
+  periods?: Array<Record<string, unknown>>
+): number {
+  return getWeeklyRaidBossActivity(raidEncounters, region, periods).length;
+}
+
+export type WeeklyVaultActivity = {
+  mplusRuns: number;
+  raidKills: number;
+  mythicRuns: WeeklyVaultMythicRun[];
+  raidBosses: WeeklyVaultRaidBoss[];
+};
+
+export function getWeeklyVaultActivity(
+  mythicPlus: MythicPlusPayload,
+  raidEncounters: RaidEncountersPayload,
+  region?: string,
+  periods?: Array<Record<string, unknown>>
+): WeeklyVaultActivity {
+  const mythicRuns = getWeeklyMythicVaultRuns(mythicPlus, region, periods);
+  const raidBosses = getWeeklyRaidBossActivity(raidEncounters, region, periods);
+  return {
+    mplusRuns: mythicRuns.length,
+    raidKills: raidBosses.length,
+    mythicRuns,
+    raidBosses,
+  };
 }
 
 export type RaidDifficultyKey = 'lfr' | 'normal' | 'heroic' | 'mythic';

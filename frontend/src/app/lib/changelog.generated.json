@@ -1,5 +1,5 @@
 {
-  "contentRevision": "Unreleased-450b6c1ca409",
+  "contentRevision": "Unreleased-4a1aff24f5b4",
   "releases": [
     {
       "version": "Unreleased",
@@ -152,6 +152,16 @@
             "Open consistent Armory, Warcraft Logs, and Raider.IO links for characters with spaces, apostrophes, and realm slugs.",
             "Character data refreshes in the background after 15 minutes while the page is visible, keeps the last successful snapshot during failures, and recovers when the page becomes visible again.",
             "Mythic+ summaries use current-season best runs when the profile index does not include period best-run entries."
+          ]
+        },
+        {
+          "category": "improvement",
+          "title": "Show Great Vault activity per slot",
+          "summary": "Weekly Mythic+ runs and raid boss kills are now available from every individual Great Vault slot card.",
+          "items": [
+            "Hover or focus a Mythic+ or Raid slot to open a game-style activity popover without permanently expanding the vault layout.",
+            "Tap a slot on mobile to keep its activity details open, and dismiss the popover by clicking elsewhere or pressing Escape.",
+            "Tracked-character dashboard cards and character detail pages use the same weekly activity data, so slot progress and the underlying runs or kills stay aligned."
           ]
         },
         {

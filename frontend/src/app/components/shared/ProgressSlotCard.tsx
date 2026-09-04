@@ -8,6 +8,7 @@ type ProgressSlotCardProps = {
   progress?: number;
   footerLeft?: string;
   footerRight?: string;
+  className?: string;
 };
 
 export default function ProgressSlotCard({
@@ -18,6 +19,7 @@ export default function ProgressSlotCard({
   progress,
   footerLeft,
   footerRight,
+  className = '',
 }: ProgressSlotCardProps) {
   const success = tone === 'success';
 
@@ -25,7 +27,7 @@ export default function ProgressSlotCard({
     <div
       className={`rounded border p-2 ${
         success ? 'border-emerald-400/40 bg-emerald-500/10' : 'border-white/10 bg-black/25'
-      }`}
+      } ${className}`.trim()}
     >
       <div className="flex items-center justify-between">
         <span className="text-[11px] font-semibold text-zinc-200">{slotLabel}</span>

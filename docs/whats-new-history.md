@@ -130,6 +130,14 @@ Character detail pages now bring profile, progression, profession, and external 
 - Character data refreshes in the background after 15 minutes while the page is visible, keeps the last successful snapshot during failures, and recovers when the page becomes visible again.
 - Mythic+ summaries use current-season best runs when the profile index does not include period best-run entries.
 
+#### Show Great Vault activity per slot
+
+Weekly Mythic+ runs and raid boss kills are now available from every individual Great Vault slot card.
+
+- Hover or focus a Mythic+ or Raid slot to open a game-style activity popover without permanently expanding the vault layout.
+- Tap a slot on mobile to keep its activity details open, and dismiss the popover by clicking elsewhere or pressing Escape.
+- Tracked-character dashboard cards and character detail pages use the same weekly activity data, so slot progress and the underlying runs or kills stay aligned.
+
 #### Consolidate external character data
 
 Character Mythic+ and Raiding tabs now place each provider's unique information alongside the canonical Blizzard data, so the same score and raid totals are not shown twice.
