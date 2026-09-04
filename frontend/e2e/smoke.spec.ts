@@ -26,7 +26,7 @@ async function mockBackend(page: Page) {
       });
     }
     if (path === '/api/history/stats') {
-      return route.fulfill({ json: { size_bytes: 0, count: 1 } });
+      return route.fulfill({ json: { size_bytes: 0, count: 4 } });
     }
     if (path === '/api/config') {
       return route.fulfill({ json: { max_jobs: 50, max_scenarios: 10 } });
@@ -38,6 +38,9 @@ async function mockBackend(page: Page) {
       return route.fulfill({ json: [] });
     }
     if (path === '/api/sims') {
+      const now = new Date();
+      const yesterday = new Date(now);
+      yesterday.setDate(yesterday.getDate() - 1);
       return route.fulfill({
         json: [
           {
@@ -52,6 +55,54 @@ async function mockBackend(page: Page) {
             player_class: 'Mage',
             realm: 'Illidan',
             dps: 123456,
+            batch_id: null,
+            size_bytes: 128,
+            pinned: false,
+          },
+          {
+            id: 'sim-2',
+            status: 'done',
+            sim_type: 'top_gear',
+            created_at: now.toISOString(),
+            fight_style: 'Patchwerk',
+            iterations: 1000,
+            error_message: null,
+            player_name: 'Bob',
+            player_class: 'Mage',
+            realm: 'Illidan',
+            dps: 123000,
+            batch_id: null,
+            size_bytes: 128,
+            pinned: false,
+          },
+          {
+            id: 'sim-3',
+            status: 'done',
+            sim_type: 'quick',
+            created_at: now.toISOString(),
+            fight_style: 'Patchwerk',
+            iterations: 1000,
+            error_message: null,
+            player_name: 'Cara',
+            player_class: 'Mage',
+            realm: 'Illidan',
+            dps: 122000,
+            batch_id: null,
+            size_bytes: 128,
+            pinned: false,
+          },
+          {
+            id: 'sim-4',
+            status: 'done',
+            sim_type: 'droptimizer',
+            created_at: yesterday.toISOString(),
+            fight_style: 'Patchwerk',
+            iterations: 1000,
+            error_message: null,
+            player_name: 'Dana',
+            player_class: 'Mage',
+            realm: 'Illidan',
+            dps: 121000,
             batch_id: null,
             size_bytes: 128,
             pinned: false,
@@ -76,6 +127,16 @@ async function mockBackend(page: Page) {
   });
 }
 
+async function dismissOptionalPrompts(page: Page) {
+  for (const button of [
+    page.getByRole('button', { name: 'Not now' }),
+    page.getByRole('button', { name: 'Close changelog' }),
+    page.getByRole('button', { name: 'Close', exact: true }),
+  ]) {
+    if (await button.isVisible().catch(() => false)) await button.click();
+  }
+}
+
 test.beforeEach(async ({ page }) => {
   await mockBackend(page);
 });
@@ -88,6 +149,54 @@ test('dashboard renders with mocked backend state', async ({ page }) => {
     'https://www.wowhead.com/'
   );
   await expect(page.getByRole('heading', { name: /Simulation Activity/ })).toBeVisible();
+});
+
+test('tracked character dashboard gives the vault room to breathe', async ({ page }) => {
+  for (const viewport of [
+    { width: 1280, height: 900 },
+    { width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto('/');
+    await page.evaluate(() => {
+      localStorage.setItem('whylowdps_tracked_characters', JSON.stringify(['us|Illidan|Alice']));
+    });
+    await page.reload();
+    await dismissOptionalPrompts(page);
+
+    const card = page.locator('[data-tracked-character-card]');
+    const overview = card.locator('[data-tracked-overview]');
+    const vault = card.locator('[data-tracked-vault]');
+    const raidVault = vault.getByText('Raid Vault', { exact: true });
+    const mythicVault = vault.getByText('Mythic+ Vault', { exact: true });
+    await expect(card).toBeVisible();
+    await expect(overview).toBeVisible();
+    await expect(vault).toBeVisible();
+    await expect(vault.getByText('Weekly Vault Progress', { exact: true })).toHaveCount(0);
+
+    const [cardBox, overviewBox, vaultBox] = await Promise.all([
+      card.boundingBox(),
+      overview.boundingBox(),
+      vault.boundingBox(),
+    ]);
+    const [raidBox, mythicBox] = await Promise.all([
+      raidVault.boundingBox(),
+      mythicVault.boundingBox(),
+    ]);
+    expect(cardBox).not.toBeNull();
+    expect(overviewBox).not.toBeNull();
+    expect(vaultBox).not.toBeNull();
+    expect(raidBox).not.toBeNull();
+    expect(mythicBox).not.toBeNull();
+    expect(cardBox!.width).toBeLessThanOrEqual(viewport.width);
+    expect(vaultBox!.height).toBeGreaterThan(250);
+    expect(raidBox!.y).toBeLessThan(mythicBox!.y);
+    if (viewport.width >= 1024) {
+      expect(vaultBox!.x).toBeGreaterThan(cardBox!.x + cardBox!.width * 0.5);
+      expect(vaultBox!.x).toBeGreaterThan(overviewBox!.x + overviewBox!.width);
+      expect(Math.abs(overviewBox!.height - vaultBox!.height)).toBeLessThanOrEqual(2);
+    }
+  }
 });
 
 test('dashboard quick links can be reordered and persist their order', async ({ page }) => {
@@ -159,8 +268,95 @@ test('quick sim validates empty input and can submit pasted input', async ({ pag
 
 test('history shows mocked simulation row', async ({ page }) => {
   await page.goto('/history');
+  await dismissOptionalPrompts(page);
   await expect(page.getByText('Alice')).toBeVisible();
-  await expect(page.getByText('Quick Sim')).toBeVisible();
+  await expect(page.getByRole('link', { name: /Quick Sim/ }).first()).toBeVisible();
+});
+
+test('history keeps row actions outside the content column', async ({ page }) => {
+  for (const viewport of [
+    { width: 1280, height: 720 },
+    { width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto('/history');
+    await dismissOptionalPrompts(page);
+
+    const rowLink = page.getByRole('link', { name: /Alice/ }).first();
+    const row = rowLink.locator('..');
+    const rerunButton = row.getByRole('button', { name: 'Rerun simulation', exact: true });
+    const linkBox = await rowLink.boundingBox();
+    const actionBox = await rerunButton.boundingBox();
+
+    await expect(row.getByRole('button', { name: 'Pin simulation', exact: true })).toBeVisible();
+    await expect(rerunButton).toBeVisible();
+    await expect(row.getByRole('button', { name: 'Delete simulation', exact: true })).toBeVisible();
+    expect(linkBox).not.toBeNull();
+    expect(actionBox).not.toBeNull();
+    expect(linkBox!.x + linkBox!.width).toBeLessThanOrEqual(actionBox!.x);
+  }
+});
+
+test('history aligns filter controls on mobile', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/history');
+  await dismissOptionalPrompts(page);
+
+  const characterFilter = page.getByLabel('Filter by Character:', { exact: true });
+  const pinFilter = page.getByLabel('Pin Filter:', { exact: true });
+  const keepLast = page.getByLabel('Keep last:', { exact: true });
+  const search = page.getByLabel('Search history', { exact: true });
+  const [characterBox, pinBox, keepBox, searchBox] = await Promise.all([
+    characterFilter.boundingBox(),
+    pinFilter.boundingBox(),
+    keepLast.boundingBox(),
+    search.boundingBox(),
+  ]);
+
+  expect(characterBox).not.toBeNull();
+  expect(pinBox).not.toBeNull();
+  expect(keepBox).not.toBeNull();
+  expect(searchBox).not.toBeNull();
+  expect(Math.abs(characterBox!.x - pinBox!.x)).toBeLessThanOrEqual(1);
+  expect(Math.abs(characterBox!.x - keepBox!.x)).toBeLessThanOrEqual(1);
+  expect(searchBox!.width).toBeGreaterThan(characterBox!.width);
+});
+
+test('history filters rows by simulation type', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/history');
+  await dismissOptionalPrompts(page);
+
+  const simTypeFilter = page.getByLabel('Sim Type:', { exact: true });
+  await expect(simTypeFilter).toBeVisible();
+  await simTypeFilter.selectOption('top_gear');
+
+  await expect(simTypeFilter).toHaveValue('top_gear');
+  await expect(page.getByRole('link', { name: /Bob/ })).toBeVisible();
+  await expect(page.getByRole('link', { name: /Alice/ })).toHaveCount(0);
+});
+
+test('history supports day, range, and modifier selection', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/history');
+  await dismissOptionalPrompts(page);
+
+  const rowCheckboxes = page.getByRole('checkbox', { name: /Select simulation/ });
+  const selectedRows = page.locator('[data-history-row][aria-selected="true"]');
+  await expect(page.getByRole('button', { name: 'Rerun simulation' }).first()).toBeVisible();
+
+  await rowCheckboxes.nth(0).check();
+  await page.getByRole('link', { name: /Cara/ }).click({ modifiers: ['Shift'] });
+  await expect(selectedRows).toHaveCount(3);
+
+  await page.getByRole('link', { name: /Bob/ }).click({ modifiers: ['Control'] });
+  await expect(selectedRows).toHaveCount(2);
+
+  await page
+    .getByRole('checkbox', { name: /Select all simulations from/ })
+    .first()
+    .check();
+  await expect(selectedRows).toHaveCount(3);
 });
 
 test('drop finder page renders controls without live backend data', async ({ page }) => {
