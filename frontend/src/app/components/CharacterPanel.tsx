@@ -13,6 +13,7 @@ import GearOverview, { type GearItem as OverviewGearItem } from './GearOverview'
 import VaultRewardsGrid, { type VaultRewardItem } from './VaultRewardsGrid';
 import SectionCard from './shared/SectionCard';
 import ProgressSlotCard from './shared/ProgressSlotCard';
+import VaultActivityList, { VaultActivitySummary } from './shared/VaultActivityList';
 import { RAID_VAULT_THRESHOLDS } from '../lib/game-rules';
 import { buildCharacterTalentString } from '../lib/character-panel-talent';
 import type {
@@ -32,7 +33,7 @@ import type {
 import {
   buildCharacterExternalLinks,
   computeMythicVaultProgress,
-  computeWeeklyRaidBossKills,
+  getWeeklyVaultActivity,
   getRaidExpansionOptions,
   getMemberProfileHref,
   isCurrentExpansionPlaceholder,
@@ -261,23 +262,20 @@ function VaultOverviewCard({
   region?: string;
   periods?: Array<Record<string, unknown>>;
 }) {
-  useMemo(
-    () => computeMythicVaultProgress(mythicPlus, region, periods).runsForVault,
-    [mythicPlus, periods, region]
-  );
-  const raidBossesThisWeek = useMemo(() => {
-    return computeWeeklyRaidBossKills(raidEncounters, region, periods);
-  }, [periods, raidEncounters, region]);
-
   const vaultItems = useMemo(
     () => parseVaultRewardsFromSimcInput(latestSimcInput) as VaultRewardItem[],
     [latestSimcInput]
+  );
+  const vaultActivity = useMemo(
+    () => getWeeklyVaultActivity(mythicPlus, raidEncounters, region, periods),
+    [mythicPlus, periods, raidEncounters, region]
   );
   const mythicVaultProgress = useMemo(
     () => computeMythicVaultProgress(mythicPlus, region, periods),
     [mythicPlus, periods, region]
   );
   const mythicSlots = mythicVaultProgress.slots;
+  const raidBossesThisWeek = vaultActivity.raidKills;
 
   const raidSlots = useMemo(
     () =>
@@ -301,45 +299,57 @@ function VaultOverviewCard({
         <SectionCard title="Mythic+ Track">
           <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
             {mythicSlots.map((slot) => (
-              <ProgressSlotCard
+              <VaultActivityList
                 key={`mplus-${slot.slot}`}
-                slotLabel={`Slot ${slot.slot}`}
-                statusLabel={slot.unlocked ? 'Unlocked' : 'Locked'}
-                tone={slot.unlocked ? 'success' : 'neutral'}
-                description={
-                  slot.unlocked
-                    ? `Based on ${mythicVaultProgress.runsForVault} runs`
-                    : `${slot.remaining} more runs`
-                }
-                progress={slot.progress}
-              />
+                kind="mythic"
+                label={`Mythic+ Slot ${slot.slot}`}
+                items={vaultActivity.mythicRuns}
+                className="h-full"
+              >
+                <ProgressSlotCard
+                  slotLabel={`Slot ${slot.slot}`}
+                  statusLabel={slot.unlocked ? 'Unlocked' : 'Locked'}
+                  tone={slot.unlocked ? 'success' : 'neutral'}
+                  description={
+                    slot.unlocked
+                      ? `Based on ${mythicVaultProgress.runsForVault} runs`
+                      : `${slot.remaining} more runs`
+                  }
+                  progress={slot.progress}
+                  className="h-full"
+                />
+              </VaultActivityList>
             ))}
           </div>
-          <p className="mt-2 text-[11px] text-zinc-500">
-            {mythicVaultProgress.runsForVault} runs completed this week.
-          </p>
+          <VaultActivitySummary kind="mythic" count={vaultActivity.mythicRuns.length} />
         </SectionCard>
 
         <SectionCard title="Raid Track">
           <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
             {raidSlots.map((slot) => (
-              <ProgressSlotCard
+              <VaultActivityList
                 key={`raid-${slot.slot}`}
-                slotLabel={`Slot ${slot.slot}`}
-                statusLabel={slot.unlocked ? 'Unlocked' : `${slot.remaining} more`}
-                tone={slot.unlocked ? 'success' : 'neutral'}
-                description={
-                  slot.unlocked
-                    ? `Based on ${raidBossesThisWeek} boss kills`
-                    : `Requires ${slot.threshold} boss kills`
-                }
-                progress={slot.progress}
-              />
+                kind="raid"
+                label={`Raid Slot ${slot.slot}`}
+                items={vaultActivity.raidBosses}
+                className="h-full"
+              >
+                <ProgressSlotCard
+                  slotLabel={`Slot ${slot.slot}`}
+                  statusLabel={slot.unlocked ? 'Unlocked' : `${slot.remaining} more`}
+                  tone={slot.unlocked ? 'success' : 'neutral'}
+                  description={
+                    slot.unlocked
+                      ? `Based on ${raidBossesThisWeek} boss kills`
+                      : `Requires ${slot.threshold} boss kills`
+                  }
+                  progress={slot.progress}
+                  className="h-full"
+                />
+              </VaultActivityList>
             ))}
           </div>
-          <p className="mt-2 text-[11px] text-zinc-500">
-            {raidBossesThisWeek} boss kills completed this week.
-          </p>
+          <VaultActivitySummary kind="raid" count={vaultActivity.raidBosses.length} />
         </SectionCard>
       </div>
 

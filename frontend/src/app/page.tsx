@@ -70,12 +70,14 @@ import { useSimContext } from './components/SimContext';
 import { useAuth } from './components/AuthContext';
 import CharacterQuickLinks from './components/character/CharacterQuickLinks';
 import VaultRewardsGrid, { type VaultRewardItem } from './components/VaultRewardsGrid';
+import VaultActivityList, { VaultActivitySummary } from './components/shared/VaultActivityList';
 import { characterHref } from './lib/routes';
 import { CLASS_COLORS, type SimSummary } from './lib/types';
 import { MYTHIC_VAULT_THRESHOLDS, RAID_VAULT_THRESHOLDS } from './lib/game-rules';
-import { computeWeeklyRaidBossKills } from './lib/character-panel-utils';
+import { getWeeklyVaultActivity, type WeeklyVaultActivity } from './lib/character-panel-utils';
 import { useDismissOnOutside } from './lib/useDismissOnOutside';
 import { useActiveCharacter } from './components/ActiveCharacterContext';
+import { useGameContext } from './lib/useGameContext';
 import OnboardingChecklist from './components/OnboardingChecklist';
 import ReadinessPanel from './components/ReadinessPanel';
 import { fetchReadiness, type ReadinessSnapshot } from './lib/readiness';
@@ -377,12 +379,6 @@ function formatBytes(bytes: number): string {
   return `${value.toFixed(value >= 100 ? 0 : 1)} ${units[i]}`;
 }
 
-function toTimestampMs(raw: unknown): number {
-  const n = Number(raw || 0);
-  if (!Number.isFinite(n) || n <= 0) return 0;
-  return n < 1_000_000_000_000 ? n * 1000 : n;
-}
-
 function getWeeklyResetStartMs(regionRaw: string | null | undefined, now = new Date()): number {
   const region = String(regionRaw || 'us').toLowerCase();
   const resetDayUtc = region === 'eu' ? 3 : region === 'Asia' ? 4 : 2; // Sun=0, Tue=2, Wed=3, Thu=4
@@ -440,73 +436,11 @@ function formatLocalDateTime(timestampMs: number): string {
   });
 }
 
-function computeMythicVaultRuns(mythicPlus: any, region?: string): number {
-  const isRunLike = (value: any) =>
-    value &&
-    typeof value === 'object' &&
-    (typeof value.keystone_level === 'number' ||
-      typeof value.keystoneLevel === 'number' ||
-      value.keystone_dungeon ||
-      value.dungeon ||
-      value.completed_challenge_mode);
-
-  const collectRuns = (root: any): any[] => {
-    const out: any[] = [];
-    const stack: any[] = [root];
-    const seen = new Set<any>();
-    while (stack.length > 0) {
-      const current = stack.pop();
-      if (!current || seen.has(current)) continue;
-      seen.add(current);
-      if (Array.isArray(current)) {
-        if (current.some((item) => isRunLike(item)))
-          out.push(...current.filter((item) => isRunLike(item)));
-        else for (const item of current) if (item && typeof item === 'object') stack.push(item);
-        continue;
-      }
-      if (typeof current === 'object') {
-        if (isRunLike(current)) out.push(current);
-        for (const value of Object.values(current))
-          if (value && typeof value === 'object') stack.push(value);
-      }
-    }
-    return out;
-  };
-
-  const getRunLevel = (run: any) => Number(run?.keystone_level ?? run?.keystoneLevel ?? 0);
-  const getRunTimestamp = (run: any) =>
-    toTimestampMs(
-      run?.completed_timestamp ??
-        run?.completedTimestamp ??
-        run?.end_timestamp ??
-        run?.endTimestamp ??
-        run?.start_timestamp ??
-        run?.startTimestamp ??
-        run?.timestamp ??
-        0
-    );
-
-  const allRuns = collectRuns(mythicPlus).filter((run) => getRunLevel(run) > 0);
-  const recentSource = Array.isArray(mythicPlus?.recent_runs) ? mythicPlus.recent_runs : allRuns;
-  const recentRuns = [...recentSource]
-    .sort((a, b) => getRunTimestamp(b) - getRunTimestamp(a))
-    .slice(0, 20);
-  const weekStart = getWeeklyResetStartMs(region);
-  const recentWeekCount = recentRuns.filter((run) => {
-    const ts = getRunTimestamp(run);
-    return ts > 0 && ts >= weekStart;
-  }).length;
-  const currentPeriodCount = collectRuns(mythicPlus?.current_period || {}).filter((run) => {
-    const ts = getRunTimestamp(run);
-    return ts > 0 && ts >= weekStart;
-  }).length;
-  return Math.max(recentWeekCount, currentPeriodCount);
-}
-
 export default function Home() {
   const router = useRouter();
   const { setSimcInput } = useSimContext();
   const { lightMode } = useAuth();
+  const gameContext = useGameContext();
   const { setCharacter: setActiveCharacter } = useActiveCharacter();
   const [sims, setSims] = useState<SimSummary[]>([]);
   const [queuedSims, setQueuedSims] = useState(0);
@@ -523,7 +457,7 @@ export default function Home() {
   const [trackedClassByCharacter, setTrackedClassByCharacter] = useState<Record<string, string>>(
     {}
   );
-  const [mainVault, setMainVault] = useState<{ mplusRuns: number; raidKills: number } | null>(null);
+  const [mainVault, setMainVault] = useState<WeeklyVaultActivity | null>(null);
   const [mainMeta, setMainMeta] = useState<{
     level?: number;
     className?: string;
@@ -849,9 +783,14 @@ export default function Home() {
         setMainVaultRewards(rewards.slice(0, 6));
         setMainSimcInput(latestSimc);
 
-        const mplusRuns = computeMythicVaultRuns(mythicPlus, region);
-        const raidKills = computeWeeklyRaidBossKills(raidEncounters, region);
-        setMainVault({ mplusRuns, raidKills });
+        setMainVault(
+          getWeeklyVaultActivity(
+            mythicPlus,
+            raidEncounters,
+            region,
+            gameContext?.active_season?.periods
+          )
+        );
         if (shouldRefresh) {
           const ts = Date.now();
           const charKey = `${region.toLowerCase()}|${realm.toLowerCase()}|${name.toLowerCase()}`;
@@ -871,7 +810,13 @@ export default function Home() {
       }
     };
     void loadMainCharacter();
-  }, [activeTrackedIndex, lightMode, setActiveCharacter, trackedRefreshToken]);
+  }, [
+    activeTrackedIndex,
+    gameContext?.active_season?.periods,
+    lightMode,
+    setActiveCharacter,
+    trackedRefreshToken,
+  ]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -2375,8 +2320,8 @@ export default function Home() {
                           data-tracked-vault
                           className="flex h-full min-w-0 flex-col gap-3 rounded-xl border border-gold/20 bg-gradient-to-b from-gold/[0.03] via-black/15 to-black/15 p-3"
                         >
-                            <div className="grid min-h-0 flex-1 auto-rows-fr gap-3">
-                              <div className="order-2 border-gold/25 from-gold/[0.06] flex min-h-[12rem] min-w-0 flex-col rounded-xl border bg-gradient-to-b via-black/20 to-black/20 p-3">
+                          <div className="grid min-h-0 flex-1 auto-rows-fr gap-3">
+                            <div className="order-2 border-gold/25 from-gold/[0.06] flex min-h-[12rem] min-w-0 flex-col rounded-xl border bg-gradient-to-b via-black/20 to-black/20 p-3">
                                 <div className="mb-3 flex items-center justify-between gap-2">
                                   <div className="flex items-center gap-2">
                                     <Gem className="text-gold h-4 w-4" strokeWidth={2} />
@@ -2396,10 +2341,16 @@ export default function Home() {
                                     const unlocked = current >= threshold;
                                     const progress = Math.min(1, current / threshold);
                                     return (
-                                      <div
+                                      <VaultActivityList
                                         key={`main-mplus-${threshold}`}
-                                        className={`flex min-h-[7rem] flex-col rounded-lg border p-2.5 ${unlocked ? 'border-emerald-400/25 bg-emerald-400/[0.06]' : 'border-white/10 bg-black/25'}`}
+                                        kind="mythic"
+                                        label={`Mythic+ Slot ${idx + 1}`}
+                                        items={mainVault?.mythicRuns ?? []}
+                                        className="h-full"
                                       >
+                                        <div
+                                        className={`flex h-full min-h-[7rem] flex-col rounded-lg border p-2.5 ${unlocked ? 'border-emerald-400/25 bg-emerald-400/[0.06]' : 'border-white/10 bg-black/25'}`}
+                                        >
                                         <div className="mb-1 flex items-center justify-between text-[11px]">
                                           <span className="font-semibold text-zinc-200">
                                             Slot {idx + 1}
@@ -2427,15 +2378,17 @@ export default function Home() {
                                             Requires {threshold} runs
                                           </p>
                                         </div>
-                                      </div>
+                                        </div>
+                                      </VaultActivityList>
                                     );
                                   })}
                                 </div>
-                                <p className="mt-2 text-[11px] text-zinc-500">
-                                  {mainVault?.mplusRuns ?? 0} runs completed this week.
-                                </p>
+                                <VaultActivitySummary
+                                  kind="mythic"
+                                  count={mainVault?.mythicRuns.length ?? 0}
+                                />
                               </div>
-                              <div className="order-1 flex min-h-[12rem] min-w-0 flex-col rounded-xl border border-emerald-400/20 bg-gradient-to-b from-emerald-400/[0.05] via-black/20 to-black/20 p-3">
+                            <div className="order-1 flex min-h-[12rem] min-w-0 flex-col rounded-xl border border-emerald-400/20 bg-gradient-to-b from-emerald-400/[0.05] via-black/20 to-black/20 p-3">
                                 <div className="mb-3 flex items-center justify-between gap-2">
                                   <div className="flex items-center gap-2">
                                     <Trophy className="h-4 w-4 text-emerald-300" strokeWidth={2} />
@@ -2455,10 +2408,16 @@ export default function Home() {
                                     const unlocked = current >= threshold;
                                     const progress = Math.min(1, current / threshold);
                                     return (
-                                      <div
+                                      <VaultActivityList
                                         key={`main-raid-${threshold}`}
-                                        className={`flex min-h-[7rem] flex-col rounded-lg border p-2.5 ${unlocked ? 'border-emerald-400/25 bg-emerald-400/[0.06]' : 'border-white/10 bg-black/25'}`}
+                                        kind="raid"
+                                        label={`Raid Slot ${idx + 1}`}
+                                        items={mainVault?.raidBosses ?? []}
+                                        className="h-full"
                                       >
+                                        <div
+                                        className={`flex h-full min-h-[7rem] flex-col rounded-lg border p-2.5 ${unlocked ? 'border-emerald-400/25 bg-emerald-400/[0.06]' : 'border-white/10 bg-black/25'}`}
+                                        >
                                         <div className="mb-1 flex items-center justify-between text-[11px]">
                                           <span className="font-semibold text-zinc-200">
                                             Slot {idx + 1}
@@ -2486,13 +2445,15 @@ export default function Home() {
                                             Requires {threshold} boss kills
                                           </p>
                                         </div>
-                                      </div>
+                                        </div>
+                                      </VaultActivityList>
                                     );
                                   })}
                                 </div>
-                                <p className="mt-2 text-[11px] text-zinc-500">
-                                  {mainVault?.raidKills ?? 0} boss kills completed this week.
-                                </p>
+                                  <VaultActivitySummary
+                                    kind="raid"
+                                    count={mainVault?.raidBosses.length ?? 0}
+                                  />
                               </div>
                             </div>
                           {mainVaultRewards.length > 0 && (
@@ -2503,7 +2464,7 @@ export default function Home() {
                               <VaultRewardsGrid items={mainVaultRewards} />
                             </div>
                           )}
-                        </div>
+                          </div>
                         </div>
                       );
                     })()

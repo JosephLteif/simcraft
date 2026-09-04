@@ -20,6 +20,7 @@ The format is based on Keep a Changelog and this project uses semantic versionin
 ### Changed
 
 - The tracked-character dashboard card now uses a compact character overview beside a vertically stacked vault column, with Raid Vault above Mythic+ Vault, equal-height desktop containers, responsive mobile stacking, and no redundant weekly progress strip.
+- Great Vault slots now reveal their weekly Mythic+ runs or raid boss kills in game-style per-slot popovers on hover, focus, or touch, with the same activity details on tracked characters and character detail pages.
 - Simulation History now supports day-group, Shift-range, and Ctrl/Cmd additive selection, adds a simulation-type filter, improves mobile filter ordering, and keeps colored Pin, Rerun, and Delete actions visible in each row.
 - Header actions are now less crowded: What's New lives in the profile menu, shared-result import is available through App search, and the current page tour uses a standalone help icon outside the mobile More menu.
 - App search now includes Queue, Raids, Saved Routes, Wishlist, Crest Upgrades, analysis tools, and Trinket Heatmaps, while the Analysis navigation group correctly stays active on Trinket Heatmaps.

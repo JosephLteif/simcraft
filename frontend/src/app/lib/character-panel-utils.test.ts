@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildCharacterExternalLinks,
   getRaidExpansionOptions,
+  getWeeklyVaultActivity,
   mergeMythicPlusDisplay,
   parseCharacterProfessions,
   parseRaidProgressionData,
@@ -74,6 +75,79 @@ describe('character panel normalization', () => {
     expect(summarizeMythicPlus(mythicPlus)?.bestDungeonName).toBe('Halls of Valor');
     expect(summarizeMythicPlus(mythicPlus)?.vaultProgressCount).toBe(4);
     expect(summarizeMythicPlus({})).toBeNull();
+  });
+
+  it('returns the weekly dungeon and raid activity that drives vault progress', () => {
+    const now = Date.now();
+    const weekStart = new Date(now - 60_000).toISOString();
+    const activity = getWeeklyVaultActivity(
+      {
+        recent_runs: [
+          {
+            keystone_level: 10,
+            keystone_dungeon: { name: 'Halls of Valor' },
+            completed_timestamp: now,
+          },
+          {
+            keystone_level: 8,
+            keystone_dungeon: { name: 'Ara-Kara' },
+            completed_timestamp: now - 10_000,
+          },
+        ],
+      },
+      {
+        expansions: [
+          {
+            name: 'Current Season',
+            instances: [
+              {
+                name: 'The Current Raid',
+                modes: [
+                  {
+                    difficulty: { type: 'NORMAL' },
+                    progress: {
+                      encounters: [
+                        {
+                          id: 1,
+                          name: 'First Boss',
+                          last_kill_timestamp: Math.floor(now / 1000),
+                        },
+                      ],
+                    },
+                  },
+                  {
+                    difficulty: { type: 'HEROIC' },
+                    progress: {
+                      encounters: [
+                        {
+                          id: 1,
+                          name: 'First Boss',
+                          last_kill_timestamp: Math.floor(now / 1000),
+                        },
+                      ],
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      'us',
+      [{ start_time: weekStart }]
+    );
+
+    expect(activity.mplusRuns).toBe(2);
+    expect(activity.mythicRuns.map((run) => `${run.dungeon} +${run.level}`)).toEqual([
+      'Halls of Valor +10',
+      'Ara-Kara +8',
+    ]);
+    expect(activity.raidKills).toBe(1);
+    expect(activity.raidBosses[0]).toMatchObject({
+      raid: 'The Current Raid',
+      boss: 'First Boss',
+      difficulties: ['NORMAL', 'HEROIC'],
+    });
   });
 
   it('reads highest key and dungeon from Blizzard current-period best runs', () => {
