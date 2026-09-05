@@ -1,5 +1,5 @@
 {
-  "contentRevision": "Unreleased-8add081b0c8a",
+  "contentRevision": "Unreleased-52b5b743977a",
   "releases": [
     {
       "version": "Unreleased",
@@ -44,6 +44,16 @@
             "Warcraft Logs activates after valid credentials are saved and adds latest-zone rankings, five recent public reports with report dates and end times, and per-boss best and median parses, public kills, best amounts, metrics, and specs.",
             "The integration settings explain what belongs in each Warcraft Logs field and show the exact redirect host and port for the current app address; private reports and private OAuth/PKCE access are not used.",
             "Personal Warcraft Logs credentials take precedence over shared hosted credentials, while environment credentials take precedence over the administrator-managed fallback. Secrets remain protected and are never returned by the API."
+          ]
+        },
+        {
+          "category": "improvement",
+          "title": "Make Mythic+ overviews more compact",
+          "summary": "Character Mythic+ overviews now use a responsive widget grid to show more progression data without a long vertical stack.",
+          "items": [
+            "Review the Mythic+ summary and season dungeon bests side by side on desktop.",
+            "View weekly vault progress and Raider.IO details in adjacent widgets, with vault slots arranged across the card.",
+            "Keep the layout stacked and readable on narrow screens."
           ]
         },
         {
