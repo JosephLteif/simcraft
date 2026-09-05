@@ -50,6 +50,14 @@ Character Mythic+ overviews now use a responsive widget grid to show more progre
 - View weekly vault progress and Raider.IO details in adjacent widgets, with vault slots arranged across the card.
 - Keep the layout stacked and readable on narrow screens.
 
+#### Make Raiding overviews more compact
+
+Character Raiding overviews now place Blizzard progression and Warcraft Logs data in adjacent responsive widgets when both providers are enabled.
+
+- Keep raid expansion, group, and parse controls with the Blizzard progression widget.
+- View Warcraft Logs rankings and recent public reports beside raid progress on wider screens.
+- Expand Blizzard progression to full width when Warcraft Logs is disabled and stack the widgets on narrow screens.
+
 #### Make tracked characters easier to scan
 
 The dashboard's tracked-character card now uses its available space more effectively, keeping the character overview compact while giving the vault a clear vertical home.
