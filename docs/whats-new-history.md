@@ -42,6 +42,14 @@ Character pages can now combine Blizzard data with public Raider.IO and Warcraft
 
 ### Improvements
 
+#### Make Mythic+ overviews more compact
+
+Character Mythic+ overviews now use a responsive widget grid to show more progression data without a long vertical stack.
+
+- Review the Mythic+ summary and season dungeon bests side by side on desktop.
+- View weekly vault progress and Raider.IO details in adjacent widgets, with vault slots arranged across the card.
+- Keep the layout stacked and readable on narrow screens.
+
 #### Make tracked characters easier to scan
 
 The dashboard's tracked-character card now uses its available space more effectively, keeping the character overview compact while giving the vault a clear vertical home.
