@@ -21,6 +21,7 @@ The format is based on Keep a Changelog and this project uses semantic versionin
 
 ### Changed
 
+- Simulation result gear panels now use the class artwork as a full-width backdrop, keep the character panel beside an external stats panel at roughly a 70/30 split, and remove the redundant inner Best Gear heading.
 - Character Mythic+ overviews now use a responsive widget grid, placing the summary beside season dungeon bests and the weekly vault beside Raider.IO details; vault slots are arranged horizontally on wider screens and stack on mobile.
 - Character Raiding overviews now use the responsive widget grid to place Blizzard progression beside Warcraft Logs when enabled, expand Blizzard content to full width otherwise, and stack the widgets on mobile.
 - Character Mythic+ and Raiding tabs now reuse the Vault tab's Great Vault tracker widgets, including per-slot activity popovers, completion placeholders, and unlocked item levels.

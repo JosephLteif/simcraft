@@ -44,6 +44,7 @@ import {
 } from '../../lib/scenario-siblings';
 import { simResultHref } from '../../lib/routes';
 import { simulationTypeRoute } from '../../lib/simulation-routes';
+import { buildCharacterBackgroundUrl } from '../../lib/profile-format';
 import { trackSimulations } from '../../lib/sim-tracking';
 import {
   getSimReturnTarget,
@@ -1164,6 +1165,17 @@ export default function SimResultClient({ initialJob, shared = false }: SimResul
 
   const equippedGear = r.equipped_gear as any;
   const avgIlevel = equippedGear ? calculateAverageIlevel(equippedGear) : undefined;
+  const playerClass =
+    typeof r.player_class === 'string' && r.player_class.trim()
+      ? r.player_class
+      : info?.kind === 'character'
+        ? info.className
+        : null;
+  const characterBackgroundUrl = !lightMode
+    ? buildCharacterBackgroundUrl(playerClass)
+    : null;
+  const hasEquippedGear = Boolean(equippedGear && Object.keys(equippedGear).length > 0);
+  const hasStatsPanel = Boolean(baselineLiveStats || simulatedStats);
 
   return (
     <div className="space-y-6">
@@ -1200,7 +1212,7 @@ export default function SimResultClient({ initialJob, shared = false }: SimResul
           <TopGearResults
             parentSimId={job.batch_id || activeScenarioId}
             playerName={r.player_name as string}
-            playerClass={r.player_class as string}
+            playerClass={playerClass || ''}
             playerRealm={r.realm as string | undefined}
             playerRegion={r.region as string | undefined}
             baseDps={normalizedTopGearBaseDps}
@@ -1273,7 +1285,7 @@ export default function SimResultClient({ initialJob, shared = false }: SimResul
         <>
           <DpsHeroCard
             playerName={r.player_name as string}
-            playerClass={r.player_class as string}
+            playerClass={playerClass || ''}
             playerRealm={r.realm as string | undefined}
             playerRegion={r.region as string | undefined}
             dps={r.dps as number}
@@ -1333,37 +1345,43 @@ export default function SimResultClient({ initialJob, shared = false }: SimResul
               </div>
             )}
           </DpsHeroCard>
-          {(baselineLiveStats ||
-            simulatedStats ||
-            (r.equipped_gear &&
-              Object.keys(r.equipped_gear as Record<string, unknown>).length > 0)) && (
-            <CollapsibleSection title="Character Panel">
-              <div className="grid gap-6 xl:grid-cols-[minmax(0,1.65fr)_minmax(340px,0.95fr)] xl:items-start">
-                {r.equipped_gear &&
-                  Object.keys(r.equipped_gear as Record<string, unknown>).length > 0 && (
+          {(hasStatsPanel || hasEquippedGear) && (
+            <div
+              className={
+                hasStatsPanel && hasEquippedGear
+                  ? 'grid gap-6 xl:grid-cols-[minmax(0,7fr)_minmax(320px,3fr)] xl:items-start'
+                  : undefined
+              }
+            >
+              {hasEquippedGear && (
+                <CollapsibleSection title="Character Panel">
+                  <div className="-m-5">
                     <GearOverview
-                      gear={r.equipped_gear as Record<string, GearItem>}
+                      gear={equippedGear as Record<string, GearItem>}
                       characterRenderUrl={
                         !lightMode && r.realm && r.player_name
                           ? `${API_URL}/api/blizzard/character/${encodeURIComponent((r.realm as string).toLowerCase())}/${encodeURIComponent((r.player_name as string).toLowerCase())}/media/render${r.region ? `?region=${(r.region as string).toLowerCase()}` : ''}`
                           : null
                       }
+                      characterBackgroundUrl={characterBackgroundUrl}
+                      showTitle={false}
                       currencies={r.currencies as any}
                       framed={false}
                     />
-                  )}
-                {(baselineLiveStats || simulatedStats) && (
-                  <div className="xl:sticky xl:top-6">
-                    <SimStatsComparisonCard
-                      current={baselineLiveStats}
-                      simulated={simulatedStats}
-                      title="Live vs Simulated Stats"
-                      description="The simulated values reflect the active run setup, including raid buffs, consumables, and other selected sim modifiers."
-                    />
                   </div>
-                )}
-              </div>
-            </CollapsibleSection>
+                </CollapsibleSection>
+              )}
+              {hasStatsPanel && (
+                <div className="xl:sticky xl:top-6 xl:mt-12">
+                  <SimStatsComparisonCard
+                    current={baselineLiveStats}
+                    simulated={simulatedStats}
+                    title="Live vs Simulated Stats"
+                    description="The simulated values reflect the active run setup, including raid buffs, consumables, and other selected sim modifiers."
+                  />
+                </div>
+              )}
+            </div>
           )}
           {typeof r.talent_string === 'string' && r.talent_string && (
             <CollapsibleSection title="Talents" defaultOpen={false}>
