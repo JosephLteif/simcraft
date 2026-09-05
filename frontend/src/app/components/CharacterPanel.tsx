@@ -796,10 +796,14 @@ function RaidSectionCard({
     setHasInitializedExpansion(true);
   }, [expansionOptions, hasInitializedExpansion, selectedExpansion]);
 
+  const hasWarcraftLogs = warcraftLogs?.enabled === true;
+
   return (
-    <div className="space-y-4">
-      <div className="card p-5">
-        <div className="mb-4 flex items-start justify-between gap-3">
+    <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-12">
+      <section
+        className={`card min-w-0 p-4 ${hasWarcraftLogs ? 'lg:col-span-7' : 'lg:col-span-12'}`}
+      >
+        <div className="mb-3 flex items-start justify-between gap-3">
           <h3 className="text-xs font-bold tracking-wider text-zinc-500 uppercase">Raid</h3>
           <div className="flex items-center gap-2">
             <select
@@ -836,8 +840,12 @@ function RaidSectionCard({
             }
           />
         </div>
-      </div>
-      <WarcraftLogsRaidCard warcraftLogs={warcraftLogs} onRefresh={onRefreshIntegrations} />
+      </section>
+      {hasWarcraftLogs && (
+        <div className="min-w-0 self-start lg:col-span-5">
+          <WarcraftLogsRaidCard warcraftLogs={warcraftLogs} onRefresh={onRefreshIntegrations} />
+        </div>
+      )}
     </div>
   );
 }
