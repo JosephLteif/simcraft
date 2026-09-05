@@ -183,7 +183,7 @@ export default function CharacterPanel({
       <CharacterPageTabs value={pageTab} onChange={setPageTab} />
 
       {pageTab === 'profile' && (
-        <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,7fr)_minmax(320px,3fr)]">
           <div className="flex min-w-0 flex-col gap-6">
             <GearOverview
               gear={profileGear}
@@ -291,12 +291,12 @@ function VaultOverviewCard({
   });
 
   return (
-    <div className="card space-y-4 p-5">
-      <h3 className="text-xs font-bold tracking-wider text-zinc-500 uppercase">
+    <div className="space-y-3">
+      <h3 className="px-1 text-xs font-bold tracking-wider text-zinc-500 uppercase">
         Overall Vault Progress
       </h3>
 
-      <div className="grid grid-cols-1 gap-3">
+      <div className="grid grid-cols-1 gap-2">
         <SectionCard title="Mythic+ Track">
           <VaultTrack kind="mythic" data={vaultTrackerData} showHeader={false} />
         </SectionCard>
@@ -412,50 +412,48 @@ function MythicPlusCard({
     return out;
   }, [mplusDungeonDetailsByName]);
   return (
-    <div className="space-y-4">
-      <div className="card p-4">
-        <div className="flex items-center justify-between gap-3">
-          <h3 className="text-xs font-bold tracking-wider text-zinc-500 uppercase">Mythic+</h3>
-          <div className="flex items-center gap-2">
-            {raiderIo?.enabled && raiderIo.refreshing && (
-              <span className="text-[11px] text-zinc-500">Updating Raider.IO…</span>
-            )}
-            {raiderIo?.enabled && onRefreshIntegrations && (
-              <button
-                type="button"
-                onClick={onRefreshIntegrations}
-                disabled={raiderIo.loading || raiderIo.refreshing}
-                className="rounded border border-white/10 bg-black/20 p-1.5 text-zinc-400 transition-colors hover:text-white disabled:opacity-50"
-                aria-label="Refresh Raider.IO"
-                title="Refresh Raider.IO"
-              >
-                <RefreshCw className={`h-3.5 w-3.5 ${raiderIo.refreshing ? 'animate-spin' : ''}`} />
-              </button>
-            )}
-            <div className="inline-flex rounded-md border border-white/10 bg-black/20 p-0.5">
-              <button
-                type="button"
-                onClick={() => setActiveTab('overview')}
-                className={`rounded px-2 py-1 text-[11px] font-bold ${
-                  activeTab === 'overview'
-                    ? 'bg-gold/20 text-gold'
-                    : 'text-zinc-400 hover:text-zinc-200'
-                }`}
-              >
-                Overview
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab('runs')}
-                className={`rounded px-2 py-1 text-[11px] font-bold ${
-                  activeTab === 'runs'
-                    ? 'bg-gold/20 text-gold'
-                    : 'text-zinc-400 hover:text-zinc-200'
-                }`}
-              >
-                Recent Runs
-              </button>
-            </div>
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3 px-1">
+        <h3 className="text-xs font-bold tracking-wider text-zinc-500 uppercase">Mythic+</h3>
+        <div className="flex items-center gap-2">
+          {raiderIo?.enabled && raiderIo.refreshing && (
+            <span className="text-[11px] text-zinc-500">Updating Raider.IO…</span>
+          )}
+          {raiderIo?.enabled && onRefreshIntegrations && (
+            <button
+              type="button"
+              onClick={onRefreshIntegrations}
+              disabled={raiderIo.loading || raiderIo.refreshing}
+              className="rounded border border-white/10 bg-black/20 p-1.5 text-zinc-400 transition-colors hover:text-white disabled:opacity-50"
+              aria-label="Refresh Raider.IO"
+              title="Refresh Raider.IO"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${raiderIo.refreshing ? 'animate-spin' : ''}`} />
+            </button>
+          )}
+          <div className="inline-flex rounded-md border border-white/10 bg-black/20 p-0.5">
+            <button
+              type="button"
+              onClick={() => setActiveTab('overview')}
+              className={`rounded px-2 py-1 text-[11px] font-bold ${
+                activeTab === 'overview'
+                  ? 'bg-gold/20 text-gold'
+                  : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              Overview
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('runs')}
+              className={`rounded px-2 py-1 text-[11px] font-bold ${
+                activeTab === 'runs'
+                  ? 'bg-gold/20 text-gold'
+                  : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              Recent Runs
+            </button>
           </div>
         </div>
       </div>
@@ -728,9 +726,9 @@ function RaidSectionCard({
   const hasWarcraftLogs = warcraftLogs?.enabled === true;
 
   return (
-    <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-12">
+    <div className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-12">
       <section
-        className={`card min-w-0 p-4 ${hasWarcraftLogs ? 'lg:col-span-7' : 'lg:col-span-12'}`}
+        className={`card min-w-0 p-3 ${hasWarcraftLogs ? 'lg:col-span-7' : 'lg:col-span-12'}`}
       >
         <div className="mb-3 flex items-start justify-between gap-3">
           <h3 className="text-xs font-bold tracking-wider text-zinc-500 uppercase">Raid</h3>
@@ -755,21 +753,19 @@ function RaidSectionCard({
           currentRaidNames={currentRaidNames}
           onRefresh={onRefreshIntegrations}
         />
-        <div className="rounded-md border border-white/5 bg-white/[0.02] p-3">
-          <RaidProgressCard
-            mythicPlus={mythicPlus}
-            raidEncounters={raidEncounters}
-            embedded
-            region={region}
-            periods={periods}
-            activeRaidInstanceIds={activeRaidInstanceIds}
-            selectedExpansion={selectedExpansion}
-            selectedRaidName="all"
-            warcraftLogs={
-              warcraftLogs?.snapshot?.status === 'ok' ? warcraftLogs.snapshot.data : null
-            }
-          />
-        </div>
+        <RaidProgressCard
+          mythicPlus={mythicPlus}
+          raidEncounters={raidEncounters}
+          embedded
+          region={region}
+          periods={periods}
+          activeRaidInstanceIds={activeRaidInstanceIds}
+          selectedExpansion={selectedExpansion}
+          selectedRaidName="all"
+          warcraftLogs={
+            warcraftLogs?.snapshot?.status === 'ok' ? warcraftLogs.snapshot.data : null
+          }
+        />
       </section>
       {hasWarcraftLogs && (
         <div className="min-w-0 self-start lg:col-span-5">
@@ -964,6 +960,7 @@ function RaidProgressCard({
           selectedRaidName={selectedRaidName}
           onActiveRaidNameChange={onActiveRaidNameChange}
           warcraftLogs={warcraftLogs}
+          embedded={embedded}
         />
       ) : (
         <p className="text-[11px] text-zinc-600 italic">
