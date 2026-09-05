@@ -995,11 +995,12 @@ pub async fn proxy_character_media(
     let namespace = format!("profile-{}", region);
     let realm_slug = realm.to_lowercase().replace("'", "").replace(" ", "-");
 
-    let target_type = if _type == "render" || _type == "main" {
-        "main-raw"
-    } else {
-        _type.as_str()
+    let target_types = match _type.as_str() {
+        "background" => vec!["main", "main-raw"],
+        "render" | "main" => vec!["main-raw", "main"],
+        target => vec![target],
     };
+    let target_type = target_types[0];
 
     let cache_key = format!(
         "char_media_{}_{}_{}_{}",
@@ -1052,7 +1053,7 @@ pub async fn proxy_character_media(
                         asset.get("key").and_then(|v| v.as_str()),
                         asset.get("value").and_then(|v| v.as_str()),
                     ) {
-                        if key == target_type {
+                        if target_types.iter().any(|target| key == *target) {
                             store.set_cache(&cache_key, value.to_string());
                             return HttpResponse::Found()
                                 .append_header(("Location", value))

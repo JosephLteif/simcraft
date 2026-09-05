@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildCharacterExternalLinks,
+  computeMythicVaultProgress,
+  getMythicVaultRewardIlvls,
   getRaidExpansionOptions,
+  getRaidVaultRewardIlvls,
+  getRaidVaultSlotRewardIlvl,
   getWeeklyVaultActivity,
   getMythicDungeonBests,
   mergeMythicPlusDisplay,
@@ -207,6 +211,139 @@ describe('character panel normalization', () => {
       boss: 'First Boss',
       difficulties: ['NORMAL', 'HEROIC'],
     });
+  });
+
+  it('keeps uncompleted active raid bosses for the vault hover and ranks reward levels', () => {
+    const now = Date.now();
+    const weekStart = new Date(now - 60_000).toISOString();
+    const activity = getWeeklyVaultActivity(
+      { recent_runs: [] },
+      {
+        expansions: [
+          {
+            instances: [
+              {
+                id: 100,
+                name: 'The Current Raid',
+                modes: [
+                  {
+                    difficulty: 'HEROIC',
+                    progress: {
+                      encounters: [
+                        {
+                          id: 1,
+                          name: 'First Boss',
+                          last_kill_timestamp: Math.floor(now / 1000),
+                        },
+                        { id: 2, name: 'Second Boss', completed_count: 0 },
+                      ],
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      'us',
+      [{ start_time: weekStart }],
+      [100]
+    );
+
+    expect(activity.raidKills).toBe(1);
+    expect(activity.raidBossesForDisplay).toMatchObject([
+      { boss: 'First Boss', killedThisWeek: true },
+      { boss: 'Second Boss', killedThisWeek: false },
+    ]);
+    expect(getRaidVaultSlotRewardIlvl(activity.raidBosses, 1, { heroic: 318 })).toBe(318);
+    expect(getRaidVaultSlotRewardIlvl(activity.raidBosses, 2, { heroic: 318 })).toBeNull();
+  });
+
+  it('includes the unlocked Mythic+ reward item level in vault progress', () => {
+    const now = Date.now();
+    const progress = computeMythicVaultProgress(
+      {
+        current_period: {
+          best_runs: [
+            {
+              keystone_level: 10,
+              keystone_dungeon: { name: 'Halls of Valor' },
+              completed_timestamp: now,
+              item_level: 315,
+            },
+          ],
+        },
+      },
+      'us',
+      [{ start_time: new Date(now - 60_000).toISOString() }]
+    );
+
+    expect(progress.slots[0]).toMatchObject({ unlocked: true, rewardIlvl: 315 });
+    expect(progress.slots[1].rewardIlvl).toBeNull();
+  });
+
+  it('derives Mythic+ vault item levels from the active season tracks', () => {
+    const rewardIlvls = getMythicVaultRewardIlvls(
+      {
+        dungeon_categories: [
+          {
+            key: 'mplus',
+            difficulties: [
+              { key: 'mythic+8', track: 'Hero', level: 2 },
+              { key: 'vault+7-9', track: 'Hero', level: 4 },
+              { key: 'vault+10', track: 'Myth', level: 1 },
+            ],
+          },
+        ],
+      },
+      [
+        { name: 'Hero', level: 2, itemLevel: 308 },
+        { name: 'Hero', level: 4, itemLevel: 315 },
+        { name: 'Myth', level: 1, itemLevel: 318 },
+      ]
+    );
+
+    expect(rewardIlvls[8]).toBe(315);
+    expect(rewardIlvls[10]).toBe(318);
+    expect(
+      computeMythicVaultProgress(
+        {
+          current_period: {
+            best_runs: [
+              {
+                keystone_level: 8,
+                keystone_dungeon: { name: 'Halls of Valor' },
+                completed_timestamp: Date.now(),
+              },
+            ],
+          },
+        },
+        'us',
+        [{ start_time: new Date(Date.now() - 60_000).toISOString() }],
+        rewardIlvls
+      ).slots[0].rewardIlvl
+    ).toBe(315);
+  });
+
+  it('raises raid drop tiers to the corresponding Great Vault item levels', () => {
+    const rewardIlvls = getRaidVaultRewardIlvls(
+      {
+        Chest: [
+          {
+            difficulty_info: {
+              normal: { ilvl: 302, track: 'Champion', level: 4 },
+              heroic: { ilvl: 315, track: 'Hero', level: 4 },
+            },
+          },
+        ],
+      },
+      [
+        { name: 'Champion', level: 5, itemLevel: 305 },
+        { name: 'Hero', level: 5, itemLevel: 318 },
+      ]
+    );
+
+    expect(rewardIlvls).toMatchObject({ normal: 305, heroic: 318 });
   });
 
   it('reads highest key and dungeon from Blizzard current-period best runs', () => {
