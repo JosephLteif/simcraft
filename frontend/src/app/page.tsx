@@ -70,7 +70,7 @@ import { useSimContext } from './components/SimContext';
 import { useAuth } from './components/AuthContext';
 import CharacterQuickLinks from './components/character/CharacterQuickLinks';
 import VaultRewardsGrid, { type VaultRewardItem } from './components/VaultRewardsGrid';
-import VaultActivityList, { VaultActivitySummary } from './components/shared/VaultActivityList';
+import VaultActivityList from './components/shared/VaultActivityList';
 import { characterHref } from './lib/routes';
 import { CLASS_COLORS, type SimSummary } from './lib/types';
 import { MYTHIC_VAULT_THRESHOLDS, RAID_VAULT_THRESHOLDS } from './lib/game-rules';
@@ -2384,10 +2384,6 @@ export default function Home() {
                                     );
                                   })}
                                 </div>
-                                <VaultActivitySummary
-                                  kind="mythic"
-                                  count={mainVault?.mythicRuns.length ?? 0}
-                                />
                               </div>
                             <div className="order-1 flex min-h-[12rem] min-w-0 flex-col rounded-xl border border-emerald-400/20 bg-gradient-to-b from-emerald-400/[0.05] via-black/20 to-black/20 p-3">
                                 <div className="mb-3 flex items-center justify-between gap-2">
@@ -2452,10 +2448,6 @@ export default function Home() {
                                     );
                                   })}
                                 </div>
-                                  <VaultActivitySummary
-                                    kind="raid"
-                                    count={mainVault?.raidBosses.length ?? 0}
-                                  />
                               </div>
                             </div>
                           {mainVaultRewards.length > 0 && (
