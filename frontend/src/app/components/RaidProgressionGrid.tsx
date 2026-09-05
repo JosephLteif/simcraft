@@ -13,6 +13,56 @@ import {
 } from '../lib/character-panel-utils';
 import type { RaidDifficultyKey as DifficultyKey } from '../lib/character-panel-utils';
 
+type RaidParseMode = 'needed' | 'all' | 'custom';
+
+type RaidParsePreferences = {
+  mode: RaidParseMode;
+  difficulties: DifficultyKey[];
+};
+
+const RAID_PARSE_PREFERENCES_STORAGE_KEY = 'whylowdps_raid_parse_preferences';
+const DEFAULT_RAID_PARSE_PREFERENCES: RaidParsePreferences = {
+  mode: 'needed',
+  difficulties: [],
+};
+const RAID_DIFFICULTY_LABELS: Record<DifficultyKey, string> = {
+  lfr: 'LFR',
+  normal: 'Normal',
+  heroic: 'Heroic',
+  mythic: 'Mythic',
+};
+const RAID_DIFFICULTY_BADGE_CLASSES: Record<DifficultyKey, string> = {
+  lfr: 'border-emerald-300/30 bg-emerald-400/10 text-emerald-200',
+  normal: 'border-sky-300/30 bg-sky-400/10 text-sky-200',
+  heroic: 'border-amber-300/30 bg-amber-400/10 text-amber-200',
+  mythic: 'border-violet-300/30 bg-violet-400/10 text-violet-200',
+};
+
+function readRaidParsePreferences(): RaidParsePreferences {
+  if (typeof window === 'undefined') return { ...DEFAULT_RAID_PARSE_PREFERENCES };
+
+  try {
+    const raw = window.localStorage.getItem(RAID_PARSE_PREFERENCES_STORAGE_KEY);
+    if (!raw) return { ...DEFAULT_RAID_PARSE_PREFERENCES };
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return { ...DEFAULT_RAID_PARSE_PREFERENCES };
+
+    const record = parsed as { mode?: unknown; difficulties?: unknown };
+    const storedDifficulties = Array.isArray(record.difficulties) ? record.difficulties : [];
+    const difficulties = DIFFICULTIES.filter((difficulty) =>
+      storedDifficulties.includes(difficulty)
+    );
+    if (record.mode === 'all') return { mode: 'all', difficulties: [] };
+    if (record.mode === 'custom' && difficulties.length > 0) {
+      return { mode: 'custom', difficulties };
+    }
+  } catch {
+    // Ignore malformed or unavailable browser storage.
+  }
+
+  return { ...DEFAULT_RAID_PARSE_PREFERENCES };
+}
+
 export default function RaidProgressionGrid({
   raidEncounters,
   region,
@@ -38,6 +88,27 @@ export default function RaidProgressionGrid({
   );
   const [selectedRaidGroup, setSelectedRaidGroup] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'overall' | 'weekly'>('overall');
+  const [parsePreferences, setParsePreferences] = useState<RaidParsePreferences>(
+    DEFAULT_RAID_PARSE_PREFERENCES
+  );
+  const [parsePreferencesLoaded, setParsePreferencesLoaded] = useState(false);
+
+  useEffect(() => {
+    setParsePreferences(readRaidParsePreferences());
+    setParsePreferencesLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (!parsePreferencesLoaded) return;
+    try {
+      window.localStorage.setItem(
+        RAID_PARSE_PREFERENCES_STORAGE_KEY,
+        JSON.stringify(parsePreferences)
+      );
+    } catch {
+      // Ignore unavailable browser storage.
+    }
+  }, [parsePreferences, parsePreferencesLoaded]);
 
   const visibleRaids = useMemo(() => {
     if (selectedExpansion === 'all') return parsed.raids;
@@ -131,43 +202,117 @@ export default function RaidProgressionGrid({
     );
   }
 
+  const hasWarcraftLogs = (warcraftLogs?.boss_rankings.length ?? 0) > 0;
+  const parseFilterButtonClass = (active: boolean) =>
+    `rounded px-2 py-1 text-[11px] font-semibold transition-colors ${
+      active ? 'bg-gold/20 text-gold' : 'text-zinc-300 hover:bg-white/10'
+    }`;
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1 rounded-md border border-white/10 bg-black/20 p-1">
-          <button
-            type="button"
-            onClick={() => setViewMode('overall')}
-            className={`rounded px-2 py-1 text-[11px] font-semibold ${viewMode === 'overall' ? 'bg-gold/20 text-gold' : 'text-zinc-300 hover:bg-white/10'}`}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1 rounded-md border border-white/10 bg-black/20 p-1">
+            <button
+              type="button"
+              onClick={() => setViewMode('overall')}
+              className={parseFilterButtonClass(viewMode === 'overall')}
+            >
+              Overall
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('weekly')}
+              className={parseFilterButtonClass(viewMode === 'weekly')}
+            >
+              Weekly kills
+            </button>
+          </div>
+          <select
+            aria-label="Raid group"
+            value={selectedRaidGroup}
+            onChange={(e) => setSelectedRaidGroup(e.target.value)}
+            className="input-field h-9 w-full px-2 py-1 text-[11px] text-zinc-100 sm:w-[180px]"
+            style={{ colorScheme: 'dark' }}
           >
-            Overall
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode('weekly')}
-            className={`rounded px-2 py-1 text-[11px] font-semibold ${viewMode === 'weekly' ? 'bg-gold/20 text-gold' : 'text-zinc-300 hover:bg-white/10'}`}
-          >
-            Weekly kills
-          </button>
+            {groupOptions.map((group) => (
+              <option key={group} value={group}>
+                {group === 'all'
+                  ? 'All raid groups'
+                  : group.startsWith('expansion:')
+                    ? visibleRaids.find((raid) => `expansion:${raid.expansionKey}` === group)
+                        ?.expansionLabel || group
+                    : group}
+              </option>
+            ))}
+          </select>
         </div>
-        <select
-          aria-label="Raid group"
-          value={selectedRaidGroup}
-          onChange={(e) => setSelectedRaidGroup(e.target.value)}
-          className="input-field h-9 w-full px-2 py-1 text-[11px] text-zinc-100 sm:w-[180px]"
-          style={{ colorScheme: 'dark' }}
-        >
-          {groupOptions.map((group) => (
-            <option key={group} value={group}>
-              {group === 'all'
-                ? 'All raid groups'
-                : group.startsWith('expansion:')
-                  ? visibleRaids.find((raid) => `expansion:${raid.expansionKey}` === group)
-                      ?.expansionLabel || group
-                  : group}
-            </option>
-          ))}
-        </select>
+        {hasWarcraftLogs ? (
+          <div
+            className="flex flex-wrap items-center gap-1 rounded-md border border-white/10 bg-black/20 p-1"
+            role="group"
+            aria-label="Warcraft Logs parse difficulty filter"
+          >
+            <span className="px-1.5 text-[10px] font-bold tracking-wide text-zinc-500 uppercase">
+              Parses
+            </span>
+            <button
+              type="button"
+              aria-pressed={parsePreferences.mode === 'needed'}
+              title="Show parses for difficulties where this character has killed the boss"
+              onClick={() => setParsePreferences({ mode: 'needed', difficulties: [] })}
+              className={parseFilterButtonClass(parsePreferences.mode === 'needed')}
+            >
+              Needed difficulties
+            </button>
+            <button
+              type="button"
+              aria-pressed={parsePreferences.mode === 'all'}
+              title="Show parses for every available raid difficulty"
+              onClick={() => setParsePreferences({ mode: 'all', difficulties: [] })}
+              className={parseFilterButtonClass(parsePreferences.mode === 'all')}
+            >
+              All difficulties
+            </button>
+            {DIFFICULTIES.map((difficulty) => (
+              <button
+                key={difficulty}
+                type="button"
+                aria-pressed={
+                  parsePreferences.mode === 'custom' &&
+                  parsePreferences.difficulties.includes(difficulty)
+                }
+                title={`Show ${RAID_DIFFICULTY_LABELS[difficulty]} parses`}
+                onClick={() =>
+                  setParsePreferences((previous) => {
+                    const selected =
+                      previous.mode === 'custom' ? previous.difficulties : ([] as DifficultyKey[]);
+                    if (selected.includes(difficulty)) {
+                      if (selected.length === 1) return previous;
+                      return {
+                        mode: 'custom',
+                        difficulties: selected.filter((item) => item !== difficulty),
+                      };
+                    }
+                    return {
+                      mode: 'custom',
+                      difficulties: [...selected, difficulty],
+                    };
+                  })
+                }
+                className={parseFilterButtonClass(
+                  parsePreferences.mode === 'custom' &&
+                    parsePreferences.difficulties.includes(difficulty)
+                )}
+              >
+                {RAID_DIFFICULTY_LABELS[difficulty]}
+              </button>
+            ))}
+            <span className="basis-full px-1 text-[10px] text-zinc-500">
+              Needed follows this character&apos;s cleared difficulty for each boss.
+            </span>
+          </div>
+        ) : null}
       </div>
 
       <div className="rounded-md border border-white/5 bg-white/[0.02] p-3">
@@ -235,9 +380,21 @@ export default function RaidProgressionGrid({
                   0
                 );
                 const guideUrl = getWarcraftLogsGuideUrl(boss.name);
-                const warcraftLogsRanking = findWarcraftLogsBossRanking(
+                const warcraftLogsRankings = findWarcraftLogsBossRanking(
                   boss.name,
                   warcraftLogs?.boss_rankings ?? []
+                );
+                const requestedParseDifficulties =
+                  parsePreferences.mode === 'all'
+                    ? DIFFICULTIES
+                    : parsePreferences.mode === 'custom'
+                      ? parsePreferences.difficulties
+                      : DIFFICULTIES.filter((diff) => boss.byDifficulty[diff].kills > 0);
+                const visibleWarcraftLogsRankings = warcraftLogsRankings.filter(
+                  (ranking) =>
+                    ranking.difficulty !== null &&
+                    ranking.difficulty !== undefined &&
+                    requestedParseDifficulties.includes(ranking.difficulty)
                 );
                 const dotClass = (active: boolean, diff: DifficultyKey) => {
                   if (!active) return 'bg-zinc-700/60 ring-white/10';
@@ -269,9 +426,12 @@ export default function RaidProgressionGrid({
                             </a>
                           ) : null}
                         </div>
-                        {warcraftLogsRanking ? (
-                          <WarcraftLogsBossParse ranking={warcraftLogsRanking} />
-                        ) : null}
+                        {visibleWarcraftLogsRankings.map((ranking, index) => (
+                          <WarcraftLogsBossParse
+                            key={`${boss.key}-${ranking.difficulty ?? 'unknown'}-${index}`}
+                            ranking={ranking}
+                          />
+                        ))}
                       </div>
                       {DIFFICULTIES.map((diff) => {
                         const killed =
@@ -305,33 +465,44 @@ export default function RaidProgressionGrid({
 function findWarcraftLogsBossRanking(
   bossName: string,
   rankings: WarcraftLogsBossRanking[]
-): WarcraftLogsBossRanking | null {
+): WarcraftLogsBossRanking[] {
   const normalizedBossName = normalizeEncounterName(bossName);
-  const directMatch = rankings.find(
+  const directMatches = rankings.filter(
     (ranking) => normalizeEncounterName(ranking.encounter_name) === normalizedBossName
   );
-  if (directMatch) return directMatch;
+  if (directMatches.length > 0) return directMatches;
 
   const guideUrl = getWarcraftLogsGuideUrl(bossName);
-  if (!guideUrl) return null;
+  if (!guideUrl) return [];
   const guideMatches = rankings.filter(
     (ranking) => getWarcraftLogsGuideUrl(ranking.encounter_name) === guideUrl
   );
-  return guideMatches.length === 1 ? guideMatches[0] : null;
+  return guideMatches;
 }
 
 function WarcraftLogsBossParse({ ranking }: { ranking: WarcraftLogsBossRanking }) {
   const hasPercentiles = ranking.rank_percent !== null || ranking.median_percent !== null;
   const metric = ranking.metric?.trim().toUpperCase();
   const amount = ranking.best_amount === null ? null : formatParseAmount(ranking.best_amount);
+  const difficultyLabel = ranking.difficulty
+    ? RAID_DIFFICULTY_LABELS[ranking.difficulty]
+    : 'Highest';
+  const difficultyBadgeClass = ranking.difficulty
+    ? RAID_DIFFICULTY_BADGE_CLASSES[ranking.difficulty]
+    : 'border-white/15 bg-white/[0.04] text-zinc-300';
 
   return (
     <p
       className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-300"
-      aria-label={`Warcraft Logs parses for ${ranking.encounter_name}`}
+      aria-label={`Warcraft Logs ${difficultyLabel} parses for ${ranking.encounter_name}`}
     >
       <span className="rounded bg-sky-400/15 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-sky-200">
         WCL
+      </span>
+      <span
+        className={`rounded border px-1.5 py-0.5 text-[10px] font-bold tracking-wide ${difficultyBadgeClass}`}
+      >
+        {difficultyLabel}
       </span>
       {hasPercentiles ? (
         <>

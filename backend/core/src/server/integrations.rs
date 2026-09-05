@@ -20,6 +20,7 @@ const WARCRAFT_LOGS_CLIENT_ID_KEY: &str = "warcraft_logs_client_id";
 const WARCRAFT_LOGS_SHARED_CLIENT_ID_KEY: &str = "warcraft_logs_shared_client_id";
 const WARCRAFT_LOGS_USER_SECRET_PREFIX: &str = "warcraft_logs:user:";
 const WARCRAFT_LOGS_SHARED_SECRET_ID: &str = "warcraft_logs:shared";
+const WARCRAFT_LOGS_CACHE_KEY_VERSION: &str = "warcraft-logs-v2";
 
 #[derive(Clone)]
 pub struct IntegrationState {
@@ -240,6 +241,8 @@ pub struct WarcraftLogsRanking {
 pub struct WarcraftLogsBossRanking {
     pub encounter_id: Option<f64>,
     pub encounter_name: String,
+    #[serde(default)]
+    pub difficulty: Option<String>,
     pub rank_percent: Option<f64>,
     pub median_percent: Option<f64>,
     pub total_kills: Option<f64>,
@@ -704,7 +707,7 @@ pub async fn get_warcraft_logs_character(
         ));
     };
 
-    let cache_key = integration_cache_key("warcraft-logs", &region, &realm, &name);
+    let cache_key = integration_cache_key(WARCRAFT_LOGS_CACHE_KEY_VERSION, &region, &realm, &name);
     if query.refresh != Some(true) {
         if let Some(cached) = cached_envelope::<WarcraftLogsData>(&***store, &cache_key) {
             return json_response(&cached);
@@ -751,7 +754,10 @@ impl IntegrationState {
                     zone { id name }
                   }
                 }
-                zoneRankings
+                lfr: zoneRankings(difficulty: 1)
+                normal: zoneRankings(difficulty: 3)
+                heroic: zoneRankings(difficulty: 4)
+                mythic: zoneRankings(difficulty: 5)
               }
             }
           }
@@ -1080,63 +1086,51 @@ fn normalize_warcraft_logs(
         })
         .unwrap_or_default();
 
-    let ranking = character_object
-        .get("zoneRankings")
-        .filter(|value| !value.is_null())
-        .and_then(|ranking| {
-            let ranking = ranking
-                .as_array()
-                .and_then(|entries| {
-                    entries
-                        .iter()
-                        .find(|entry| entry.get("rankings").is_some())
-                        .or_else(|| entries.first())
-                })
-                .unwrap_or(ranking);
-            let metric = value_string(ranking.get("metric"));
-            Some(WarcraftLogsRanking {
-                zone_id: value_number(
-                    ranking
-                        .get("zone")
-                        .and_then(|zone| zone.get("id"))
-                        .or_else(|| ranking.get("zoneId"))
-                        .or_else(|| ranking.get("zoneID"))
-                        .or_else(|| ranking.get("zone")),
-                ),
-                zone_name: value_string(
-                    ranking
-                        .get("zone")
-                        .and_then(|zone| zone.get("name"))
-                        .or_else(|| ranking.get("zoneName")),
-                ),
-                metric,
-                best_performance_average: value_number(ranking.get("bestPerformanceAverage")),
-                median_performance_average: value_number(ranking.get("medianPerformanceAverage")),
-                all_stars: value_number(ranking.get("allStars")),
-                average_item_level: value_number(ranking.get("averageItemLevel")),
-            })
-        });
+    let zone_rankings = warcraft_logs_character_zone_ranking_entries(character_object);
 
-    let boss_rankings = character_object
-        .get("zoneRankings")
-        .filter(|value| !value.is_null())
-        .and_then(|ranking| {
-            let ranking = ranking
-                .as_array()
-                .and_then(|entries| {
-                    entries
-                        .iter()
-                        .find(|entry| entry.get("rankings").is_some())
-                        .or_else(|| entries.first())
-                })
-                .unwrap_or(ranking);
+    let ranking = zone_rankings.iter().rev().find_map(|(_, value)| {
+        let ranking = warcraft_logs_zone_ranking_value(value);
+        if ranking.is_null() {
+            return None;
+        }
+        let metric = value_string(ranking.get("metric"));
+        Some(WarcraftLogsRanking {
+            zone_id: value_number(
+                ranking
+                    .get("zone")
+                    .and_then(|zone| zone.get("id"))
+                    .or_else(|| ranking.get("zoneId"))
+                    .or_else(|| ranking.get("zoneID"))
+                    .or_else(|| ranking.get("zone")),
+            ),
+            zone_name: value_string(
+                ranking
+                    .get("zone")
+                    .and_then(|zone| zone.get("name"))
+                    .or_else(|| ranking.get("zoneName")),
+            ),
+            metric,
+            best_performance_average: value_number(ranking.get("bestPerformanceAverage")),
+            median_performance_average: value_number(ranking.get("medianPerformanceAverage")),
+            all_stars: value_number(ranking.get("allStars")),
+            average_item_level: value_number(ranking.get("averageItemLevel")),
+        })
+    });
+
+    let boss_rankings = zone_rankings
+        .iter()
+        .flat_map(|(difficulty, value)| {
+            let ranking = warcraft_logs_zone_ranking_value(value);
             let metric = value_string(ranking.get("metric"));
             ranking
                 .get("rankings")
                 .and_then(Value::as_array)
-                .map(|rankings| normalize_warcraft_logs_boss_rankings(rankings, metric.as_deref()))
+                .map(|rankings| {
+                    normalize_warcraft_logs_boss_rankings(rankings, metric.as_deref(), *difficulty)
+                })
+                .unwrap_or_default()
         })
-        .unwrap_or_default();
+        .collect();
 
     Some(WarcraftLogsData {
         profile_url: format!("https://www.warcraftlogs.com/character/{region}/{realm}/{name}"),
@@ -1152,9 +1146,61 @@ fn normalize_warcraft_logs(
     })
 }
 
+fn warcraft_logs_zone_ranking_entries(value: &Value) -> Vec<(Option<&'static str>, &Value)> {
+    const DIFFICULTY_KEYS: [&str; 4] = ["lfr", "normal", "heroic", "mythic"];
+
+    if let Some(object) = value.as_object() {
+        let aliased = DIFFICULTY_KEYS
+            .iter()
+            .filter_map(|key| object.get(*key).map(|value| (Some(*key), value)))
+            .collect::<Vec<_>>();
+        if !aliased.is_empty() {
+            return aliased;
+        }
+    }
+
+    match value {
+        Value::Array(entries) => entries.iter().map(|entry| (None, entry)).collect(),
+        _ => vec![(None, value)],
+    }
+}
+
+fn warcraft_logs_character_zone_ranking_entries(
+    character: &serde_json::Map<String, Value>,
+) -> Vec<(Option<&'static str>, &Value)> {
+    const DIFFICULTY_KEYS: [&str; 4] = ["lfr", "normal", "heroic", "mythic"];
+
+    let aliased_entries = DIFFICULTY_KEYS
+        .iter()
+        .filter_map(|key| character.get(*key).map(|value| (Some(*key), value)))
+        .collect::<Vec<_>>();
+    if !aliased_entries.is_empty() {
+        return aliased_entries;
+    }
+
+    character
+        .get("zoneRankings")
+        .filter(|value| !value.is_null())
+        .map(warcraft_logs_zone_ranking_entries)
+        .unwrap_or_default()
+}
+
+fn warcraft_logs_zone_ranking_value(value: &Value) -> &Value {
+    value
+        .as_array()
+        .and_then(|entries| {
+            entries
+                .iter()
+                .find(|entry| entry.get("rankings").is_some())
+                .or_else(|| entries.first())
+        })
+        .unwrap_or(value)
+}
+
 fn normalize_warcraft_logs_boss_rankings(
     rankings: &[Value],
     metric: Option<&str>,
+    difficulty: Option<&str>,
 ) -> Vec<WarcraftLogsBossRanking> {
     rankings
         .iter()
@@ -1176,6 +1222,7 @@ fn normalize_warcraft_logs_boss_rankings(
                         .or_else(|| entry.get("encounterId")),
                 ),
                 encounter_name,
+                difficulty: difficulty.map(str::to_string),
                 rank_percent: value_number(entry.get("rankPercent")),
                 median_percent: value_number(entry.get("medianPercent")),
                 total_kills: value_number(entry.get("totalKills")),
@@ -1473,6 +1520,46 @@ mod tests {
         assert_eq!(normalized.boss_rankings[0].best_amount, Some(85654.45));
         assert_eq!(normalized.boss_rankings[0].metric.as_deref(), Some("dps"));
         assert_eq!(normalized.boss_rankings[0].spec.as_deref(), Some("Arcane"));
+    }
+
+    #[test]
+    fn normalizes_warcraft_logs_rankings_for_each_requested_difficulty() {
+        let payload = json!({
+            "name": "Hero",
+            "normal": {
+                "zone": {"id": 42, "name": "Current Raid"},
+                "metric": "dps",
+                "bestPerformanceAverage": 82.1,
+                "rankings": [{
+                    "encounter": {"id": 3470, "name": "Nek'zali the Soulcoiler"},
+                    "rankPercent": 82.1
+                }]
+            },
+            "mythic": {
+                "zone": {"id": 42, "name": "Current Raid"},
+                "metric": "dps",
+                "bestPerformanceAverage": 91.5,
+                "rankings": [{
+                    "encounter": {"id": 3470, "name": "Nek'zali the Soulcoiler"},
+                    "rankPercent": 91.5
+                }]
+            }
+        });
+
+        let normalized = normalize_warcraft_logs(&payload, "us", "aerie-peak", "hero").unwrap();
+        assert_eq!(
+            normalized.ranking.unwrap().best_performance_average,
+            Some(91.5)
+        );
+        assert_eq!(normalized.boss_rankings.len(), 2);
+        assert_eq!(
+            normalized
+                .boss_rankings
+                .iter()
+                .map(|ranking| ranking.difficulty.as_deref())
+                .collect::<Vec<_>>(),
+            vec![Some("normal"), Some("mythic")]
+        );
     }
 
     #[test]
