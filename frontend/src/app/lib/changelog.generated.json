@@ -1,5 +1,5 @@
 {
-  "contentRevision": "Unreleased-52b5b743977a",
+  "contentRevision": "Unreleased-edf05b47dad2",
   "releases": [
     {
       "version": "Unreleased",
@@ -54,6 +54,16 @@
             "Review the Mythic+ summary and season dungeon bests side by side on desktop.",
             "View weekly vault progress and Raider.IO details in adjacent widgets, with vault slots arranged across the card.",
             "Keep the layout stacked and readable on narrow screens."
+          ]
+        },
+        {
+          "category": "improvement",
+          "title": "Make Raiding overviews more compact",
+          "summary": "Character Raiding overviews now place Blizzard progression and Warcraft Logs data in adjacent responsive widgets when both providers are enabled.",
+          "items": [
+            "Keep raid expansion, group, and parse controls with the Blizzard progression widget.",
+            "View Warcraft Logs rankings and recent public reports beside raid progress on wider screens.",
+            "Expand Blizzard progression to full width when Warcraft Logs is disabled and stack the widgets on narrow screens."
           ]
         },
         {
