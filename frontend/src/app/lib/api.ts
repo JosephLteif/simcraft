@@ -237,9 +237,12 @@ export type WarcraftLogsRanking = {
   average_item_level: number | null;
 };
 
+export type WarcraftLogsDifficulty = 'lfr' | 'normal' | 'heroic' | 'mythic';
+
 export type WarcraftLogsBossRanking = {
   encounter_id: number | null;
   encounter_name: string;
+  difficulty?: WarcraftLogsDifficulty | null;
   rank_percent: number | null;
   median_percent: number | null;
   total_kills: number | null;

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import RaidProgressionGrid from './RaidProgressionGrid';
 import type { WarcraftLogsData } from '../lib/api';
@@ -103,6 +103,7 @@ describe('RaidProgressionGrid', () => {
         {
           encounter_id: 103,
           encounter_name: 'Fallen King Salhadaar',
+          difficulty: 'heroic',
           rank_percent: 95.4,
           median_percent: 88.2,
           total_kills: 3,
@@ -156,7 +157,7 @@ describe('RaidProgressionGrid', () => {
     expect(screen.getByText('Median parse')).toBeInTheDocument();
     expect(screen.getByText('88.2%')).toBeInTheDocument();
     const parse = document.querySelector(
-      '[aria-label="Warcraft Logs parses for Fallen King Salhadaar"]'
+      '[aria-label="Warcraft Logs Heroic parses for Fallen King Salhadaar"]'
     );
     expect(parse).toHaveTextContent('3 public kills');
     expect(parse).toHaveTextContent('Best amount');
@@ -166,5 +167,83 @@ describe('RaidProgressionGrid', () => {
     expect(
       document.querySelector('[aria-label="Warcraft Logs parses for Unknown Boss"]')
     ).not.toBeInTheDocument();
+  });
+
+  it('defaults to the boss difficulties the character has cleared and allows an all-difficulty view', () => {
+    const warcraftLogs: WarcraftLogsData = {
+      profile_url: 'https://www.warcraftlogs.com/character/us/aerie-peak/hero',
+      name: 'Hero',
+      realm: 'aerie-peak',
+      region: 'us',
+      reports: [],
+      ranking: null,
+      boss_rankings: [
+        {
+          encounter_id: 101,
+          encounter_name: 'Rotmire',
+          difficulty: 'normal',
+          rank_percent: 92,
+          median_percent: 80,
+          total_kills: 4,
+          best_amount: 10000,
+          metric: 'dps',
+          spec: 'Arcane',
+        },
+        {
+          encounter_id: 101,
+          encounter_name: 'Rotmire',
+          difficulty: 'mythic',
+          rank_percent: 75,
+          median_percent: 68,
+          total_kills: 2,
+          best_amount: 9000,
+          metric: 'dps',
+          spec: 'Arcane',
+        },
+      ],
+    };
+
+    render(
+      <RaidProgressionGrid
+        selectedExpansion="all"
+        raidEncounters={{
+          expansions: [
+            {
+              name: 'Current expansion',
+              instances: [
+                {
+                  name: 'Current Raid',
+                  modes: [
+                    {
+                      difficulty: { type: 'normal' },
+                      progress: {
+                        encounters: [
+                          {
+                            encounter: { id: 101, name: 'Rotmire' },
+                            completed_count: 1,
+                            display_order: 1,
+                          },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        }}
+        warcraftLogs={warcraftLogs}
+      />
+    );
+
+    expect(screen.getByLabelText('Warcraft Logs Normal parses for Rotmire')).toBeInTheDocument();
+    expect(
+      screen.queryByLabelText('Warcraft Logs Mythic parses for Rotmire')
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'All difficulties' }));
+
+    expect(screen.getByLabelText('Warcraft Logs Normal parses for Rotmire')).toBeInTheDocument();
+    expect(screen.getByLabelText('Warcraft Logs Mythic parses for Rotmire')).toBeInTheDocument();
   });
 });
