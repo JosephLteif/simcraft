@@ -95,22 +95,33 @@ function CharacterCard({
     >
       <Link href={href} aria-label={cardLabel} className="absolute inset-0 z-10" />
       <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+        {classKey ? (
+          <img
+            src={`https://render.worldofwarcraft.com/profile-backgrounds/v2/armory_bg_class_${classKey}.jpg`}
+            alt=""
+            aria-hidden="true"
+            className="absolute inset-0 h-full w-full object-cover opacity-[0.78] transition-transform duration-500 group-hover:scale-[1.03]"
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).style.display = 'none';
+            }}
+          />
+        ) : null}
         <img
           src={`${API_URL}/api/blizzard/character/${char.realm}/${char.name}/media/main?region=${char.region}`}
           alt=""
-          className="absolute inset-x-0 -bottom-[6%] mx-auto h-[112%] w-auto max-w-none object-contain opacity-95 transition-transform duration-300 group-hover:scale-[1.08]"
+          className="absolute inset-x-0 -bottom-[6%] z-[2] mx-auto h-[112%] w-auto max-w-none object-contain opacity-100 transition-transform duration-300 group-hover:scale-[1.08]"
           onError={(e) => {
             (e.target as HTMLImageElement).style.display = 'none';
           }}
         />
         <div
-          className={`absolute inset-0 bg-gradient-to-t ${
+          className={`absolute inset-0 z-[1] bg-gradient-to-t ${
             isAlliance
               ? 'from-[#080a10]/97 via-[#080a10]/45 to-transparent'
               : 'from-[#100808]/97 via-[#100808]/45 to-transparent'
           }`}
         />
-        <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/70 to-transparent" />
+        <div className="absolute inset-x-0 bottom-0 z-[1] h-16 bg-gradient-to-t from-black/70 to-transparent" />
       </div>
 
       <div className="pointer-events-none relative z-20 flex w-full flex-col p-4">

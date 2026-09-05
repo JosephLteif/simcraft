@@ -169,6 +169,13 @@ Character detail pages now bring profile, progression, profession, and external 
 - Character data refreshes in the background after 15 minutes while the page is visible, keeps the last successful snapshot during failures, and recovers when the page becomes visible again.
 - Mythic+ summaries use current-season best runs when the profile index does not include period best-run entries.
 
+#### Show character artwork clearly
+
+Character profile and character-list cards now pair Blizzard's class backgrounds with clearly visible character renders.
+
+- Use the matching `armory_bg_class_<class>.jpg` artwork behind each character.
+- Keep the character render above the card gradient at full opacity so equipment and roster views are easier to recognize.
+
 #### Show Great Vault activity per slot
 
 Weekly Mythic+ runs and raid boss kills are now available from every individual Great Vault slot card.

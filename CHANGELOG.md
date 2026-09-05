@@ -39,6 +39,7 @@ The format is based on Keep a Changelog and this project uses semantic versionin
 - Result Insights starts collapsed by default so the primary result content stays focused until deeper analysis is requested.
 - Upgrade Trinket results now support searching specific trinkets or combinations, saving eligible pairs directly to the character's Wishlist, and showing the legacy-trinket filter only when it was enabled at launch.
 - Character detail pages now show profile, Mythic+, raid, vault, profession, and external-profile information in the Profile tab, with 15-minute visible-page refreshes that retain the last successful snapshot if a background refresh fails.
+- Character profile and character-list cards now use matching Blizzard class backgrounds with full-opacity character renders for clearer artwork.
 - Character Mythic+ and Raiding tabs now consolidate external data into the canonical Blizzard cards: Raider.IO details, active-raid achievement milestones, scan freshness, attribution, and profile links appear inline without duplicate progression totals, while Warcraft Logs keeps its unique rankings, dated reports, and per-boss metadata.
 - The character Raiding tab now hides the generic Current expansion option and selects the latest concrete expansion by default, while keeping All expansions available for older progression.
 - History character filters now preserve names and realms containing hyphens, and saved simulation reruns open the matching tool for each simulation type.

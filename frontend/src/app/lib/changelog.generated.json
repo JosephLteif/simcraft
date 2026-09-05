@@ -1,5 +1,5 @@
 {
-  "contentRevision": "Unreleased-e41aee18a50c",
+  "contentRevision": "Unreleased-610986e8fb94",
   "releases": [
     {
       "version": "Unreleased",
@@ -201,6 +201,15 @@
             "Open consistent Armory, Warcraft Logs, and Raider.IO links for characters with spaces, apostrophes, and realm slugs.",
             "Character data refreshes in the background after 15 minutes while the page is visible, keeps the last successful snapshot during failures, and recovers when the page becomes visible again.",
             "Mythic+ summaries use current-season best runs when the profile index does not include period best-run entries."
+          ]
+        },
+        {
+          "category": "improvement",
+          "title": "Show character artwork clearly",
+          "summary": "Character profile and character-list cards now pair Blizzard's class backgrounds with clearly visible character renders.",
+          "items": [
+            "Use the matching `armory_bg_class_<class>.jpg` artwork behind each character.",
+            "Keep the character render above the card gradient at full opacity so equipment and roster views are easier to recognize."
           ]
         },
         {

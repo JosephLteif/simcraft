@@ -234,6 +234,7 @@ export default function GearOverview({
 }: GearOverviewProps) {
   const [loadedSourceInstances, setLoadedSourceInstances] = useState<Instance[]>([]);
   const effectiveSourceInstances = sourceInstances ?? loadedSourceInstances;
+  const hasCharacterImage = Boolean(characterBackgroundUrl || characterRenderUrl);
 
   useEffect(() => {
     if (sourceInstances) return;
@@ -373,7 +374,7 @@ export default function GearOverview({
           src={characterBackgroundUrl}
           alt=""
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 hidden h-full w-full object-cover object-center opacity-40 md:block"
+          className="pointer-events-none absolute inset-0 hidden h-full w-full object-cover object-center opacity-[0.75] md:block"
           onError={(e) => {
             (e.currentTarget as HTMLImageElement).style.display = 'none';
           }}
@@ -387,7 +388,7 @@ export default function GearOverview({
         <img
           src={characterRenderUrl}
           alt=""
-          className="pointer-events-none absolute inset-0 z-[2] mx-auto hidden h-[120%] w-auto -translate-y-[8%] object-contain opacity-26 md:block"
+          className="pointer-events-none absolute inset-0 z-[2] mx-auto hidden h-[120%] w-auto -translate-y-[8%] object-contain opacity-100 md:block"
           onError={(e) => {
             (e.currentTarget as HTMLImageElement).style.display = 'none';
           }}
@@ -424,7 +425,7 @@ export default function GearOverview({
         </div>
 
         <div
-          className={`hidden md:grid ${characterRenderUrl ? 'md:grid-cols-[1fr_200px_1fr] lg:grid-cols-[1fr_230px_1fr] xl:grid-cols-[1fr_260px_1fr]' : 'md:grid-cols-2'} md:gap-x-4 lg:gap-x-6`}
+          className={`hidden md:grid ${hasCharacterImage ? 'md:grid-cols-[1fr_200px_1fr] lg:grid-cols-[1fr_230px_1fr] xl:grid-cols-[1fr_260px_1fr]' : 'md:grid-cols-2'} md:gap-x-4 lg:gap-x-6`}
         >
           <div className="space-y-2">
             {GEAR_ORDER_LEFT.map((slot) => (
@@ -448,7 +449,7 @@ export default function GearOverview({
               />
             ))}
           </div>
-          {characterRenderUrl && <div className="hidden md:block" />}
+          {hasCharacterImage && <div className="hidden md:block" />}
           <div className="space-y-2">
             {GEAR_ORDER_RIGHT.map((slot) => (
               <GearSlotRow
