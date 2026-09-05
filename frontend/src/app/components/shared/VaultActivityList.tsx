@@ -1,4 +1,4 @@
-import { Check, Circle, Info } from 'lucide-react';
+import { Check, Circle } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import type { WeeklyVaultMythicRun, WeeklyVaultRaidBoss } from '../../lib/character-panel-utils';
@@ -22,30 +22,10 @@ type VaultActivityListProps =
       label?: string;
     };
 
-type VaultActivitySummaryProps = {
-  kind: 'mythic' | 'raid';
-  count: number;
-};
-
 function formatDifficulty(value: string): string {
   const normalized = value.trim().toLowerCase();
   if (!normalized) return '';
   return normalized.charAt(0).toUpperCase() + normalized.slice(1).replace(/_/g, ' ');
-}
-
-export function VaultActivitySummary({ kind, count }: VaultActivitySummaryProps) {
-  const isMythic = kind === 'mythic';
-
-  return (
-    <div className="mt-2 inline-flex items-center gap-1 text-[10px] text-zinc-400">
-      <span
-        className={`border-b border-dotted ${isMythic ? 'border-gold/50' : 'border-emerald-400/50'}`}
-      >
-        {count} {isMythic ? 'runs' : 'boss kills'} this week
-      </span>
-      <Info className="h-3 w-3" aria-hidden="true" />
-    </div>
-  );
 }
 
 export default function VaultActivityList(props: VaultActivityListProps) {

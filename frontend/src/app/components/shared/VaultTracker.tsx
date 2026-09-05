@@ -15,7 +15,7 @@ import {
 } from '../../lib/character-panel-utils';
 import { API_URL, fetchJson } from '../../lib/api';
 import ProgressSlotCard from './ProgressSlotCard';
-import VaultActivityList, { VaultActivitySummary } from './VaultActivityList';
+import VaultActivityList from './VaultActivityList';
 
 export type VaultTrackerData = {
   vaultActivity: WeeklyVaultActivity;
@@ -223,7 +223,6 @@ export default function VaultTrack({
         </div>
       ) : null}
       <div className="grid gap-2 sm:grid-cols-3">{slots.map(renderSlot)}</div>
-      <VaultActivitySummary kind={kind} count={count} />
     </div>
   );
 }
