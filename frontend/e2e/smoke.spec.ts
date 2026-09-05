@@ -200,6 +200,84 @@ test.beforeEach(async ({ page }) => {
   await mockBackend(page);
 });
 
+test('mythic overview lists season dungeon bests on desktop and mobile', async ({ page }) => {
+  const names = [
+    'Altar of Fangs',
+    'Den of Nalorakk',
+    "Kings' Rest",
+    'Murder Row',
+    'Ruby Life Pools',
+    'Temple of Sethraliss',
+    'The Blinding Vale',
+    'Voidscar Arena',
+  ];
+  await page.route('**/api/dungeons', (route) =>
+    route.fulfill({
+      json: {
+        season_id: 1,
+        season_name: 'Current season',
+        current_affixes: [],
+        rotation_dungeons: [],
+      },
+    })
+  );
+  await page.route('**/api/instances', (route) =>
+    route.fulfill({
+      json: [
+        {
+          id: -1,
+          name: 'Mythic+ Dungeons',
+          type: 'mplus-chest',
+          encounters: names.map((name, id) => ({ id, name })),
+        },
+      ],
+    })
+  );
+  await page.route('**/mythic-keystone-profile?*', (route) =>
+    route.fulfill({
+      json: {
+        current_mythic_rating: { rating: 2260 },
+        current_period: {
+          best_runs: [
+            { dungeon: { name: names[1] }, keystone_level: 8, completed_timestamp: Date.now() },
+          ],
+        },
+        season_best_runs: names
+          .filter((name) => name !== 'Murder Row')
+          .map((name) => ({
+            dungeon: { name },
+            keystone_level: name === names[1] ? 8 : 10,
+            duration: 1140000,
+            mythic_rating: { rating: 334 },
+            is_completed_within_time: true,
+          })),
+      },
+    })
+  );
+
+  for (const viewport of [
+    { width: 1280, height: 800 },
+    { width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto('/character/us/Illidan/Alice?tab=mythic');
+    await dismissOptionalPrompts(page);
+    const section = page.getByRole('region', { name: 'Season dungeon bests' });
+    await expect(section.getByRole('row')).toHaveCount(9);
+    await expect(section.getByRole('row', { name: /Altar of Fangs/ })).toContainText('+10');
+    await expect(section.getByRole('row', { name: /Den of Nalorakk/ })).toContainText('+8');
+    await expect(section.getByRole('row', { name: /Murder Row/ })).toHaveText(
+      /Murder Row\s*0\s*0\s*-/
+    );
+    await expect(page.getByText('Completed runs counted:')).toContainText('1');
+    const bounds = await section.boundingBox();
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(viewport.width);
+    expect(await section.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
+      true
+    );
+  }
+});
+
 test('dashboard renders with mocked backend state', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByText('Quick Links')).toBeVisible();

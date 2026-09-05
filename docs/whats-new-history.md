@@ -15,6 +15,22 @@ Drop Finder rankings now summarize which raid bosses and dungeons are the best n
 - Compare unique item rewards, likely upgrades, and the best DPS gain for each source.
 - Select a boss or dungeon to filter the rankings to matching combinations, switch directly to another source, or use Show all sources to clear the filter.
 
+#### Show every Mythic+ season dungeon best
+
+The character Mythic+ overview now lists every dungeon in the active season with the character's best completed run.
+
+- Compare each dungeon's highest completed key, Mythic+ rating, and fastest completion time in one table.
+- Keep dungeons with no completed run visible so missing season coverage is easy to spot.
+- Keep season-wide bests separate from the current week's vault activity and completed-run count.
+
+#### Filter Warcraft Logs parses by difficulty
+
+Warcraft Logs raid data now keeps LFR, Normal, Heroic, and Mythic parses distinct instead of combining every difficulty into one result.
+
+- Request each raid difficulty explicitly and label per-boss rankings with the difficulty they came from.
+- Filter the Raiding tab by Needed difficulties based on the character's Blizzard kills, All difficulties, or an individual difficulty.
+- Keep the selected parse difficulties across refreshes while preserving the existing Warcraft Logs summary and report views.
+
 #### Add optional Raider.IO and Warcraft Logs character data
 
 Character pages can now combine Blizzard data with public Raider.IO and Warcraft Logs data without making either provider a dependency.

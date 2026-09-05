@@ -3,12 +3,71 @@ import {
   buildCharacterExternalLinks,
   getRaidExpansionOptions,
   getWeeklyVaultActivity,
+  getMythicDungeonBests,
   mergeMythicPlusDisplay,
   parseCharacterProfessions,
   parseRaidProgressionData,
   summarizeCurrentRaidProgress,
   summarizeMythicPlus,
 } from './character-panel-utils';
+import type { DungeonInfo } from './api';
+
+describe('season dungeon bests', () => {
+  const roster = ['Altar of Fangs', 'Den of Nalorakk', 'Murder Row'].map(
+    (name, id) => ({ id, name }) as DungeonInfo
+  );
+
+  it('uses the highest season key and fastest tie, and includes uncompleted rotation dungeons', () => {
+    const payload = {
+      current_period: {
+        best_runs: [
+          { dungeon: { name: 'Altar of Fangs' }, keystone_level: 8, duration: 600000 },
+          { dungeon: { name: 'Den of Nalorakk' }, keystone_level: 8 },
+        ],
+      },
+      season_best_runs: [
+        { dungeon: { name: 'Altar of Fangs' }, keystone_level: 10, duration: 1200000 },
+        {
+          dungeon: { name: 'Altar of Fangs' },
+          keystone_level: 10,
+          duration: 1140000,
+          mythic_rating: { rating: 333.6 },
+          is_completed_within_time: true,
+        },
+        { dungeon: { name: 'Old dungeon' }, keystone_level: 20 },
+      ],
+    };
+    expect(getMythicDungeonBests(payload, roster)).toMatchObject([
+      { dungeon: 'Altar of Fangs', level: 10, duration: '19:00', score: 334, timed: true },
+      { dungeon: 'Den of Nalorakk', level: 8 },
+      { dungeon: 'Murder Row', level: null, score: null, duration: '-' },
+    ]);
+  });
+
+  it('keeps season runs out of weekly counts and recent activity', () => {
+    const summary = summarizeMythicPlus({
+      current_period: { best_runs: [] },
+      season_best_runs: [{ dungeon: { name: 'Altar of Fangs' }, keystone_level: 10 }],
+    });
+    expect(summary).toMatchObject({
+      bestLevel: 10,
+      runs: 0,
+      vaultProgressCount: 0,
+      recentRuns: [],
+    });
+  });
+
+  it('shows known runs when the catalog or season request is unavailable', () => {
+    expect(
+      getMythicDungeonBests({
+        current_period: {
+          best_runs: [{ dungeon: { name: 'Den of Nalorakk' }, keystone_level: 8 }],
+        },
+      })
+    ).toMatchObject([{ dungeon: 'Den of Nalorakk', level: 8 }]);
+    expect(getMythicDungeonBests(null)).toEqual([]);
+  });
+});
 
 describe('character panel normalization', () => {
   it('builds external links from region, realm, and character slugs', () => {
