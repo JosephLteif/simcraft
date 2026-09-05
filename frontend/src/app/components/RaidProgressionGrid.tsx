@@ -73,6 +73,7 @@ export default function RaidProgressionGrid({
   selectedRaidName,
   onActiveRaidNameChange,
   warcraftLogs,
+  embedded = false,
 }: {
   mythicPlus?: MythicPlusPayload;
   raidEncounters: RaidEncountersPayload;
@@ -83,6 +84,7 @@ export default function RaidProgressionGrid({
   selectedRaidName?: string;
   onActiveRaidNameChange?: (raidName: string | null) => void;
   warcraftLogs?: WarcraftLogsData | null;
+  embedded?: boolean;
 }) {
   const vaultTrackerData = useVaultTrackerData({
     mythicPlus,
@@ -200,7 +202,7 @@ export default function RaidProgressionGrid({
     }`;
 
   return (
-    <div className="space-y-4">
+    <div className={embedded ? 'space-y-3' : 'space-y-4'}>
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1 rounded-md border border-white/10 bg-black/20 p-1">
@@ -306,8 +308,8 @@ export default function RaidProgressionGrid({
         ) : null}
       </div>
 
-      <div className="rounded-md border border-white/5 bg-white/[0.02] p-3">
-        <div className="mb-3 rounded-md border border-white/10 bg-black/20 p-3">
+      <div className={embedded ? 'space-y-3' : 'rounded-md border border-white/5 bg-white/[0.02] p-3'}>
+        <div className={embedded ? 'mb-3' : 'mb-3 rounded-md border border-white/10 bg-black/20 p-3'}>
           <VaultTrack kind="raid" data={vaultTrackerData} />
         </div>
         <p className="mb-2 text-[11px] font-bold tracking-wider text-zinc-500 uppercase">

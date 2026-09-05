@@ -1,5 +1,5 @@
 {
-  "contentRevision": "Unreleased-3674e9518a20",
+  "contentRevision": "Unreleased-5a0de555a5f3",
   "releases": [
     {
       "version": "Unreleased",
@@ -44,6 +44,16 @@
             "Warcraft Logs activates after valid credentials are saved and adds latest-zone rankings, five recent public reports with report dates and end times, and per-boss best and median parses, public kills, best amounts, metrics, and specs.",
             "The integration settings explain what belongs in each Warcraft Logs field and show the exact redirect host and port for the current app address; private reports and private OAuth/PKCE access are not used.",
             "Personal Warcraft Logs credentials take precedence over shared hosted credentials, while environment credentials take precedence over the administrator-managed fallback. Secrets remain protected and are never returned by the API."
+          ]
+        },
+        {
+          "category": "improvement",
+          "title": "Flatten character detail sections",
+          "summary": "Character tabs and simulation result sections now avoid redundant nested containers so the useful data occupies more of the page.",
+          "items": [
+            "Keep the specialization label and talent controls directly inside the outer Talents section instead of placing them in a second card.",
+            "Remove the extra Raid progression frame and compact the Mythic+, Raiding, and Vault section headers and spacing.",
+            "Preserve responsive stacking and the existing filters, refresh actions, and talent controls while reducing visual nesting."
           ]
         },
         {

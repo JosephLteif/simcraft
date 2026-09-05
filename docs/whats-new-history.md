@@ -42,6 +42,14 @@ Character pages can now combine Blizzard data with public Raider.IO and Warcraft
 
 ### Improvements
 
+#### Flatten character detail sections
+
+Character tabs and simulation result sections now avoid redundant nested containers so the useful data occupies more of the page.
+
+- Keep the specialization label and talent controls directly inside the outer Talents section instead of placing them in a second card.
+- Remove the extra Raid progression frame and compact the Mythic+, Raiding, and Vault section headers and spacing.
+- Preserve responsive stacking and the existing filters, refresh actions, and talent controls while reducing visual nesting.
+
 #### Give simulation gear panels a cleaner layout
 
 Simulation result gear panels now give the character artwork and equipped gear the space they need while keeping comparison stats easy to scan.
