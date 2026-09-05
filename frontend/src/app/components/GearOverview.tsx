@@ -203,6 +203,7 @@ interface GearOverviewProps {
   gear: Record<string, GearItem>;
   title?: string;
   characterRenderUrl?: string | null;
+  characterBackgroundUrl?: string | null;
   characterClassName?: string | null;
   equippedGear?: Record<string, GearItem>;
   dropBaselineIlevelByKey?: Record<string, number>;
@@ -210,6 +211,7 @@ interface GearOverviewProps {
   downgradeSlots?: Set<string>;
   currencies?: Record<string, { id: number; name: string; icon: string }>;
   framed?: boolean;
+  fullWidth?: boolean;
   comparisonMode?: 'result' | 'provenance';
   sourceInstances?: Instance[];
 }
@@ -218,6 +220,7 @@ export default function GearOverview({
   gear,
   title = 'Equipped Gear',
   characterRenderUrl,
+  characterBackgroundUrl,
   characterClassName,
   equippedGear,
   dropBaselineIlevelByKey = {},
@@ -225,6 +228,7 @@ export default function GearOverview({
   downgradeSlots,
   currencies,
   framed = true,
+  fullWidth = false,
   comparisonMode = 'provenance',
   sourceInstances,
 }: GearOverviewProps) {
@@ -362,19 +366,34 @@ export default function GearOverview({
 
   return (
     <div
-      className={`${framed ? 'card mx-auto max-w-6xl p-4 sm:p-5' : ''} relative w-full overflow-hidden`}
+      className={`${framed ? `card ${fullWidth ? '' : 'mx-auto max-w-6xl'} p-4 sm:p-5` : ''} relative w-full overflow-hidden`}
     >
-      {characterRenderUrl && (
+      {characterBackgroundUrl && (
         <img
-          src={characterRenderUrl}
+          src={characterBackgroundUrl}
           alt=""
-          className="opacity-26 pointer-events-none absolute inset-0 mx-auto hidden h-[120%] w-auto -translate-y-[8%] object-contain md:block"
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 hidden h-full w-full object-cover object-center opacity-40 md:block"
           onError={(e) => {
             (e.currentTarget as HTMLImageElement).style.display = 'none';
           }}
         />
       )}
-      <div className="relative">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-b from-black/20 via-[#0c0a0f]/55 to-[#0c0c0f]/95"
+      />
+      {characterRenderUrl && (
+        <img
+          src={characterRenderUrl}
+          alt=""
+          className="pointer-events-none absolute inset-0 z-[2] mx-auto hidden h-[120%] w-auto -translate-y-[8%] object-contain opacity-26 md:block"
+          onError={(e) => {
+            (e.currentTarget as HTMLImageElement).style.display = 'none';
+          }}
+        />
+      )}
+      <div className="relative z-10">
         <div className="mb-4 flex items-center justify-between gap-4">
           <p className="text-sm font-medium uppercase tracking-widest text-muted">{title}</p>
           {totalCostsDisplay && <div className="hidden md:block">{totalCostsDisplay}</div>}

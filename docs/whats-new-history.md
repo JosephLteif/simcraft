@@ -58,6 +58,13 @@ Character Raiding overviews now place Blizzard progression and Warcraft Logs dat
 - View Warcraft Logs rankings and recent public reports beside raid progress on wider screens.
 - Expand Blizzard progression to full width when Warcraft Logs is disabled and stack the widgets on narrow screens.
 
+#### Share Great Vault trackers across character tabs
+
+The Mythic+ and Raiding tabs now reuse the Vault tab's Great Vault tracker widgets.
+
+- See the same per-slot activity popovers, completion placeholders, and unlocked item levels from every character tab.
+- Keep weekly thresholds, activity details, and reward-level calculations consistent across the character experience.
+
 #### Make tracked characters easier to scan
 
 The dashboard's tracked-character card now uses its available space more effectively, keeping the character overview compact while giving the vault a clear vertical home.

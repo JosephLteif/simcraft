@@ -2346,6 +2346,7 @@ export default function Home() {
                                         kind="mythic"
                                         label={`Mythic+ Slot ${idx + 1}`}
                                         items={mainVault?.mythicRuns ?? []}
+                                        maxItems={threshold}
                                         className="h-full"
                                       >
                                         <div
@@ -2413,6 +2414,7 @@ export default function Home() {
                                         kind="raid"
                                         label={`Raid Slot ${idx + 1}`}
                                         items={mainVault?.raidBosses ?? []}
+                                        displayItems={mainVault?.raidBossesForDisplay ?? []}
                                         className="h-full"
                                       >
                                         <div

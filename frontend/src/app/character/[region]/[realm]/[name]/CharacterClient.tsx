@@ -573,6 +573,7 @@ export default function CharacterClient() {
       })
     : '';
   const characterMediaUrl = `${API_URL}/api/blizzard/character/${realm}/${name}/media/main?region=${region}`;
+  const characterBackgroundUrl = `${API_URL}/api/blizzard/character/${realm}/${name}/media/background?region=${region}`;
 
   return (
     <div className="space-y-6">
@@ -729,6 +730,7 @@ export default function CharacterClient() {
         mythicPlus={data.mythicPlus}
         raidEncounters={data.raidEncounters}
         characterMediaUrl={characterMediaUrl}
+        characterBackgroundUrl={characterBackgroundUrl}
         latestSimcInput={savedProfiles[0]?.simc_input || null}
         initialTab={initialTab}
         raiderIoIntegration={raiderIoIntegration}
