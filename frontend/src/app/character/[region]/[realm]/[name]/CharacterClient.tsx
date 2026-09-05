@@ -573,7 +573,13 @@ export default function CharacterClient() {
       })
     : '';
   const characterMediaUrl = `${API_URL}/api/blizzard/character/${realm}/${name}/media/main?region=${region}`;
-  const characterBackgroundUrl = `${API_URL}/api/blizzard/character/${realm}/${name}/media/background?region=${region}`;
+  const characterBackgroundSlug = profileClassName
+    ?.trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_');
+  const characterBackgroundUrl = characterBackgroundSlug
+    ? `https://render.worldofwarcraft.com/profile-backgrounds/v2/armory_bg_class_${characterBackgroundSlug}.jpg`
+    : null;
 
   return (
     <div className="space-y-6">
