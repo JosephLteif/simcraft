@@ -1,5 +1,5 @@
 import { characterHref } from './routes';
-import type { MythicKeystoneDungeonDetail, RaiderIoData } from './api';
+import type { DungeonInfo, MythicKeystoneDungeonDetail, RaiderIoData } from './api';
 import type {
   CharacterNamedValue,
   CharacterRunMember,
@@ -151,6 +151,8 @@ function collectKnownMythicRuns(root: unknown): MythicRun[] {
 
 function collectMythicRuns(root: unknown): MythicRun[] {
   const knownRuns = collectKnownMythicRuns(root);
+  // Season records must never become weekly activity through the legacy payload fallback.
+  if (root && typeof root === 'object' && 'season_best_runs' in root) return knownRuns;
   return knownRuns.length > 0 ? knownRuns : collectRuns(root);
 }
 
@@ -254,9 +256,7 @@ function getWeeklyMythicVaultRuns(
   const allRuns = collectRuns(mythicPlus).filter((run) => getRunLevel(run) > 0);
   const recentRunsValue = mythicPlusObject.recent_runs ?? mythicPlusObject.recentRuns;
   const currentPeriodValue = mythicPlusObject.current_period ?? mythicPlusObject.currentPeriod;
-  const recentSource = Array.isArray(recentRunsValue)
-    ? (recentRunsValue as MythicRun[])
-    : allRuns;
+  const recentSource = Array.isArray(recentRunsValue) ? (recentRunsValue as MythicRun[]) : allRuns;
   const recentRuns = [...recentSource]
     .filter((run) => getRunLevel(run) > 0)
     .sort((a, b) => getRunTimestamp(b) - getRunTimestamp(a))
@@ -411,6 +411,48 @@ function formatMythicDuration(ms: number): string {
   return `${min}:${String(sec).padStart(2, '0')}`;
 }
 
+export function getMythicDungeonBests(
+  mythicPlus: MythicPlusPayload,
+  dungeons: Array<Pick<DungeonInfo, 'name' | 'image_url'>> = [],
+  dungeonDetailsByName: Record<string, MythicKeystoneDungeonDetail> = {}
+) {
+  const normalizeName = (name: string) => name.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const seasonRuns = Array.isArray(mythicPlus?.season_best_runs)
+    ? mythicPlus.season_best_runs.filter(isRunLike)
+    : [];
+  const bestByDungeon = new Map<string, MythicRun>();
+  for (const run of [...seasonRuns, ...collectMythicRuns(mythicPlus)]) {
+    if (getRunLevel(run) <= 0) continue;
+    const key = normalizeName(getMythicRunName(run));
+    const previous = bestByDungeon.get(key);
+    const duration = getMythicRunDurationMs(run) || Infinity;
+    if (
+      !previous ||
+      getRunLevel(run) > getRunLevel(previous) ||
+      (getRunLevel(run) === getRunLevel(previous) &&
+        duration < (getMythicRunDurationMs(previous) || Infinity))
+    ) {
+      bestByDungeon.set(key, run);
+    }
+  }
+  const roster: Pick<DungeonInfo, 'name' | 'image_url'>[] = dungeons.length
+    ? dungeons
+    : Array.from(bestByDungeon.values(), (run) => ({ name: getMythicRunName(run) }));
+  return roster.map((dungeon) => {
+    const run = bestByDungeon.get(normalizeName(dungeon.name));
+    const rating = run?.mythic_rating as { rating?: number } | undefined;
+    const score = Number(rating?.rating);
+    return {
+      dungeon: dungeon.name,
+      imageUrl: dungeon.image_url,
+      level: run ? getRunLevel(run) : null,
+      score: Number.isFinite(score) ? Math.round(score) : null,
+      duration: run ? formatMythicDuration(getMythicRunDurationMs(run)) : '-',
+      timed: run ? getMythicRunTimed(run, dungeonDetailsByName) : null,
+    };
+  });
+}
+
 function getMythicDungeonDetail(
   run: MythicRun,
   dungeonDetailsByName: Record<string, MythicKeystoneDungeonDetail>
@@ -499,8 +541,11 @@ export function summarizeMythicPlus(
   const mythicPlusObj = mythicPlus as Record<string, unknown>;
   if (Object.keys(mythicPlusObj).length === 0) return null;
   const allRuns = collectMythicRuns(mythicPlus).filter((run) => getRunLevel(run) > 0);
+  const seasonRuns = Array.isArray(mythicPlusObj.season_best_runs)
+    ? mythicPlusObj.season_best_runs.filter(isRunLike)
+    : [];
   const byDungeon = new Map<string, MythicRun>();
-  for (const run of allRuns) {
+  for (const run of [...allRuns, ...seasonRuns]) {
     const key = getMythicRunName(run).trim().toLowerCase();
     const existing = byDungeon.get(key);
     if (!existing || getRunLevel(run) > getRunLevel(existing)) byDungeon.set(key, run);
@@ -585,7 +630,7 @@ export function summarizeMythicPlus(
 
   return {
     score: score > 0 ? Math.round(score) : null,
-    runs: bestRuns.length,
+    runs: new Set(allRuns.map((run) => getMythicRunName(run).trim().toLowerCase())).size,
     bestLevel: bestLevel > 0 ? bestLevel : null,
     bestDungeonName: bestDungeon ? getMythicRunName(bestDungeon) : providedBestDungeon || null,
     recentRuns: recentRuns.map((run, index) => {

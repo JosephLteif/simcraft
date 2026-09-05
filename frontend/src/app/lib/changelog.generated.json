@@ -1,5 +1,5 @@
 {
-  "contentRevision": "Unreleased-4a1aff24f5b4",
+  "contentRevision": "Unreleased-8add081b0c8a",
   "releases": [
     {
       "version": "Unreleased",
@@ -13,6 +13,26 @@
           "items": [
             "Compare unique item rewards, likely upgrades, and the best DPS gain for each source.",
             "Select a boss or dungeon to filter the rankings to matching combinations, switch directly to another source, or use Show all sources to clear the filter."
+          ]
+        },
+        {
+          "category": "feature",
+          "title": "Show every Mythic+ season dungeon best",
+          "summary": "The character Mythic+ overview now lists every dungeon in the active season with the character's best completed run.",
+          "items": [
+            "Compare each dungeon's highest completed key, Mythic+ rating, and fastest completion time in one table.",
+            "Keep dungeons with no completed run visible so missing season coverage is easy to spot.",
+            "Keep season-wide bests separate from the current week's vault activity and completed-run count."
+          ]
+        },
+        {
+          "category": "feature",
+          "title": "Filter Warcraft Logs parses by difficulty",
+          "summary": "Warcraft Logs raid data now keeps LFR, Normal, Heroic, and Mythic parses distinct instead of combining every difficulty into one result.",
+          "items": [
+            "Request each raid difficulty explicitly and label per-boss rankings with the difficulty they came from.",
+            "Filter the Raiding tab by Needed difficulties based on the character's Blizzard kills, All difficulties, or an individual difficulty.",
+            "Keep the selected parse difficulties across refreshes while preserving the existing Warcraft Logs summary and report views."
           ]
         },
         {

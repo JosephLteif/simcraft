@@ -7,6 +7,7 @@ import TalentTree from './TalentTree';
 import { type TalentTreeData, useTalentTree } from '../lib/useTalentTree';
 import CharacterQuickLinks from './character/CharacterQuickLinks';
 import CharacterOverviewCard from './character/CharacterOverviewCard';
+import MythicDungeonBests from './character/MythicDungeonBests';
 import CharacterPageTabs, { type CharacterPageTab } from './character/CharacterPageTabs';
 import RaidProgressionGrid from './RaidProgressionGrid';
 import GearOverview, { type GearItem as OverviewGearItem } from './GearOverview';
@@ -34,6 +35,7 @@ import {
   buildCharacterExternalLinks,
   computeMythicVaultProgress,
   getWeeklyVaultActivity,
+  getMythicDungeonBests,
   getRaidExpansionOptions,
   getMemberProfileHref,
   isCurrentExpansionPlaceholder,
@@ -46,7 +48,14 @@ import {
 import { parseTalentLoadouts, type TalentLoadoutParsed } from '../lib/types';
 import { useMythicDungeonDetails } from '../lib/useMythicDungeonDetails';
 import { useGameContext } from '../lib/useGameContext';
-import type { RaiderIoData, WarcraftLogsData } from '../lib/api';
+import {
+  getDungeonData,
+  listInstances,
+  type DungeonInfo,
+  type RaiderIoData,
+  type WarcraftLogsData,
+} from '../lib/api';
+import type { Instance } from '../drop-finder/types';
 import {
   RaiderIoRaidAttribution,
   RaiderIoMythicPlusDetails,
@@ -379,6 +388,40 @@ function MythicPlusCard({
 }) {
   const [activeTab, setActiveTab] = useState<'overview' | 'runs'>('overview');
   const mplusDungeonDetailsByName = useMythicDungeonDetails('us');
+  const [seasonDungeons, setSeasonDungeons] = useState<
+    Array<Pick<DungeonInfo, 'name' | 'image_url'>>
+  >([]);
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.allSettled([getDungeonData(), listInstances()]).then(
+      ([dungeonResult, instancesResult]) => {
+        if (cancelled) return;
+        const apiDungeons =
+          dungeonResult.status === 'fulfilled' &&
+          Array.isArray(dungeonResult.value.rotation_dungeons)
+            ? dungeonResult.value.rotation_dungeons
+            : [];
+        const instances: Instance[] =
+          instancesResult.status === 'fulfilled' ? instancesResult.value : [];
+        const mplusBucket = instances.find(
+          (instance) =>
+            instance.id === -1 && (instance.current_season || instance.type === 'mplus-chest')
+        );
+        const currentRotation = (mplusBucket?.encounters || []).map((dungeon) => ({
+          name: dungeon.name,
+          image_url: dungeon.image_url,
+        }));
+        setSeasonDungeons(currentRotation.length > 0 ? currentRotation : apiDungeons);
+      }
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const dungeonBests = useMemo(
+    () => getMythicDungeonBests(mythicPlus, seasonDungeons, mplusDungeonDetailsByName),
+    [mythicPlus, seasonDungeons, mplusDungeonDetailsByName]
+  );
 
   const summary = useMemo(
     () => summarizeMythicPlus(mythicPlus, region, periods, mplusDungeonDetailsByName),
@@ -473,6 +516,10 @@ function MythicPlusCard({
                 value={display.bestLevel ? `+${display.bestLevel}` : '-'}
               />
               <StatRow label="Top Dungeon" value={display.bestDungeonName || '-'} />
+              <MythicDungeonBests
+                dungeons={dungeonBests}
+                seasonLoaded={Array.isArray(mythicPlus?.season_best_runs)}
+              />
               {summary && (
                 <>
                   <div className="my-2 h-px bg-white/5" />
