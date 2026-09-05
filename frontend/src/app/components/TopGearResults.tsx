@@ -24,6 +24,7 @@ import type { DropItem, Instance } from '../drop-finder/types';
 import { trackSimulations } from '../lib/sim-tracking';
 import { filterResultsByDropSource } from '../lib/drop-source-priority';
 import DropSourcePriority from './DropSourcePriority';
+import { buildCharacterBackgroundUrl } from '../lib/profile-format';
 
 interface TopGearResultsProps {
   parentSimId?: string;
@@ -736,6 +737,8 @@ export default function TopGearResults({
           playerRegion ? `?region=${playerRegion.toLowerCase()}` : ''
         }`
       : null;
+  const characterBackgroundUrl = !lightMode ? buildCharacterBackgroundUrl(playerClass) : null;
+  const hasStatsPanel = Boolean(simulatedStats || generatedInput);
 
   const rankingSlotOptions = useMemo(() => {
     const slots = new Set<string>();
@@ -858,88 +861,98 @@ export default function TopGearResults({
       </DpsHeroCard>
 
       {hasGearOverview && (
-        <CollapsibleSection title="Character Panel">
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.65fr)_minmax(340px,0.95fr)] xl:items-start">
-            <GearOverview
-              gear={bestGearSet}
-              title={
-                selectedResultName && selectedResultName !== results[0]?.name
-                  ? 'Selected Gear'
-                  : 'Best Gear'
-              }
-              characterRenderUrl={characterRenderUrl}
-              equippedGear={equippedGear}
-              dropBaselineIlevelByKey={dropBaselineIlevelByKey}
-              upgradeSlots={upgradeSlots}
-              downgradeSlots={downgradeSlots}
-              currencies={currencies}
-              framed={false}
-              comparisonMode="result"
-              sourceInstances={sourceInstances}
-            />
+        <div
+          className={
+            hasStatsPanel
+              ? 'grid gap-6 xl:grid-cols-[minmax(0,7fr)_minmax(320px,3fr)] xl:items-start'
+              : undefined
+          }
+        >
+          <CollapsibleSection title="Character Panel">
+            <div className="-m-5">
+              <GearOverview
+                gear={bestGearSet}
+                title={
+                  selectedResultName && selectedResultName !== results[0]?.name
+                    ? 'Selected Gear'
+                    : 'Best Gear'
+                }
+                characterRenderUrl={characterRenderUrl}
+                characterBackgroundUrl={characterBackgroundUrl}
+                showTitle={false}
+                equippedGear={equippedGear}
+                dropBaselineIlevelByKey={dropBaselineIlevelByKey}
+                upgradeSlots={upgradeSlots}
+                downgradeSlots={downgradeSlots}
+                currencies={currencies}
+                framed={false}
+                comparisonMode="result"
+                sourceInstances={sourceInstances}
+              />
+            </div>
+          </CollapsibleSection>
 
-            {simulatedStats || generatedInput ? (
-              <div className="xl:sticky xl:top-6">
-                {selectedExactSimulatedStats ? (
-                  <SimStatsComparisonCard
-                    current={simulatedStats}
-                    simulated={selectedExactSimulatedStats}
-                    title="Base vs Exact Selected Stats"
-                    description="Base is the currently equipped simulated profile from the main Top Gear run. Selected is the exact follow-up simulation for the row you chose."
-                    currentLabel="Base"
-                    simulatedLabel="Selected"
-                  />
-                ) : (
-                  <div className="card overflow-hidden border-border/70 bg-surface/95">
-                    <div className="flex items-start justify-between gap-4 border-b border-border/60 px-4 py-4 sm:px-5">
-                      <div className="space-y-1">
-                        <h3 className="text-xs font-bold uppercase tracking-[0.18em] text-zinc-400">
-                          Exact Simulated Stats
-                        </h3>
-                        <p className="max-w-xl text-[12px] leading-5 text-zinc-400">
-                          Load an exact follow-up sim for the selected Top Gear row to compare it
-                          against the base simulated profile from the main Top Gear run.
-                        </p>
-                      </div>
-                      {canLoadSelectedExactStats ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (selectedResult) void loadExactStats(selectedResult);
-                          }}
-                          disabled={selectedExactStatsEntry?.status === 'loading'}
-                          className="shrink-0 rounded border border-gold/35 bg-gold/10 px-3 py-1.5 text-xs font-semibold text-gold transition-colors hover:bg-gold/20 disabled:cursor-wait disabled:opacity-60"
-                        >
-                          {selectedExactStatsEntry?.status === 'loading'
-                            ? 'Loading Exact Stats...'
-                            : 'Load Exact Stats'}
-                        </button>
-                      ) : null}
-                    </div>
-                    <div className="space-y-3 px-4 py-5 sm:px-5">
-                      <p className="text-[13px] text-zinc-300">
-                        {!canLoadSelectedExactStats
-                          ? 'Exact stats are unavailable for this older result. Run Top Gear again to enable row-specific stat snapshots.'
-                          : selectedResultName && selectedResultName !== results[0]?.name
-                            ? `Exact stats for "${selectedResultName}" have not been loaded yet.`
-                            : 'The top result exact stats are being prepared or can be loaded on demand.'}
-                      </p>
-                      {selectedExactStatsEntry?.status === 'error' ? (
-                        <p className="text-[12px] text-red-300">
-                          {selectedExactStatsEntry.error || 'Failed to load exact stats.'}
-                        </p>
-                      ) : null}
-                      <p className="text-[12px] text-zinc-500">
-                        Exact stats are loaded only on demand and cached for this sim for future
-                        opens.
+          {hasStatsPanel ? (
+            <div className="xl:sticky xl:top-6 xl:mt-12">
+              {selectedExactSimulatedStats ? (
+                <SimStatsComparisonCard
+                  current={simulatedStats}
+                  simulated={selectedExactSimulatedStats}
+                  title="Base vs Exact Selected Stats"
+                  description="Base is the currently equipped simulated profile from the main Top Gear run. Selected is the exact follow-up simulation for the row you chose."
+                  currentLabel="Base"
+                  simulatedLabel="Selected"
+                />
+              ) : (
+                <div className="card overflow-hidden border-border/70 bg-surface/95">
+                  <div className="flex items-start justify-between gap-4 border-b border-border/60 px-4 py-4 sm:px-5">
+                    <div className="space-y-1">
+                      <h3 className="text-xs font-bold uppercase tracking-[0.18em] text-zinc-400">
+                        Exact Simulated Stats
+                      </h3>
+                      <p className="max-w-xl text-[12px] leading-5 text-zinc-400">
+                        Load an exact follow-up sim for the selected Top Gear row to compare it
+                        against the base simulated profile from the main Top Gear run.
                       </p>
                     </div>
+                    {canLoadSelectedExactStats ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (selectedResult) void loadExactStats(selectedResult);
+                        }}
+                        disabled={selectedExactStatsEntry?.status === 'loading'}
+                        className="shrink-0 rounded border border-gold/35 bg-gold/10 px-3 py-1.5 text-xs font-semibold text-gold transition-colors hover:bg-gold/20 disabled:cursor-wait disabled:opacity-60"
+                      >
+                        {selectedExactStatsEntry?.status === 'loading'
+                          ? 'Loading Exact Stats...'
+                          : 'Load Exact Stats'}
+                      </button>
+                    ) : null}
                   </div>
-                )}
-              </div>
-            ) : null}
-          </div>
-        </CollapsibleSection>
+                  <div className="space-y-3 px-4 py-5 sm:px-5">
+                    <p className="text-[13px] text-zinc-300">
+                      {!canLoadSelectedExactStats
+                        ? 'Exact stats are unavailable for this older result. Run Top Gear again to enable row-specific stat snapshots.'
+                        : selectedResultName && selectedResultName !== results[0]?.name
+                          ? `Exact stats for "${selectedResultName}" have not been loaded yet.`
+                          : 'The top result exact stats are being prepared or can be loaded on demand.'}
+                    </p>
+                    {selectedExactStatsEntry?.status === 'error' ? (
+                      <p className="text-[12px] text-red-300">
+                        {selectedExactStatsEntry.error || 'Failed to load exact stats.'}
+                      </p>
+                    ) : null}
+                    <p className="text-[12px] text-zinc-500">
+                      Exact stats are loaded only on demand and cached for this sim for future
+                      opens.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : null}
+        </div>
       )}
 
       {talentString && (

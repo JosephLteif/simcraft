@@ -205,6 +205,7 @@ interface GearOverviewProps {
   characterRenderUrl?: string | null;
   characterBackgroundUrl?: string | null;
   characterClassName?: string | null;
+  showTitle?: boolean;
   equippedGear?: Record<string, GearItem>;
   dropBaselineIlevelByKey?: Record<string, number>;
   upgradeSlots?: Set<string>;
@@ -222,6 +223,7 @@ export default function GearOverview({
   characterRenderUrl,
   characterBackgroundUrl,
   characterClassName,
+  showTitle = true,
   equippedGear,
   dropBaselineIlevelByKey = {},
   upgradeSlots,
@@ -394,12 +396,18 @@ export default function GearOverview({
           }}
         />
       )}
-      <div className="relative z-10">
-        <div className="mb-4 flex items-center justify-between gap-4">
-          <p className="text-sm font-medium uppercase tracking-widest text-muted">{title}</p>
-          {totalCostsDisplay && <div className="hidden md:block">{totalCostsDisplay}</div>}
-        </div>
-        {totalCostsDisplay && <div className="mb-4 md:hidden">{totalCostsDisplay}</div>}
+      <div className={`relative z-10 ${showTitle ? '' : 'pt-4'}`}>
+        {showTitle ? (
+          <>
+            <div className="mb-4 flex items-center justify-between gap-4">
+              <p className="text-sm font-medium uppercase tracking-widest text-muted">{title}</p>
+              {totalCostsDisplay && <div className="hidden md:block">{totalCostsDisplay}</div>}
+            </div>
+            {totalCostsDisplay && <div className="mb-4 md:hidden">{totalCostsDisplay}</div>}
+          </>
+        ) : totalCostsDisplay ? (
+          <div className="mb-4 flex justify-end">{totalCostsDisplay}</div>
+        ) : null}
 
         <div className="space-y-2 md:hidden">
           {GEAR_ORDER_STACKED.map((slot) => (
@@ -425,7 +433,7 @@ export default function GearOverview({
         </div>
 
         <div
-          className={`hidden md:grid ${hasCharacterImage ? 'md:grid-cols-[1fr_200px_1fr] lg:grid-cols-[1fr_230px_1fr] xl:grid-cols-[1fr_260px_1fr]' : 'md:grid-cols-2'} md:gap-x-4 lg:gap-x-6`}
+          className={`mx-auto hidden w-full max-w-[1600px] md:grid ${hasCharacterImage ? 'md:grid-cols-[1fr_200px_1fr] lg:grid-cols-[1fr_230px_1fr] xl:grid-cols-[1fr_260px_1fr]' : 'md:grid-cols-2'} md:gap-x-4 lg:gap-x-6`}
         >
           <div className="space-y-2">
             {GEAR_ORDER_LEFT.map((slot) => (

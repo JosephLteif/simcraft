@@ -42,6 +42,14 @@ Character pages can now combine Blizzard data with public Raider.IO and Warcraft
 
 ### Improvements
 
+#### Give simulation gear panels a cleaner layout
+
+Simulation result gear panels now give the character artwork and equipped gear the space they need while keeping comparison stats easy to scan.
+
+- Use a full-width class backdrop and centered gear arrangement inside the Character Panel, with the character render shown at full opacity.
+- Place live or exact simulated stats in a separate right-hand panel at roughly 30% width on wide screens, stacking it below the gear panel on smaller screens.
+- Remove the redundant Best Gear heading from inside the Character Panel.
+
 #### Make Mythic+ overviews more compact
 
 Character Mythic+ overviews now use a responsive widget grid to show more progression data without a long vertical stack.
