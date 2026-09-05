@@ -87,8 +87,8 @@ describe('RaidProgressionGrid', () => {
       />
     );
 
-    expect(screen.getByText('Current Raid')).toBeInTheDocument();
-    expect(screen.getByText('Current Boss')).toBeInTheDocument();
+    expect(screen.getAllByText('Current Raid').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Current Boss').length).toBeGreaterThan(0);
   });
 
   it('adds exact public Warcraft Logs parses to matching boss rows', () => {

@@ -13,9 +13,7 @@ import RaidProgressionGrid from './RaidProgressionGrid';
 import GearOverview, { type GearItem as OverviewGearItem } from './GearOverview';
 import VaultRewardsGrid, { type VaultRewardItem } from './VaultRewardsGrid';
 import SectionCard from './shared/SectionCard';
-import ProgressSlotCard from './shared/ProgressSlotCard';
-import VaultActivityList, { VaultActivitySummary } from './shared/VaultActivityList';
-import { RAID_VAULT_THRESHOLDS } from '../lib/game-rules';
+import VaultTrack, { useVaultTrackerData } from './shared/VaultTracker';
 import { buildCharacterTalentString } from '../lib/character-panel-talent';
 import type {
   CharacterPanelEquipment,
@@ -33,8 +31,6 @@ import type {
 } from '../lib/character-domain-types';
 import {
   buildCharacterExternalLinks,
-  computeMythicVaultProgress,
-  getWeeklyVaultActivity,
   getMythicDungeonBests,
   getRaidExpansionOptions,
   getMemberProfileHref,
@@ -86,6 +82,7 @@ interface CharacterPanelProps {
   raidEncounters: RaidEncountersPayload;
   dungeons?: unknown;
   characterMediaUrl?: string | null;
+  characterBackgroundUrl?: string | null;
   latestSimcInput?: string | null;
   initialTab?: 'profile' | 'raiding' | 'mythic' | 'vault';
   raiderIoIntegration?: CharacterIntegrationState<RaiderIoData> | null;
@@ -106,6 +103,7 @@ export default function CharacterPanel({
   mythicPlus,
   raidEncounters,
   characterMediaUrl,
+  characterBackgroundUrl,
   latestSimcInput,
   initialTab,
   raiderIoIntegration = null,
@@ -114,6 +112,7 @@ export default function CharacterPanel({
 }: CharacterPanelProps) {
   const gameContext = useGameContext();
   const seasonPeriods = gameContext?.active_season?.periods;
+  const activeRaidInstanceIds = gameContext?.pool_members?.raids;
 
   // --- Talent & Spec Logic (Lifted for SimC Generation) ---
   const activeSpec = useMemo(() => {
@@ -190,7 +189,9 @@ export default function CharacterPanel({
               gear={profileGear}
               title="Equipped Gear"
               characterRenderUrl={characterMediaUrl}
+              characterBackgroundUrl={characterBackgroundUrl}
               characterClassName={characterClass}
+              fullWidth
             />
 
             <TalentsCard
@@ -215,7 +216,7 @@ export default function CharacterPanel({
               raidEncounters={raidEncounters}
               region={region}
               periods={seasonPeriods}
-              activeRaidInstanceIds={gameContext?.pool_members?.raids}
+              activeRaidInstanceIds={activeRaidInstanceIds}
               layout="stacked"
             />
           </div>
@@ -225,8 +226,10 @@ export default function CharacterPanel({
       {pageTab === 'mythic' && (
         <MythicPlusCard
           mythicPlus={mythicPlus}
+          raidEncounters={raidEncounters}
           region={region}
           periods={seasonPeriods}
+          activeRaidInstanceIds={activeRaidInstanceIds}
           realm={realm}
           name={name}
           raiderIo={raiderIoIntegration}
@@ -236,10 +239,11 @@ export default function CharacterPanel({
 
       {pageTab === 'raiding' && (
         <RaidSectionCard
+          mythicPlus={mythicPlus}
           raidEncounters={raidEncounters}
           region={region}
           periods={seasonPeriods}
-          activeRaidInstanceIds={gameContext?.pool_members?.raids}
+          activeRaidInstanceIds={activeRaidInstanceIds}
           raiderIo={raiderIoIntegration}
           warcraftLogs={warcraftLogsIntegration}
           onRefreshIntegrations={onRefreshIntegrations}
@@ -252,6 +256,7 @@ export default function CharacterPanel({
           latestSimcInput={latestSimcInput}
           region={region}
           periods={seasonPeriods}
+          activeRaidInstanceIds={activeRaidInstanceIds}
         />
       )}
     </div>
@@ -264,39 +269,26 @@ function VaultOverviewCard({
   latestSimcInput,
   region,
   periods,
+  activeRaidInstanceIds,
 }: {
   mythicPlus: MythicPlusPayload;
   raidEncounters: RaidEncountersPayload;
   latestSimcInput?: string | null;
   region?: string;
   periods?: Array<Record<string, unknown>>;
+  activeRaidInstanceIds?: number[];
 }) {
   const vaultItems = useMemo(
     () => parseVaultRewardsFromSimcInput(latestSimcInput) as VaultRewardItem[],
     [latestSimcInput]
   );
-  const vaultActivity = useMemo(
-    () => getWeeklyVaultActivity(mythicPlus, raidEncounters, region, periods),
-    [mythicPlus, periods, raidEncounters, region]
-  );
-  const mythicVaultProgress = useMemo(
-    () => computeMythicVaultProgress(mythicPlus, region, periods),
-    [mythicPlus, periods, region]
-  );
-  const mythicSlots = mythicVaultProgress.slots;
-  const raidBossesThisWeek = vaultActivity.raidKills;
-
-  const raidSlots = useMemo(
-    () =>
-      RAID_VAULT_THRESHOLDS.map((threshold, idx) => ({
-        slot: idx + 1,
-        threshold,
-        unlocked: raidBossesThisWeek >= threshold,
-        remaining: Math.max(0, threshold - raidBossesThisWeek),
-        progress: Math.min(1, raidBossesThisWeek / threshold),
-      })),
-    [raidBossesThisWeek]
-  );
+  const vaultTrackerData = useVaultTrackerData({
+    mythicPlus,
+    raidEncounters,
+    region,
+    periods,
+    activeRaidInstanceIds,
+  });
 
   return (
     <div className="card space-y-4 p-5">
@@ -306,59 +298,11 @@ function VaultOverviewCard({
 
       <div className="grid grid-cols-1 gap-3">
         <SectionCard title="Mythic+ Track">
-          <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
-            {mythicSlots.map((slot) => (
-              <VaultActivityList
-                key={`mplus-${slot.slot}`}
-                kind="mythic"
-                label={`Mythic+ Slot ${slot.slot}`}
-                items={vaultActivity.mythicRuns}
-                className="h-full"
-              >
-                <ProgressSlotCard
-                  slotLabel={`Slot ${slot.slot}`}
-                  statusLabel={slot.unlocked ? 'Unlocked' : 'Locked'}
-                  tone={slot.unlocked ? 'success' : 'neutral'}
-                  description={
-                    slot.unlocked
-                      ? `Based on ${mythicVaultProgress.runsForVault} runs`
-                      : `${slot.remaining} more runs`
-                  }
-                  progress={slot.progress}
-                  className="h-full"
-                />
-              </VaultActivityList>
-            ))}
-          </div>
-          <VaultActivitySummary kind="mythic" count={vaultActivity.mythicRuns.length} />
+          <VaultTrack kind="mythic" data={vaultTrackerData} showHeader={false} />
         </SectionCard>
 
         <SectionCard title="Raid Track">
-          <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
-            {raidSlots.map((slot) => (
-              <VaultActivityList
-                key={`raid-${slot.slot}`}
-                kind="raid"
-                label={`Raid Slot ${slot.slot}`}
-                items={vaultActivity.raidBosses}
-                className="h-full"
-              >
-                <ProgressSlotCard
-                  slotLabel={`Slot ${slot.slot}`}
-                  statusLabel={slot.unlocked ? 'Unlocked' : `${slot.remaining} more`}
-                  tone={slot.unlocked ? 'success' : 'neutral'}
-                  description={
-                    slot.unlocked
-                      ? `Based on ${raidBossesThisWeek} boss kills`
-                      : `Requires ${slot.threshold} boss kills`
-                  }
-                  progress={slot.progress}
-                  className="h-full"
-                />
-              </VaultActivityList>
-            ))}
-          </div>
-          <VaultActivitySummary kind="raid" count={vaultActivity.raidBosses.length} />
+          <VaultTrack kind="raid" data={vaultTrackerData} showHeader={false} />
         </SectionCard>
       </div>
 
@@ -373,20 +317,31 @@ function VaultOverviewCard({
 
 function MythicPlusCard({
   mythicPlus,
+  raidEncounters,
   region,
   periods,
+  activeRaidInstanceIds,
   raiderIo,
   onRefreshIntegrations,
 }: {
   mythicPlus: MythicPlusPayload;
+  raidEncounters: RaidEncountersPayload;
   region?: string;
   periods?: Array<Record<string, unknown>>;
+  activeRaidInstanceIds?: number[];
   realm: string;
   name: string;
   raiderIo: CharacterIntegrationState<RaiderIoData> | null;
   onRefreshIntegrations?: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<'overview' | 'runs'>('overview');
+  const vaultTrackerData = useVaultTrackerData({
+    mythicPlus,
+    raidEncounters,
+    region,
+    periods,
+    activeRaidInstanceIds,
+  });
   const mplusDungeonDetailsByName = useMythicDungeonDetails('us');
   const [seasonDungeons, setSeasonDungeons] = useState<
     Array<Pick<DungeonInfo, 'name' | 'image_url'>>
@@ -533,39 +488,11 @@ function MythicPlusCard({
             </section>
 
             {summary && (
-              <section
+              <VaultTrack
+                kind="mythic"
+                data={vaultTrackerData}
                 className={`card min-w-0 p-4 ${raiderIo?.enabled ? 'lg:col-span-7' : 'lg:col-span-12'}`}
-              >
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <h4 className="text-[11px] font-bold tracking-wider text-zinc-500 uppercase">
-                    Weekly Vault Tracker
-                  </h4>
-                  <span className="text-[10px] text-zinc-500">
-                    {summary.vaultProgressCount} runs counted
-                  </span>
-                </div>
-                <div className="grid gap-2 sm:grid-cols-3">
-                  {summary.vaultSlots.map((slot) => (
-                    <ProgressSlotCard
-                      key={slot.slot}
-                      slotLabel={`Slot ${slot.slot}`}
-                      statusLabel={
-                        slot.unlocked
-                          ? 'Unlocked'
-                          : `${slot.threshold - summary.vaultProgressCount} more`
-                      }
-                      tone={slot.unlocked ? 'success' : 'neutral'}
-                      description={slot.keyLevel ? `Based on +${slot.keyLevel}` : 'Run more keys'}
-                      progress={slot.progress}
-                      footerRight={
-                        summary.hasAnyVaultIlvl && slot.rewardIlvl
-                          ? `iLvl ${slot.rewardIlvl}`
-                          : undefined
-                      }
-                    />
-                  ))}
-                </div>
-              </section>
+              />
             )}
 
             {raiderIo?.enabled && (
@@ -747,6 +674,7 @@ function MythicPlusCard({
 }
 
 function RaidSectionCard({
+  mythicPlus,
   raidEncounters,
   region,
   periods,
@@ -755,6 +683,7 @@ function RaidSectionCard({
   warcraftLogs,
   onRefreshIntegrations,
 }: {
+  mythicPlus: MythicPlusPayload;
   raidEncounters: RaidEncountersPayload;
   region: string;
   periods?: Array<Record<string, unknown>>;
@@ -828,6 +757,7 @@ function RaidSectionCard({
         />
         <div className="rounded-md border border-white/5 bg-white/[0.02] p-3">
           <RaidProgressCard
+            mythicPlus={mythicPlus}
             raidEncounters={raidEncounters}
             embedded
             region={region}
@@ -851,6 +781,7 @@ function RaidSectionCard({
 }
 
 function RaidProgressCard({
+  mythicPlus,
   raidEncounters,
   embedded = false,
   region,
@@ -861,6 +792,7 @@ function RaidProgressCard({
   onActiveRaidNameChange,
   warcraftLogs,
 }: {
+  mythicPlus?: MythicPlusPayload;
   raidEncounters: RaidEncountersPayload;
   embedded?: boolean;
   region?: string;
@@ -1023,6 +955,7 @@ function RaidProgressCard({
       )}
       {visibleRaids.length > 0 ? (
         <RaidProgressionGrid
+          mythicPlus={mythicPlus}
           raidEncounters={raidEncounters}
           region={region}
           periods={periods}

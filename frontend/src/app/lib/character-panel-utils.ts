@@ -245,6 +245,125 @@ export type WeeklyVaultMythicRun = {
   timestamp: number;
 };
 
+function normalizeUpgradeTrackName(value: unknown): string {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+}
+
+function collectUpgradeTrackIlvls(input: unknown): Map<string, Map<number, number>> {
+  const tracks = new Map<string, Map<number, number>>();
+  const add = (trackName: unknown, rawRow: unknown) => {
+    if (!rawRow || typeof rawRow !== 'object' || Array.isArray(rawRow)) return;
+    const row = rawRow as Record<string, unknown>;
+    const level = Number(row.level ?? 0);
+    const ilvl = Number(row.itemLevel ?? row.item_level ?? row.ilevel ?? row.ilvl ?? 0);
+    const name = normalizeUpgradeTrackName(trackName);
+    if (!name || !Number.isFinite(level) || level <= 0 || !Number.isFinite(ilvl) || ilvl <= 0) {
+      return;
+    }
+    const levels = tracks.get(name) ?? new Map<number, number>();
+    levels.set(level, ilvl);
+    tracks.set(name, levels);
+  };
+
+  if (Array.isArray(input)) {
+    for (const row of input) {
+      if (row && typeof row === 'object' && !Array.isArray(row)) {
+        add((row as Record<string, unknown>).name, row);
+      }
+    }
+  } else if (input && typeof input === 'object') {
+    for (const [trackName, rows] of Object.entries(input as Record<string, unknown>)) {
+      if (!Array.isArray(rows)) continue;
+      for (const row of rows) add(trackName, row);
+    }
+  }
+  return tracks;
+}
+
+export function getMythicVaultRewardIlvls(
+  seasonConfig: unknown,
+  upgradeTracks: unknown
+): Record<number, number> {
+  if (!seasonConfig || typeof seasonConfig !== 'object' || Array.isArray(seasonConfig)) return {};
+  const config = seasonConfig as Record<string, unknown>;
+  const categories = config.dungeon_categories ?? config.dungeonCategories;
+  if (!Array.isArray(categories)) return {};
+  const mplusCategory = categories.find((category) => {
+    if (!category || typeof category !== 'object' || Array.isArray(category)) return false;
+    const value = category as Record<string, unknown>;
+    return (
+      String(value.key ?? '')
+        .trim()
+        .toLowerCase() === 'mplus' ||
+      Number(value.poolInstanceId ?? value.pool_instance_id ?? 0) === -1
+    );
+  });
+  if (!mplusCategory || typeof mplusCategory !== 'object' || Array.isArray(mplusCategory))
+    return {};
+
+  const difficulties = (mplusCategory as Record<string, unknown>).difficulties;
+  if (!Array.isArray(difficulties)) return {};
+  const tracks = collectUpgradeTrackIlvls(upgradeTracks);
+  const direct = new Map<number, number>();
+  let mythicZeroIlvl: number | null = null;
+  let vault79Ilvl: number | null = null;
+  let vault10Ilvl: number | null = null;
+
+  for (const rawDifficulty of difficulties) {
+    if (!rawDifficulty || typeof rawDifficulty !== 'object' || Array.isArray(rawDifficulty)) {
+      continue;
+    }
+    const difficulty = rawDifficulty as Record<string, unknown>;
+    const key = String(difficulty.key ?? '')
+      .trim()
+      .toLowerCase();
+    const level = Number(difficulty.level ?? 0);
+    const track = tracks.get(normalizeUpgradeTrackName(difficulty.track));
+    const ilvl = track?.get(level) ?? Number(difficulty.fixedIlvl ?? difficulty.fixed_ilvl ?? 0);
+    if (!Number.isFinite(ilvl) || ilvl <= 0) continue;
+
+    if (key === 'mythic') {
+      mythicZeroIlvl = ilvl;
+      continue;
+    }
+    if (key === 'vault+7-9') {
+      vault79Ilvl = ilvl;
+      continue;
+    }
+    if (key === 'vault+10') {
+      vault10Ilvl = ilvl;
+      continue;
+    }
+    const keyLevel = key.match(/^mythic\+(\d+)$/)?.[1];
+    if (keyLevel) direct.set(Number(keyLevel), ilvl);
+  }
+
+  const result: Record<number, number> = {};
+  if (mythicZeroIlvl) result[1] = mythicZeroIlvl;
+  for (const [keyLevel, ilvl] of direct) result[keyLevel] = ilvl;
+  if (vault79Ilvl) {
+    result[7] = vault79Ilvl;
+    result[8] = vault79Ilvl;
+    result[9] = vault79Ilvl;
+  }
+  if (vault10Ilvl) result[10] = vault10Ilvl;
+  return result;
+}
+
+function getFallbackMythicVaultRewardIlvl(
+  rewardIlvls: Partial<Record<number, number>>,
+  keyLevel: number
+): number | null {
+  const direct = rewardIlvls[keyLevel];
+  if (direct && direct > 0) return direct;
+  if (keyLevel >= 10 && rewardIlvls[10]) return rewardIlvls[10] ?? null;
+  if (keyLevel >= 7 && rewardIlvls[9]) return rewardIlvls[9] ?? null;
+  return rewardIlvls[1] ?? null;
+}
+
 function getWeeklyMythicVaultRuns(
   mythicPlus: MythicPlusPayload,
   region?: string,
@@ -292,7 +411,8 @@ function getWeeklyMythicVaultRuns(
 export function computeMythicVaultProgress(
   mythicPlus: MythicPlusPayload,
   region?: string,
-  periods?: Array<Record<string, unknown>>
+  periods?: Array<Record<string, unknown>>,
+  fallbackRewardIlvls: Partial<Record<number, number>> = {}
 ): {
   runsForVault: number;
   slotThresholds: number[];
@@ -302,6 +422,7 @@ export function computeMythicVaultProgress(
     unlocked: boolean;
     remaining: number;
     progress: number;
+    rewardIlvl: number | null;
   }>;
 } {
   if (!mythicPlus || typeof mythicPlus !== 'object') {
@@ -315,20 +436,34 @@ export function computeMythicVaultProgress(
         unlocked: false,
         remaining: threshold,
         progress: 0,
+        rewardIlvl: null,
       })),
     };
   }
 
-  const runsForVault = getWeeklyMythicVaultRuns(mythicPlus, region, periods).length;
+  const weeklyRuns = getWeeklyMythicVaultRuns(mythicPlus, region, periods);
+  const runsForVault = weeklyRuns.length;
+  const mythicPlusObject = mythicPlus as Record<string, unknown>;
+  const rewardMap = collectMythicRewardMap(
+    mythicPlusObject.current_period || mythicPlusObject.currentPeriod || mythicPlus
+  );
+  const topLevels = weeklyRuns.map((run) => run.level).sort((a, b) => b - a);
 
   const slotThresholds = [...MYTHIC_VAULT_THRESHOLDS];
-  const slots = slotThresholds.map((threshold, idx) => ({
-    slot: idx + 1,
-    threshold,
-    unlocked: runsForVault >= threshold,
-    remaining: Math.max(0, threshold - runsForVault),
-    progress: Math.min(1, runsForVault / threshold),
-  }));
+  const slots = slotThresholds.map((threshold, idx) => {
+    const keyLevel = topLevels[threshold - 1];
+    return {
+      slot: idx + 1,
+      threshold,
+      unlocked: runsForVault >= threshold,
+      remaining: Math.max(0, threshold - runsForVault),
+      progress: Math.min(1, runsForVault / threshold),
+      rewardIlvl: keyLevel
+        ? (rewardMap.get(keyLevel) ??
+          getFallbackMythicVaultRewardIlvl(fallbackRewardIlvls, keyLevel))
+        : null,
+    };
+  });
 
   return { runsForVault, slotThresholds, slots };
 }
@@ -769,6 +904,24 @@ export function raidMatchesActiveIds(raid: unknown, activeIds?: number[]): boole
   });
 }
 
+export function getRaidInstanceIds(
+  raidEncounters: RaidEncountersPayload,
+  activeRaidIds?: number[]
+): number[] {
+  if (!activeRaidIds) return [];
+
+  const instanceIds = new Set<number>();
+  const expansions = Array.isArray(raidEncounters?.expansions) ? raidEncounters.expansions : [];
+  for (const expansion of expansions) {
+    for (const instance of Array.isArray(expansion?.instances) ? expansion.instances : []) {
+      if (!raidMatchesActiveIds(instance, activeRaidIds)) continue;
+      const instanceId = Number(instance?.instance?.id ?? instance?.id ?? 0);
+      if (Number.isFinite(instanceId) && instanceId > 0) instanceIds.add(instanceId);
+    }
+  }
+  return Array.from(instanceIds);
+}
+
 function normalizeRaidKey(value: unknown): string {
   return String(value ?? '')
     .trim()
@@ -782,19 +935,25 @@ export type WeeklyVaultRaidBoss = {
   boss: string;
   timestamp: number;
   difficulties: string[];
+  killedThisWeek: boolean;
 };
 
-function getWeeklyRaidBossActivity(
+function collectRaidBossActivity(
   raidEncounters: RaidEncountersPayload,
   region?: string,
-  periods?: Array<Record<string, unknown>>
+  periods?: Array<Record<string, unknown>>,
+  activeRaidInstanceIds?: number[]
 ): WeeklyVaultRaidBoss[] {
   const expansions = Array.isArray(raidEncounters?.expansions) ? raidEncounters.expansions : [];
   const weekStart = getWeeklyResetStartMs(region, new Date(), periods);
-  const killedBosses = new Map<string, WeeklyVaultRaidBoss>();
+  const bosses = new Map<string, WeeklyVaultRaidBoss>();
 
   for (const expansion of expansions) {
     for (const instance of Array.isArray(expansion?.instances) ? expansion.instances : []) {
+      if (activeRaidInstanceIds && !raidMatchesActiveIds(instance, activeRaidInstanceIds)) {
+        continue;
+      }
+
       const raidName =
         String(instance?.instance?.name || instance?.name || 'Raid').trim() || 'Raid';
       const raidKey = normalizeRaidKey(raidName);
@@ -812,8 +971,7 @@ function getWeeklyRaidBossActivity(
           const timestamp = timestampToMs(
             encounter?.last_kill_timestamp ?? encounter?.lastKillTimestamp
           );
-          if (timestamp < weekStart) continue;
-
+          const killedThisWeek = timestamp >= weekStart;
           const bossId = Number(
             encounter?.encounter?.id ?? encounter?.id ?? encounter?.journal_encounter_id ?? 0
           );
@@ -826,18 +984,22 @@ function getWeeklyRaidBossActivity(
             ).trim() || `Boss ${index + 1}`;
           const stableBossKey = bossId > 0 ? `id:${bossId}` : `name:${normalizeRaidKey(bossName)}`;
           const key = `${raidKey}::${stableBossKey}`;
-          const existing = killedBosses.get(key);
+          const existing = bosses.get(key);
+
           if (!existing) {
-            killedBosses.set(key, {
+            bosses.set(key, {
               key,
               raid: raidName,
               boss: bossName,
-              timestamp,
-              difficulties: difficulty ? [difficulty] : [],
+              timestamp: killedThisWeek ? timestamp : 0,
+              difficulties: killedThisWeek && difficulty ? [difficulty] : [],
+              killedThisWeek,
             });
             continue;
           }
 
+          if (!killedThisWeek) continue;
+          existing.killedThisWeek = true;
           existing.timestamp = Math.max(existing.timestamp, timestamp);
           if (difficulty && !existing.difficulties.includes(difficulty)) {
             existing.difficulties.push(difficulty);
@@ -847,7 +1009,130 @@ function getWeeklyRaidBossActivity(
     }
   }
 
-  return Array.from(killedBosses.values()).sort((a, b) => b.timestamp - a.timestamp);
+  return Array.from(bosses.values()).sort(
+    (a, b) =>
+      Number(b.killedThisWeek) - Number(a.killedThisWeek) ||
+      b.timestamp - a.timestamp ||
+      a.raid.localeCompare(b.raid) ||
+      a.boss.localeCompare(b.boss)
+  );
+}
+
+function getWeeklyRaidBossActivity(
+  raidEncounters: RaidEncountersPayload,
+  region?: string,
+  periods?: Array<Record<string, unknown>>,
+  activeRaidInstanceIds?: number[]
+): WeeklyVaultRaidBoss[] {
+  return collectRaidBossActivity(raidEncounters, region, periods, activeRaidInstanceIds).filter(
+    (boss) => boss.killedThisWeek
+  );
+}
+
+export function getRaidBossesForVaultDisplay(
+  raidEncounters: RaidEncountersPayload,
+  region?: string,
+  periods?: Array<Record<string, unknown>>,
+  activeRaidInstanceIds?: number[]
+): WeeklyVaultRaidBoss[] {
+  const bosses = collectRaidBossActivity(raidEncounters, region, periods, activeRaidInstanceIds);
+  if (activeRaidInstanceIds) return bosses;
+
+  const raidsWithWeeklyKills = new Set(
+    bosses.filter((boss) => boss.killedThisWeek).map((boss) => normalizeRaidKey(boss.raid))
+  );
+  return bosses.filter((boss) => raidsWithWeeklyKills.has(normalizeRaidKey(boss.raid)));
+}
+
+function normalizeRaidDifficultyKey(value: unknown): RaidDifficultyKey | null {
+  const normalized = String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z]/g, '');
+  if (normalized.includes('mythic')) return 'mythic';
+  if (normalized.includes('heroic')) return 'heroic';
+  if (normalized.includes('normal')) return 'normal';
+  if (normalized === 'lfr' || normalized.includes('raidfinder')) return 'lfr';
+  return null;
+}
+
+export function getRaidVaultRewardIlvls(
+  input: unknown,
+  upgradeTracks?: unknown
+): Record<RaidDifficultyKey, number> {
+  const levels = {} as Record<RaidDifficultyKey, number>;
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return levels;
+  const tracks = collectUpgradeTrackIlvls(upgradeTracks);
+
+  for (const rawItems of Object.values(input as Record<string, unknown>)) {
+    if (!Array.isArray(rawItems)) continue;
+    for (const rawItem of rawItems) {
+      if (!rawItem || typeof rawItem !== 'object') continue;
+      const difficultyInfo = (rawItem as Record<string, unknown>).difficulty_info;
+      if (!difficultyInfo || typeof difficultyInfo !== 'object' || Array.isArray(difficultyInfo)) {
+        continue;
+      }
+      for (const [difficulty, rawInfo] of Object.entries(
+        difficultyInfo as Record<string, unknown>
+      )) {
+        if (!rawInfo || typeof rawInfo !== 'object') continue;
+        const ilvl = Number(
+          (rawInfo as Record<string, unknown>).ilvl ??
+            (rawInfo as Record<string, unknown>).item_level ??
+            (rawInfo as Record<string, unknown>).itemLevel ??
+            0
+        );
+        const infoObject = rawInfo as Record<string, unknown>;
+        const level = Number(infoObject.level ?? 0);
+        const nextTrackIlvl =
+          tracks.get(normalizeUpgradeTrackName(infoObject.track))?.get(level + 1) ?? 0;
+        const key = normalizeRaidDifficultyKey(difficulty);
+        if (!key || !Number.isFinite(ilvl) || ilvl <= 0) continue;
+        levels[key] = Math.max(levels[key] || 0, ilvl, nextTrackIlvl);
+      }
+    }
+  }
+  return levels;
+}
+
+export function getRaidVaultSlotRewardIlvl(
+  raidBosses: WeeklyVaultRaidBoss[],
+  threshold: number,
+  rewardIlvls: Partial<Record<RaidDifficultyKey, number>>
+): number | null {
+  if (threshold <= 0) return null;
+
+  const difficultyRank: Record<RaidDifficultyKey, number> = {
+    lfr: 0,
+    normal: 1,
+    heroic: 2,
+    mythic: 3,
+  };
+  const rankedBosses = raidBosses
+    .filter((boss) => boss.killedThisWeek)
+    .map((boss) => {
+      const difficulties = boss.difficulties
+        .map(normalizeRaidDifficultyKey)
+        .filter((difficulty): difficulty is RaidDifficultyKey => difficulty !== null);
+      const difficulty = difficulties.reduce<RaidDifficultyKey | null>(
+        (best, candidate) =>
+          !best || difficultyRank[candidate] > difficultyRank[best] ? candidate : best,
+        null
+      );
+      return { boss, difficulty };
+    })
+    .filter(
+      (entry): entry is { boss: WeeklyVaultRaidBoss; difficulty: RaidDifficultyKey } =>
+        entry.difficulty !== null
+    )
+    .sort(
+      (a, b) =>
+        difficultyRank[b.difficulty] - difficultyRank[a.difficulty] ||
+        b.boss.timestamp - a.boss.timestamp
+    );
+
+  const selected = rankedBosses[threshold - 1];
+  return selected ? rewardIlvls[selected.difficulty] || null : null;
 }
 
 export function computeWeeklyRaidBossKills(
@@ -863,21 +1148,35 @@ export type WeeklyVaultActivity = {
   raidKills: number;
   mythicRuns: WeeklyVaultMythicRun[];
   raidBosses: WeeklyVaultRaidBoss[];
+  raidBossesForDisplay: WeeklyVaultRaidBoss[];
 };
 
 export function getWeeklyVaultActivity(
   mythicPlus: MythicPlusPayload,
   raidEncounters: RaidEncountersPayload,
   region?: string,
-  periods?: Array<Record<string, unknown>>
+  periods?: Array<Record<string, unknown>>,
+  activeRaidInstanceIds?: number[]
 ): WeeklyVaultActivity {
   const mythicRuns = getWeeklyMythicVaultRuns(mythicPlus, region, periods);
-  const raidBosses = getWeeklyRaidBossActivity(raidEncounters, region, periods);
+  const raidBosses = getWeeklyRaidBossActivity(
+    raidEncounters,
+    region,
+    periods,
+    activeRaidInstanceIds
+  );
+  const raidBossesForDisplay = getRaidBossesForVaultDisplay(
+    raidEncounters,
+    region,
+    periods,
+    activeRaidInstanceIds
+  );
   return {
     mplusRuns: mythicRuns.length,
     raidKills: raidBosses.length,
     mythicRuns,
     raidBosses,
+    raidBossesForDisplay,
   };
 }
 

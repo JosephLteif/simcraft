@@ -1,5 +1,5 @@
 {
-  "contentRevision": "Unreleased-edf05b47dad2",
+  "contentRevision": "Unreleased-e41aee18a50c",
   "releases": [
     {
       "version": "Unreleased",
@@ -64,6 +64,15 @@
             "Keep raid expansion, group, and parse controls with the Blizzard progression widget.",
             "View Warcraft Logs rankings and recent public reports beside raid progress on wider screens.",
             "Expand Blizzard progression to full width when Warcraft Logs is disabled and stack the widgets on narrow screens."
+          ]
+        },
+        {
+          "category": "improvement",
+          "title": "Share Great Vault trackers across character tabs",
+          "summary": "The Mythic+ and Raiding tabs now reuse the Vault tab's Great Vault tracker widgets.",
+          "items": [
+            "See the same per-slot activity popovers, completion placeholders, and unlocked item levels from every character tab.",
+            "Keep weekly thresholds, activity details, and reward-level calculations consistent across the character experience."
           ]
         },
         {

@@ -2,8 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { getWarcraftLogsGuideUrl, normalizeEncounterName } from '../lib/warcraft-logs-guides';
-import { RAID_VAULT_THRESHOLDS } from '../lib/game-rules';
-import type { RaidEncountersPayload } from '../lib/character-domain-types';
+import type { MythicPlusPayload, RaidEncountersPayload } from '../lib/character-domain-types';
 import type { WarcraftLogsBossRanking, WarcraftLogsData } from '../lib/api';
 import {
   getWeeklyResetStartMs,
@@ -12,6 +11,7 @@ import {
   raidAcronym,
 } from '../lib/character-panel-utils';
 import type { RaidDifficultyKey as DifficultyKey } from '../lib/character-panel-utils';
+import VaultTrack, { useVaultTrackerData } from './shared/VaultTracker';
 
 type RaidParseMode = 'needed' | 'all' | 'custom';
 
@@ -64,6 +64,7 @@ function readRaidParsePreferences(): RaidParsePreferences {
 }
 
 export default function RaidProgressionGrid({
+  mythicPlus,
   raidEncounters,
   region,
   periods,
@@ -73,6 +74,7 @@ export default function RaidProgressionGrid({
   onActiveRaidNameChange,
   warcraftLogs,
 }: {
+  mythicPlus?: MythicPlusPayload;
   raidEncounters: RaidEncountersPayload;
   region?: string;
   periods?: Array<Record<string, unknown>>;
@@ -82,6 +84,13 @@ export default function RaidProgressionGrid({
   onActiveRaidNameChange?: (raidName: string | null) => void;
   warcraftLogs?: WarcraftLogsData | null;
 }) {
+  const vaultTrackerData = useVaultTrackerData({
+    mythicPlus,
+    raidEncounters,
+    region,
+    periods,
+    activeRaidInstanceIds,
+  });
   const parsed = useMemo(
     () => parseRaidProgressionData(raidEncounters, activeRaidInstanceIds),
     [activeRaidInstanceIds, raidEncounters]
@@ -173,24 +182,6 @@ export default function RaidProgressionGrid({
     }).length;
     return { totalBosses, fullyCleared };
   }, [groupedRaidsWithViewBosses, viewMode, weekCutoffTs]);
-
-  const raidVaultSummary = useMemo(() => {
-    const allBosses = groupedRaidsWithViewBosses.flatMap((raid) => raid.bosses);
-    const weeklyBossKills = allBosses.filter((boss) =>
-      DIFFICULTIES.some((diff) => boss.byDifficulty[diff].lastKillTs >= weekCutoffTs)
-    ).length;
-    const slotThresholds = [...RAID_VAULT_THRESHOLDS];
-    const slots = slotThresholds.map((threshold, i) => {
-      const unlocked = weeklyBossKills >= threshold;
-      return {
-        slot: i + 1,
-        threshold,
-        unlocked,
-        progress: Math.min(1, weeklyBossKills / threshold),
-      };
-    });
-    return { weeklyBossKills, slots };
-  }, [groupedRaidsWithViewBosses, weekCutoffTs]);
 
   if (groupedRaidsWithViewBosses.length === 0) {
     return (
@@ -317,37 +308,7 @@ export default function RaidProgressionGrid({
 
       <div className="rounded-md border border-white/5 bg-white/[0.02] p-3">
         <div className="mb-3 rounded-md border border-white/10 bg-black/20 p-3">
-          <div className="mb-2 flex items-center justify-between">
-            <p className="text-[11px] font-bold tracking-wider text-zinc-500 uppercase">
-              Weekly Vault Tracker (Raid)
-            </p>
-            <span className="rounded border border-white/10 bg-black/30 px-1.5 py-0.5 text-[10px] font-bold text-zinc-300">
-              {raidVaultSummary.weeklyBossKills} bosses this week
-            </span>
-          </div>
-          <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
-            {raidVaultSummary.slots.map((slot) => (
-              <div key={slot.slot} className="rounded border border-white/10 bg-black/25 p-2">
-                <div className="mb-1 flex items-center justify-between text-[11px]">
-                  <span className="font-semibold text-zinc-200">Slot {slot.slot}</span>
-                  <span className={slot.unlocked ? 'font-bold text-emerald-400' : 'text-zinc-500'}>
-                    {slot.unlocked
-                      ? 'Unlocked'
-                      : `${slot.threshold - raidVaultSummary.weeklyBossKills} more`}
-                  </span>
-                </div>
-                <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
-                  <div
-                    className={`h-full rounded-full ${slot.unlocked ? 'bg-emerald-400' : 'bg-gold/70'}`}
-                    style={{ width: `${Math.max(6, slot.progress * 100)}%` }}
-                  />
-                </div>
-                <p className="mt-1 text-[10px] text-zinc-500">
-                  Requires {slot.threshold} weekly boss kills
-                </p>
-              </div>
-            ))}
-          </div>
+          <VaultTrack kind="raid" data={vaultTrackerData} />
         </div>
         <p className="mb-2 text-[11px] font-bold tracking-wider text-zinc-500 uppercase">
           Bosses by raid
