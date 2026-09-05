@@ -27,6 +27,7 @@ import type {
 import { getCharacterValueLabel, normalizeCharacterSlug } from '@/app/lib/character-panel-utils';
 import { CHARACTER_DATA_TTL_MS, isCharacterDataStale } from '@/app/lib/character-refresh';
 import { buildWishlistHref } from '@/app/lib/wishlist';
+import { buildCharacterBackgroundUrl } from '@/app/lib/profile-format';
 import { useAuth } from '../../../../components/AuthContext';
 import CharacterPanel from '../../../../components/CharacterPanel';
 import ConfirmModal from '../../../../components/ConfirmModal';
@@ -573,13 +574,7 @@ export default function CharacterClient() {
       })
     : '';
   const characterMediaUrl = `${API_URL}/api/blizzard/character/${realm}/${name}/media/main?region=${region}`;
-  const characterBackgroundSlug = profileClassName
-    ?.trim()
-    .toLowerCase()
-    .replace(/[\s-]+/g, '_');
-  const characterBackgroundUrl = characterBackgroundSlug
-    ? `https://render.worldofwarcraft.com/profile-backgrounds/v2/armory_bg_class_${characterBackgroundSlug}.jpg`
-    : null;
+  const characterBackgroundUrl = buildCharacterBackgroundUrl(profileClassName);
 
   return (
     <div className="space-y-6">

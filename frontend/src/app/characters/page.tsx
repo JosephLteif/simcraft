@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../components/AuthContext';
 import { API_URL, fetchJson, fetchJsonCached } from '../lib/api';
 import { characterHref } from '../lib/routes';
+import { buildCharacterBackgroundUrl } from '../lib/profile-format';
 import { CLASS_COLORS } from '../lib/types';
 import { buildWishlistHref } from '../lib/wishlist';
 
@@ -71,6 +72,7 @@ function CharacterCard({
 }) {
   const classKey = normalizeClassKey(char.class);
   const color = CLASS_COLORS[classKey] || '#d4d4d8';
+  const characterBackgroundUrl = buildCharacterBackgroundUrl(char.class);
   const isAlliance = faction === 'alliance';
   const href = characterHref(
     char.region,
@@ -95,9 +97,9 @@ function CharacterCard({
     >
       <Link href={href} aria-label={cardLabel} className="absolute inset-0 z-10" />
       <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
-        {classKey ? (
+        {characterBackgroundUrl ? (
           <img
-            src={`https://render.worldofwarcraft.com/profile-backgrounds/v2/armory_bg_class_${classKey}.jpg`}
+            src={characterBackgroundUrl}
             alt=""
             aria-hidden="true"
             className="absolute inset-0 h-full w-full object-cover opacity-[0.78] transition-transform duration-500 group-hover:scale-[1.03]"
