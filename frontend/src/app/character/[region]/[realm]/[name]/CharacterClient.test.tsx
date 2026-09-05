@@ -30,8 +30,19 @@ vi.mock('@/app/lib/api', () => ({
 }));
 
 vi.mock('../../../../components/CharacterPanel', () => ({
-  default: ({ mythicPlus }: { mythicPlus?: Record<string, unknown> | null }) => (
-    <div data-testid="character-panel">{JSON.stringify(mythicPlus)}</div>
+  default: ({
+    mythicPlus,
+    characterBackgroundUrl,
+  }: {
+    mythicPlus?: Record<string, unknown> | null;
+    characterBackgroundUrl?: string | null;
+  }) => (
+    <div
+      data-testid="character-panel"
+      data-character-background-url={characterBackgroundUrl || ''}
+    >
+      {JSON.stringify(mythicPlus)}
+    </div>
   ),
 }));
 
@@ -75,6 +86,17 @@ describe('CharacterClient refresh lifecycle', () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
+  });
+
+  it('uses the Blizzard class artwork as the character background', async () => {
+    render(<CharacterClient />);
+
+    await waitFor(() => expect(screen.getByTestId('character-panel')).toBeInTheDocument());
+
+    expect(screen.getByTestId('character-panel')).toHaveAttribute(
+      'data-character-background-url',
+      'https://render.worldofwarcraft.com/profile-backgrounds/v2/armory_bg_class_mage.jpg'
+    );
   });
 
   it('bypasses the cache on the initial load when the snapshot is stale', async () => {
