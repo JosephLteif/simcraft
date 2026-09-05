@@ -458,8 +458,8 @@ function MythicPlusCard({
   }, [mplusDungeonDetailsByName]);
   return (
     <div className="space-y-4">
-      <div className="card p-5">
-        <div className="mb-4 flex items-center justify-between gap-3">
+      <div className="card p-4">
+        <div className="flex items-center justify-between gap-3">
           <h3 className="text-xs font-bold tracking-wider text-zinc-500 uppercase">Mythic+</h3>
           <div className="flex items-center gap-2">
             {raiderIo?.enabled && raiderIo.refreshing && (
@@ -503,83 +503,99 @@ function MythicPlusCard({
             </div>
           </div>
         </div>
-        {hasMythicPlusData ? (
-          activeTab === 'overview' ? (
-            <div className="space-y-3">
-              <StatRow
-                label="Current Score"
-                value={display.score ? display.score.toLocaleString() : '-'}
-              />
-              <StatRow label="Best Runs (Period)" value={display.runs.toString()} />
-              <StatRow
-                label="Highest Key"
-                value={display.bestLevel ? `+${display.bestLevel}` : '-'}
-              />
-              <StatRow label="Top Dungeon" value={display.bestDungeonName || '-'} />
+      </div>
+      {hasMythicPlusData ? (
+        activeTab === 'overview' ? (
+          <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-12">
+            <section className="card min-w-0 self-start p-4 lg:col-span-4">
+              <h4 className="mb-3 text-[11px] font-bold tracking-wider text-zinc-500 uppercase">
+                Mythic+ summary
+              </h4>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+                <StatRow
+                  label="Current Score"
+                  value={display.score ? display.score.toLocaleString() : '-'}
+                />
+                <StatRow label="Best Runs (Period)" value={display.runs.toString()} />
+                <StatRow
+                  label="Highest Key"
+                  value={display.bestLevel ? `+${display.bestLevel}` : '-'}
+                />
+                <StatRow label="Top Dungeon" value={display.bestDungeonName || '-'} />
+              </div>
+            </section>
+
+            <section className="card min-w-0 p-4 lg:col-span-8">
               <MythicDungeonBests
                 dungeons={dungeonBests}
                 seasonLoaded={Array.isArray(mythicPlus?.season_best_runs)}
               />
-              {summary && (
-                <>
-                  <div className="my-2 h-px bg-white/5" />
-                  <div className="rounded-md border border-white/5 bg-white/[0.02] p-3">
-                    <p className="mb-2 text-[11px] font-bold tracking-wider text-zinc-500 uppercase">
-                      Weekly Vault Tracker
-                    </p>
-                    <p className="mb-3 text-[11px] text-zinc-400">
-                      Completed runs counted:{' '}
-                      <span className="font-bold text-zinc-200">{summary.vaultProgressCount}</span>
-                    </p>
-                    <div className="space-y-2">
-                      {summary.vaultSlots.map((slot) => (
-                        <ProgressSlotCard
-                          key={slot.slot}
-                          slotLabel={`Slot ${slot.slot}`}
-                          statusLabel={
-                            slot.unlocked
-                              ? 'Unlocked'
-                              : `${slot.threshold - summary.vaultProgressCount} more`
-                          }
-                          tone={slot.unlocked ? 'success' : 'neutral'}
-                          description={
-                            slot.keyLevel ? `Based on +${slot.keyLevel}` : 'Run more keys'
-                          }
-                          progress={slot.progress}
-                          footerRight={
-                            summary.hasAnyVaultIlvl && slot.rewardIlvl
-                              ? `iLvl ${slot.rewardIlvl}`
-                              : undefined
-                          }
-                        />
-                      ))}
-                    </div>
-                  </div>
-                </>
-              )}
-              {raiderIo?.enabled && (
-                <>
-                  <div className="my-2 h-px bg-white/5" />
-                  {raiderIoData ? (
-                    <RaiderIoMythicPlusDetails data={raiderIoData} />
-                  ) : (
-                    <p className="text-[11px] text-zinc-500" role="status">
-                      {raiderIo.loading && !raiderIo.snapshot
-                        ? 'Loading Raider.IO details…'
-                        : raiderIo.snapshot?.status === 'not_found'
-                          ? 'Raider.IO character profile not found.'
-                          : 'Raider.IO details unavailable.'}
-                    </p>
-                  )}
-                  {raiderIo.error && raiderIoData && (
-                    <p className="text-[11px] text-amber-300" role="status">
-                      Refresh failed; showing the last successful Raider.IO snapshot.
-                    </p>
-                  )}
-                </>
-              )}
-            </div>
-          ) : summary ? (
+            </section>
+
+            {summary && (
+              <section
+                className={`card min-w-0 p-4 ${raiderIo?.enabled ? 'lg:col-span-7' : 'lg:col-span-12'}`}
+              >
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <h4 className="text-[11px] font-bold tracking-wider text-zinc-500 uppercase">
+                    Weekly Vault Tracker
+                  </h4>
+                  <span className="text-[10px] text-zinc-500">
+                    {summary.vaultProgressCount} runs counted
+                  </span>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-3">
+                  {summary.vaultSlots.map((slot) => (
+                    <ProgressSlotCard
+                      key={slot.slot}
+                      slotLabel={`Slot ${slot.slot}`}
+                      statusLabel={
+                        slot.unlocked
+                          ? 'Unlocked'
+                          : `${slot.threshold - summary.vaultProgressCount} more`
+                      }
+                      tone={slot.unlocked ? 'success' : 'neutral'}
+                      description={slot.keyLevel ? `Based on +${slot.keyLevel}` : 'Run more keys'}
+                      progress={slot.progress}
+                      footerRight={
+                        summary.hasAnyVaultIlvl && slot.rewardIlvl
+                          ? `iLvl ${slot.rewardIlvl}`
+                          : undefined
+                      }
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {raiderIo?.enabled && (
+              <section
+                className={`card min-w-0 self-start p-4 ${summary ? 'lg:col-span-5' : 'lg:col-span-12'}`}
+              >
+                <h4 className="mb-3 text-[11px] font-bold tracking-wider text-zinc-500 uppercase">
+                  Raider.IO
+                </h4>
+                {raiderIoData ? (
+                  <RaiderIoMythicPlusDetails data={raiderIoData} />
+                ) : (
+                  <p className="text-[11px] text-zinc-500" role="status">
+                    {raiderIo.loading && !raiderIo.snapshot
+                      ? 'Loading Raider.IO details…'
+                      : raiderIo.snapshot?.status === 'not_found'
+                        ? 'Raider.IO character profile not found.'
+                        : 'Raider.IO details unavailable.'}
+                  </p>
+                )}
+                {raiderIo.error && raiderIoData && (
+                  <p className="mt-3 text-[11px] text-amber-300" role="status">
+                    Refresh failed; showing the last successful Raider.IO snapshot.
+                  </p>
+                )}
+              </section>
+            )}
+          </div>
+        ) : summary ? (
+          <div className="card min-w-0 p-4">
             <div className="space-y-2">
               <div className="flex items-center justify-between text-[11px] text-zinc-400">
                 <span>Showing {summary.recentRuns.length} recent runs</span>
@@ -713,15 +729,19 @@ function MythicPlusCard({
                 })}
               </div>
             </div>
-          ) : (
+          </div>
+        ) : (
+          <div className="card p-4">
             <p className="text-[11px] text-zinc-500" role="status">
               Blizzard recent run data unavailable.
             </p>
-          )
-        ) : (
+          </div>
+        )
+      ) : (
+        <div className="card p-4">
           <p className="text-[11px] text-zinc-600 italic">Mythic+ data unavailable.</p>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

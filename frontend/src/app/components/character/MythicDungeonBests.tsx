@@ -8,7 +8,7 @@ export default function MythicDungeonBests({
   seasonLoaded: boolean;
 }) {
   return (
-    <section aria-label="Season dungeon bests" className="border-t border-white/5 pt-3">
+    <section aria-label="Season dungeon bests" className="min-w-0">
       <h4 className="text-xs font-bold tracking-wider text-zinc-400 uppercase">
         Season dungeon bests
       </h4>
