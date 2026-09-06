@@ -6,7 +6,7 @@
     "@tauri-apps/cli": "^2",
     "@tauri-apps/plugin-updater": "^2",
     "cross-env": "^10",
-    "npm-check-updates": "^23.0.2"
+    "npm-check-updates": "^23.1.0"
   },
   "scripts": {
     "check": "npm run typecheck && npm run lint && npm run test",
