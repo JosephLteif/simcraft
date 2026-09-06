@@ -6,7 +6,17 @@ The format is based on Keep a Changelog and this project uses semantic versionin
 
 ## [Unreleased]
 
-No unreleased changes yet.
+### Changed
+
+- What's New now shows updates since the last seen app version and includes major-release highlights when users install a later patch directly; the profile menu also shows an unread indicator for unseen updates.
+- What's New now includes version filter tags so users can quickly view one displayed release or return to All versions.
+- Character detail Vault tabs now place Raid Track above Mythic+ Track so raid progress is visible first.
+- Desktop source launches now synchronize changelog data before starting the frontend, so What’s New reflects the latest released notes.
+
+### Fixed
+
+- Great Vault weekly Mythic+ activity now counts current-period dungeon runs once instead of counting season-best copies again.
+- Desktop startup synchronization now waits for the embedded backend to become available and retries the initial sync automatically instead of showing a fatal error when the app launches before the backend is ready.
 
 ## [6.0.0] - 2026-09-06
 

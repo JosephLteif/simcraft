@@ -7,25 +7,66 @@ import {
   CHANGELOG_CATEGORY_ORDER,
   CHANGELOG_CONTENT_REVISION,
   CHANGELOG_HISTORY_URL,
+  CHANGELOG_RELEASES,
   LATEST_CHANGELOG_RELEASE,
+  getChangelogReleasesToShow,
+  isMajorChangelogRelease,
+  type ChangelogRelease,
   type ChangelogCategory,
 } from '../lib/changelog';
 import { APP_VERSION } from '../lib/version';
 
 export const CHANGELOG_OPEN_EVENT = 'whylowdps:open-changelog';
+export const CHANGELOG_STATUS_EVENT = 'whylowdps:changelog-status';
 export { CHANGELOG_CONTENT_REVISION } from '../lib/changelog';
 
-const seenKey = `whylowdps_changelog_seen_${APP_VERSION}_${CHANGELOG_CONTENT_REVISION}`;
-const releaseNotes = LATEST_CHANGELOG_RELEASE.entries;
+export const CHANGELOG_SEEN_KEY = `whylowdps_changelog_seen_${APP_VERSION}_${CHANGELOG_CONTENT_REVISION}`;
+export const CHANGELOG_LAST_SEEN_VERSION_KEY = 'whylowdps_changelog_last_seen_version';
+
+function readLastSeenVersion(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.localStorage.getItem(CHANGELOG_LAST_SEEN_VERSION_KEY)?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+export function isChangelogUnread(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(CHANGELOG_SEEN_KEY) !== '1';
+  } catch {
+    return true;
+  }
+}
+
+function notifyChangelogStatus(): void {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(CHANGELOG_STATUS_EVENT));
+}
 
 export default function ChangelogPopup() {
   const [isOpen, setIsOpen] = useState(false);
+  const [lastSeenVersion, setLastSeenVersion] = useState<string | null>(null);
+  const [selectedVersion, setSelectedVersion] = useState<string | null>(null);
+  const [visibleReleases, setVisibleReleases] = useState<ChangelogRelease[]>(() =>
+    getChangelogReleasesToShow(CHANGELOG_RELEASES, APP_VERSION, null)
+  );
+  const versionFilters = Array.from(new Set(visibleReleases.map((release) => release.version)));
+  const activeVersionFilter =
+    selectedVersion && versionFilters.includes(selectedVersion) ? selectedVersion : null;
+  const releasesToRender = activeVersionFilter
+    ? visibleReleases.filter((release) => release.version === activeVersionFilter)
+    : visibleReleases;
   const dialogRef = useRef<HTMLElement | null>(null);
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
-    const seen = localStorage.getItem(seenKey) === '1';
-    if (!seen) setIsOpen(true);
+    const previous = readLastSeenVersion();
+    setLastSeenVersion(previous);
+    setVisibleReleases(getChangelogReleasesToShow(CHANGELOG_RELEASES, APP_VERSION, previous));
+    if (isChangelogUnread()) setIsOpen(true);
+    notifyChangelogStatus();
 
     const open = () => {
       setIsOpen(true);
@@ -36,9 +77,12 @@ export default function ChangelogPopup() {
 
   const dismiss = useCallback(() => {
     try {
-      localStorage.setItem(seenKey, '1');
+      window.localStorage.setItem(CHANGELOG_SEEN_KEY, '1');
+      window.localStorage.setItem(CHANGELOG_LAST_SEEN_VERSION_KEY, APP_VERSION);
     } catch {}
+    setLastSeenVersion(APP_VERSION);
     setIsOpen(false);
+    notifyChangelogStatus();
   }, []);
 
   useEffect(() => {
@@ -117,7 +161,9 @@ export default function ChangelogPopup() {
                   {LATEST_CHANGELOG_RELEASE.version}
                 </p>
                 <p className="mt-2 text-sm text-zinc-400">
-                  The latest improvements, features, and fixes.
+                  {lastSeenVersion
+                    ? `Updates since ${lastSeenVersion}.`
+                    : 'Latest updates and major-release highlights.'}
                 </p>
               </div>
             </div>
@@ -133,46 +179,117 @@ export default function ChangelogPopup() {
           <h2 id="changelog-title" className="sr-only">
             What&apos;s new
           </h2>
+          <div className="relative mt-6 border-t border-white/[0.08] pt-4">
+            <p
+              id="changelog-version-filter-label"
+              className="text-[10px] font-semibold tracking-[0.18em] text-zinc-500 uppercase"
+            >
+              Browse by version
+            </p>
+            <div
+              className="mt-3 flex flex-wrap gap-2"
+              role="group"
+              aria-labelledby="changelog-version-filter-label"
+            >
+              <button
+                type="button"
+                onClick={() => setSelectedVersion(null)}
+                aria-pressed={activeVersionFilter === null}
+                className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                  activeVersionFilter === null
+                    ? 'border-gold/40 bg-gold/15 text-gold'
+                    : 'border-white/10 bg-white/[0.04] text-zinc-400 hover:bg-white/[0.1] hover:text-zinc-100'
+                }`}
+              >
+                All versions
+              </button>
+              {versionFilters.map((version) => (
+                <button
+                  key={version}
+                  type="button"
+                  onClick={() => setSelectedVersion(version)}
+                  aria-pressed={activeVersionFilter === version}
+                  className={`rounded-full border px-3 py-1.5 font-mono text-xs font-semibold transition-colors ${
+                    activeVersionFilter === version
+                      ? 'border-gold/40 bg-gold/15 text-gold'
+                      : 'border-white/10 bg-white/[0.04] text-zinc-400 hover:bg-white/[0.1] hover:text-zinc-100'
+                  }`}
+                >
+                  {version}
+                </button>
+              ))}
+            </div>
+          </div>
         </header>
 
         <article className="relative z-0 min-h-0 flex-1 overflow-y-auto px-5 py-6 sm:px-6">
-          <div className="space-y-8">
-            {CHANGELOG_CATEGORY_ORDER.map((category: ChangelogCategory) => {
-              const notes = releaseNotes.filter((note) => note.category === category);
-              if (notes.length === 0) return null;
-
+          <div className="space-y-10">
+            {releasesToRender.map((release, releaseIndex) => {
+              const releaseSlug = `${release.version}-${releaseIndex}`
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, '-');
               return (
-                <section key={category} aria-labelledby={`changelog-${category}`}>
-                  <div className="mb-3 flex items-center gap-3">
-                    <h3
-                      id={`changelog-${category}`}
-                      className="text-gold text-xs font-bold tracking-[0.18em] uppercase"
-                    >
-                      {CHANGELOG_CATEGORY_LABELS[category]}
-                    </h3>
+                <div
+                  key={`${release.version}-${releaseIndex}`}
+                  data-changelog-release={release.version}
+                >
+                  <div className="mb-4 flex items-center gap-3">
+                    <p className="text-gold text-xs font-bold tracking-[0.18em] uppercase">
+                      {release.version}
+                    </p>
+                    {isMajorChangelogRelease(release.version) ? (
+                      <span className="border-gold/25 bg-gold/10 text-gold rounded border px-2 py-0.5 text-[10px] font-semibold tracking-wide uppercase">
+                        Major release highlights
+                      </span>
+                    ) : null}
                     <div className="from-gold/25 h-px flex-1 bg-gradient-to-r to-transparent" />
                   </div>
-                  <div className="space-y-3">
-                    {notes.map((note) => (
-                      <div
-                        key={note.title}
-                        className="hover:border-gold/25 rounded-xl border border-white/[0.08] bg-white/[0.025] p-4 transition-colors"
-                      >
-                        <h4 className="text-base font-semibold text-zinc-100">{note.title}</h4>
-                        <div className="mt-3 space-y-3 text-sm leading-6 text-zinc-300">
-                          <p>{note.summary}</p>
-                          {note.items && (
-                            <ul className="marker:text-gold list-disc space-y-2 pl-5">
-                              {note.items.map((item) => (
-                                <li key={item}>{item}</li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                  <div className="space-y-8">
+                    {CHANGELOG_CATEGORY_ORDER.map((category: ChangelogCategory) => {
+                      const notes = release.entries.filter((note) => note.category === category);
+                      if (notes.length === 0) return null;
+
+                      return (
+                        <section
+                          key={`${release.version}-${category}`}
+                          aria-labelledby={`changelog-${releaseSlug}-${category}`}
+                        >
+                          <div className="mb-3 flex items-center gap-3">
+                            <h3
+                              id={`changelog-${releaseSlug}-${category}`}
+                              className="text-gold text-xs font-bold tracking-[0.18em] uppercase"
+                            >
+                              {CHANGELOG_CATEGORY_LABELS[category]}
+                            </h3>
+                            <div className="from-gold/25 h-px flex-1 bg-gradient-to-r to-transparent" />
+                          </div>
+                          <div className="space-y-3">
+                            {notes.map((note) => (
+                              <div
+                                key={`${release.version}-${note.title}`}
+                                className="hover:border-gold/25 rounded-xl border border-white/[0.08] bg-white/[0.025] p-4 transition-colors"
+                              >
+                                <h4 className="text-base font-semibold text-zinc-100">
+                                  {note.title}
+                                </h4>
+                                <div className="mt-3 space-y-3 text-sm leading-6 text-zinc-300">
+                                  <p>{note.summary}</p>
+                                  {note.items && (
+                                    <ul className="marker:text-gold list-disc space-y-2 pl-5">
+                                      {note.items.map((item) => (
+                                        <li key={item}>{item}</li>
+                                      ))}
+                                    </ul>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </section>
+                      );
+                    })}
                   </div>
-                </section>
+                </div>
               );
             })}
           </div>

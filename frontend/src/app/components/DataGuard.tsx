@@ -23,6 +23,11 @@ function syncFailureMessage(error: unknown): string {
     : 'The backend could not complete data synchronization.';
 }
 
+function isSyncAlreadyRunningError(error: unknown): boolean {
+  const candidate = error as { status?: number; message?: string } | null;
+  return candidate?.status === 409 || candidate?.message === 'Sync already in progress';
+}
+
 export default function DataGuard({ children }: { children: ReactNode }) {
   const [dataStatus, setDataStatus] = useState<any>({ status: 'syncing', progress: '' });
   const [syncError, setSyncError] = useState<string | null>(null);
@@ -56,6 +61,8 @@ export default function DataGuard({ children }: { children: ReactNode }) {
   const statusFailureFirstAtRef = useRef<number | null>(null);
   const autoRetryAttemptRef = useRef(0);
   const autoRetryTimerRef = useRef<number | null>(null);
+  const syncRequestAcceptedRef = useRef(false);
+  const syncRequestInFlightRef = useRef(false);
   const pathname = usePathname();
   const router = useRouter();
   const normalizedPath =
@@ -147,6 +154,19 @@ export default function DataGuard({ children }: { children: ReactNode }) {
   };
 
   const markSyncFailure = useCallback((error: unknown) => {
+    if (isNetworkUnavailableError(error)) {
+      setSyncError(null);
+      setDataStatus({ status: 'syncing', progress: 'Waiting for backend to start...' });
+      return;
+    }
+    if (isSyncAlreadyRunningError(error)) {
+      setSyncError(null);
+      setDataStatus({
+        status: 'syncing',
+        progress: 'Data synchronization is already in progress...',
+      });
+      return;
+    }
     if (autoRetryTimerRef.current != null) {
       window.clearTimeout(autoRetryTimerRef.current);
       autoRetryTimerRef.current = null;
@@ -157,6 +177,27 @@ export default function DataGuard({ children }: { children: ReactNode }) {
     setSyncError(message);
     setDataStatus({ status: 'error', progress: message });
   }, []);
+
+  const requestSync = useCallback(
+    async (progress: string): Promise<void> => {
+      if (syncRequestInFlightRef.current) return;
+      syncRequestInFlightRef.current = true;
+      setSyncError(null);
+      setDataStatus({ status: 'syncing', progress });
+      try {
+        await fetchJson(`${API_URL}/api/data/sync`, { method: 'POST' });
+        syncRequestAcceptedRef.current = true;
+      } catch (error) {
+        if (isSyncAlreadyRunningError(error)) {
+          syncRequestAcceptedRef.current = true;
+        }
+        markSyncFailure(error);
+      } finally {
+        syncRequestInFlightRef.current = false;
+      }
+    },
+    [markSyncFailure]
+  );
 
   useEffect(() => {
     setIsReady(localStorage.getItem('whylowdps_data_ready') === 'true');
@@ -213,7 +254,15 @@ export default function DataGuard({ children }: { children: ReactNode }) {
         setMissingDataProgress(parseProgress(String(data.progress)));
       }
 
+      if (data.status === 'syncing') {
+        syncRequestAcceptedRef.current = true;
+      }
+
       if (data.status === 'ready') {
+        if (!syncRequestAcceptedRef.current && !isReady) {
+          void requestSync('Initializing synchronization...');
+          return;
+        }
         if (autoRetryTimerRef.current != null) {
           window.clearTimeout(autoRetryTimerRef.current);
           autoRetryTimerRef.current = null;
@@ -243,8 +292,7 @@ export default function DataGuard({ children }: { children: ReactNode }) {
         try {
           localStorage.removeItem('whylowdps_data_ready');
         } catch {}
-        setDataStatus({ status: 'syncing', progress: 'Initializing synchronization...' });
-        fetchJson(`${API_URL}/api/data/sync`, { method: 'POST' }).catch(markSyncFailure);
+        void requestSync('Initializing synchronization...');
       } else {
         setIsReady(false);
         try {
@@ -268,8 +316,7 @@ export default function DataGuard({ children }: { children: ReactNode }) {
               autoRetryTimerRef.current = null;
               autoRetryAttemptRef.current += 1;
               setAutoRetryAttempt(autoRetryAttemptRef.current);
-              fetchJson(`${API_URL}/api/data/sync`, { method: 'POST' })
-                .catch(markSyncFailure)
+              requestSync('Retrying data synchronization...')
                 .finally(() => {
                   void checkStatus();
                 });
@@ -278,9 +325,12 @@ export default function DataGuard({ children }: { children: ReactNode }) {
         }
       }
     } catch (err) {
-      if (!isNetworkUnavailableError(err)) {
-        console.error('Failed to fetch data status:', err);
+      if (isNetworkUnavailableError(err)) {
+        setSyncError(null);
+        setDataStatus({ status: 'syncing', progress: 'Waiting for backend to start...' });
+        return;
       }
+      console.error('Failed to fetch data status:', err);
       // Avoid random splash/reload-like UX on brief idle/network hiccups.
       statusFailureCountRef.current += 1;
       if (statusFailureFirstAtRef.current == null) {
@@ -296,7 +346,15 @@ export default function DataGuard({ children }: { children: ReactNode }) {
         markSyncFailure(new Error(`Unable to check data status: ${syncFailureMessage(err)}`));
       }
     }
-  }, [isSharedResultPage, lanAccessRequired, lightMode, markSyncFailure, missingDataDownloadBusy]);
+  }, [
+    isReady,
+    isSharedResultPage,
+    lanAccessRequired,
+    lightMode,
+    markSyncFailure,
+    missingDataDownloadBusy,
+    requestSync,
+  ]);
 
   useEffect(() => {
     if (isSharedResultPage) return;
@@ -305,14 +363,11 @@ export default function DataGuard({ children }: { children: ReactNode }) {
       !lanAccessRequired &&
       localStorage.getItem(LAN_ACCESS_REQUIRED_STORAGE_KEY) !== '1'
     ) {
-      setDataStatus({ status: 'syncing', progress: 'Initializing synchronization...' });
-      fetchJson(`${API_URL}/api/data/sync`, { method: 'POST' })
-        .catch(markSyncFailure)
-        .finally(() => {
-          void checkStatus();
-        });
+      requestSync('Initializing synchronization...').finally(() => {
+        void checkStatus();
+      });
     }
-  }, [checkStatus, isReady, isSharedResultPage, lanAccessRequired, markSyncFailure]);
+  }, [checkStatus, isReady, isSharedResultPage, lanAccessRequired, requestSync]);
 
   useEffect(() => {
     if (
@@ -337,10 +392,8 @@ export default function DataGuard({ children }: { children: ReactNode }) {
     autoRetryAttemptRef.current = 0;
     setAutoRetryAttempt(0);
     setSyncError(null);
-    setDataStatus({ status: 'syncing', progress: 'Retrying data synchronization...' });
-    fetchJson(`${API_URL}/api/data/sync`, { method: 'POST' })
-      .catch(markSyncFailure)
-      .finally(() => void checkStatus());
+    syncRequestAcceptedRef.current = false;
+    requestSync('Retrying data synchronization...').finally(() => void checkStatus());
   };
 
   const openDataFolder = useCallback(async () => {

@@ -1,7 +1,11 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
-import ChangelogPopup, { CHANGELOG_CONTENT_REVISION, CHANGELOG_OPEN_EVENT } from './ChangelogPopup';
+import ChangelogPopup, {
+  CHANGELOG_CONTENT_REVISION,
+  CHANGELOG_LAST_SEEN_VERSION_KEY,
+  CHANGELOG_OPEN_EVENT,
+} from './ChangelogPopup';
 import { APP_VERSION } from '../lib/version';
 import { CHANGELOG_HISTORY_URL, LATEST_CHANGELOG_RELEASE } from '../lib/changelog';
 
@@ -18,7 +22,9 @@ describe('ChangelogPopup', () => {
 
     const dialog = await screen.findByRole('dialog', { name: /what's new/i });
     expect(dialog).toBeInTheDocument();
-    expect(screen.getByText(LATEST_CHANGELOG_RELEASE.version)).toBeInTheDocument();
+    expect(
+      dialog.querySelector(`[data-changelog-release="${LATEST_CHANGELOG_RELEASE.version}"]`)
+    ).toBeInTheDocument();
     expect(screen.getAllByRole('heading', { level: 4 }).length).toBeGreaterThan(0);
     expect(
       screen.queryByRole('button', { name: /changelog item|changelog page/i })
@@ -30,6 +36,7 @@ describe('ChangelogPopup', () => {
 
     await user.click(screen.getByRole('button', { name: /got it/i }));
     expect(localStorage.getItem(seenKey)).toBe('1');
+    expect(localStorage.getItem(CHANGELOG_LAST_SEEN_VERSION_KEY)).toBe(APP_VERSION);
     await waitFor(() => {
       expect(screen.queryByRole('dialog', { name: /what's new/i })).not.toBeInTheDocument();
     });
@@ -82,6 +89,37 @@ describe('ChangelogPopup', () => {
     expect(
       screen.queryByRole('button', { name: /previous changelog item/i })
     ).not.toBeInTheDocument();
+  });
+
+  it('filters release notes with version tags', async () => {
+    const user = userEvent.setup();
+    render(<ChangelogPopup />);
+
+    const dialog = await screen.findByRole('dialog', { name: /what's new/i });
+    const versionFilters = within(dialog).getByRole('group', {
+      name: /filter.*version|browse.*version/i,
+    });
+    const allVersions = within(versionFilters).getByRole('button', { name: /all versions/i });
+    const releaseButtons = within(versionFilters)
+      .getAllByRole('button')
+      .filter((button) => button !== allVersions);
+
+    expect(releaseButtons.length).toBeGreaterThan(0);
+    expect(allVersions).toHaveAttribute('aria-pressed', 'true');
+
+    const selectedButton = releaseButtons[releaseButtons.length - 1];
+    const selectedVersion = selectedButton.textContent?.trim();
+    await user.click(selectedButton);
+
+    expect(selectedButton).toHaveAttribute('aria-pressed', 'true');
+    expect(allVersions).toHaveAttribute('aria-pressed', 'false');
+    expect(dialog.querySelectorAll('[data-changelog-release]')).toHaveLength(1);
+    expect(
+      dialog.querySelector(`[data-changelog-release="${selectedVersion}"]`)
+    ).toBeInTheDocument();
+
+    await user.click(allVersions);
+    expect(dialog.querySelectorAll('[data-changelog-release]')).toHaveLength(releaseButtons.length);
   });
 
   it('renders detailed changelog content as rich text', async () => {

@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   fetchJson: vi.fn(),
   useAuth: vi.fn(),
   replace: vi.fn(),
+  isNetworkUnavailableError: vi.fn(() => false),
 }));
 
 vi.mock('../lib/api', () => ({
@@ -13,7 +14,7 @@ vi.mock('../lib/api', () => ({
   LAN_ACCESS_REQUIRED_STORAGE_KEY: 'whylowdps_lan_access_required',
   fetchJson: mocks.fetchJson,
   isDesktop: true,
-  isNetworkUnavailableError: vi.fn(() => false),
+  isNetworkUnavailableError: mocks.isNetworkUnavailableError,
 }));
 
 vi.mock('./AuthContext', () => ({
@@ -59,6 +60,7 @@ describe('DataGuard auth gating', () => {
       if (url.endsWith('/api/data/files')) return Promise.resolve({ files: [] });
       return Promise.resolve({});
     });
+    mocks.isNetworkUnavailableError.mockReturnValue(false);
   });
 
   it('shows app content for an authenticated user even if credentials status is stale false', async () => {
@@ -105,6 +107,58 @@ describe('DataGuard auth gating', () => {
     await waitFor(() => expect(screen.getByTestId('splash')).toHaveTextContent('error'));
     expect(screen.getByTestId('retries-remaining')).toHaveTextContent('0');
     expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+  });
+
+  it('waits for the desktop backend and resumes initial synchronization automatically', async () => {
+    let backendAvailable = false;
+    mocks.useAuth.mockReturnValue({
+      user: { battletag: 'User#1234' },
+      loading: false,
+      lightMode: false,
+      checkCredentialsStatus: vi.fn().mockResolvedValue({ globally_configured: true }),
+    });
+    mocks.isNetworkUnavailableError.mockReturnValue(true);
+    mocks.fetchJson.mockImplementation((url: string) => {
+      if (url.endsWith('/api/data/status')) {
+        return backendAvailable
+          ? Promise.resolve({ status: 'ready' })
+          : Promise.reject(new Error('backend starting'));
+      }
+      if (url.endsWith('/api/data/sync')) {
+        return backendAvailable
+          ? Promise.resolve({})
+          : Promise.reject(new Error('backend starting'));
+      }
+      if (url.endsWith('/api/data/files')) return Promise.resolve({ files: [] });
+      return Promise.resolve({});
+    });
+
+    render(
+      <DataGuard>
+        <div>App content</div>
+      </DataGuard>
+    );
+
+    await waitFor(() => {
+      expect(mocks.fetchJson).toHaveBeenCalledWith(
+        expect.stringContaining('/api/data/sync'),
+        { method: 'POST' }
+      );
+    });
+    expect(screen.getByTestId('splash')).toHaveTextContent('syncing');
+    expect(screen.getByTestId('retries-remaining')).toHaveTextContent('3');
+
+    backendAvailable = true;
+    await waitFor(
+      () => {
+        expect(screen.getByText('App content')).toBeInTheDocument();
+        expect(
+          mocks.fetchJson.mock.calls.filter(([url]) => String(url).endsWith('/api/data/sync'))
+            .length
+        ).toBeGreaterThan(1);
+      },
+      { timeout: 6000 }
+    );
   });
 
   it('prioritizes LAN pairing over credential entry and Light mode', () => {
