@@ -21,6 +21,7 @@ The format is based on Keep a Changelog and this project uses semantic versionin
 
 ### Changed
 
+- SimC configuration no longer shows a separate Active Character banner; imported profiles continue to synchronize character state automatically.
 - Tracked Characters now use softer overview and vault grouping, compact metadata, bottom-aligned actions, and extra breathing room below the dashboard card.
 - Wishlist's By Slot view now labels each slot section and removes redundant nested cards for a flatter, easier-to-scan roadmap layout.
 - Simulation result gear panels now use the class artwork as a full-width backdrop, keep the character panel beside an external stats panel at roughly a 70/30 split, and remove the redundant inner Best Gear heading.
