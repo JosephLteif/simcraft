@@ -710,10 +710,16 @@ export default function WishlistPage() {
           </div>
         </div>
         {groupedEntries(entries).map(([group, groupItems]) => (
-          <div key={group} className="card space-y-2 p-3">
-            {groupBy === 'instance' ? (
-              <h4 className="text-xs font-semibold text-zinc-400">{group}</h4>
-            ) : null}
+          <div key={group} className={groupBy === 'instance' ? 'card space-y-2 p-3' : 'space-y-2'}>
+            <h4
+              className={
+                groupBy === 'instance'
+                  ? 'text-xs font-semibold text-zinc-400'
+                  : 'text-sm font-semibold text-zinc-300'
+              }
+            >
+              {group}
+            </h4>
             {groupItems.map(({ entry, status: itemStatus }) => (
               <RoadmapItemRow
                 key={entry.roadmap_id || `${entry.item_id}:${getWishlistItemLevel(entry)}`}
