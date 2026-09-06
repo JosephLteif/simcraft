@@ -9,10 +9,11 @@ vi.mock('../lib/api', async () => {
     ...actual,
     pauseSim: vi.fn(),
     resumeSim: vi.fn(),
+    setSimCores: vi.fn(),
   };
 });
 
-import { pauseSim, resumeSim } from '../lib/api';
+import { pauseSim, resumeSim, setSimCores } from '../lib/api';
 
 describe('extractLatestPhaseRemainingSeconds', () => {
   it('extracts the latest remaining time from a phase log line', () => {
@@ -57,6 +58,7 @@ describe('SimStatus pause and resume controls', () => {
   beforeEach(() => {
     vi.mocked(pauseSim).mockReset();
     vi.mocked(resumeSim).mockReset();
+    vi.mocked(setSimCores).mockReset();
   });
 
   it('shows Resume for a paused simulation and reports the resumed status', async () => {
@@ -110,6 +112,27 @@ describe('SimStatus pause and resume controls', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('pause failed');
     expect(onStatusChange).not.toHaveBeenCalled();
+  });
+
+  it('changes the CPU cores used by a running simulation', async () => {
+    vi.mocked(setSimCores).mockResolvedValue({ status: 'running', cores: 2, max_cores: 4 });
+
+    render(
+      <SimStatus
+        status="running"
+        progress={40}
+        jobId="cores-job"
+        cpuCores={4}
+        maxCpuCores={4}
+        coresAvailable
+      />
+    );
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'CPU cores used by this simulation' }), {
+      target: { value: '2' },
+    });
+
+    await waitFor(() => expect(setSimCores).toHaveBeenCalledWith('cores-job', 2));
   });
 
   it('offers rerun when a paused job has no live resume control', () => {

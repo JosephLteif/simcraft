@@ -630,6 +630,19 @@ export async function resumeSim(id: string): Promise<{ status: 'pending' | 'runn
   );
 }
 
+export async function setSimCores(
+  id: string,
+  cores: number
+): Promise<{ status: 'running' | 'paused'; cores: number; max_cores: number }> {
+  return fetchJson<{ status: 'running' | 'paused'; cores: number; max_cores: number }>(
+    `${API_URL}/api/sim/${encodeURIComponent(id)}/cores`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ cores }),
+    }
+  );
+}
+
 export async function setSimPinned(id: string, pinned: boolean): Promise<void> {
   await fetchJson(`${API_URL}/api/sim/${id}/pin`, {
     method: 'POST',

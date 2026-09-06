@@ -34,6 +34,8 @@ export interface SharedResultJob {
   cpu_pct?: number;
   mem_bytes?: number;
   cpu_cores?: number;
+  max_cpu_cores?: number;
+  cores_available?: boolean;
   iterations?: number;
   iterations_completed?: number;
   fight_style?: string;

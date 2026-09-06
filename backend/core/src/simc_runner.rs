@@ -210,6 +210,8 @@ struct ControlInner {
     execution_started: bool,
     paused_from: JobControlState,
     pid: Option<u32>,
+    max_cores: Option<u32>,
+    cores: Option<u32>,
     paused_at: Option<Instant>,
     paused_duration: Duration,
 }
@@ -232,6 +234,8 @@ impl SimulationControl {
                 execution_started: false,
                 paused_from: JobControlState::Pending,
                 pid: None,
+                max_cores: None,
+                cores: None,
                 paused_at: None,
                 paused_duration: Duration::ZERO,
             }),
@@ -264,6 +268,53 @@ impl SimulationControl {
                 .paused_at
                 .map(|started| started.elapsed())
                 .unwrap_or(Duration::ZERO)
+    }
+
+    fn core_settings(&self) -> Option<JobCoreSettings> {
+        let inner = self.inner.lock().unwrap();
+        let max = inner.max_cores?;
+        Some(JobCoreSettings {
+            current: inner.cores.unwrap_or(max),
+            max,
+            available: process_affinity_supported()
+                && inner.pid.is_some()
+                && matches!(
+                    inner.state,
+                    InternalControlState::Running | InternalControlState::Paused
+                ),
+        })
+    }
+
+    fn set_cores(&self, cores: u32) -> std::result::Result<JobCoreSettings, String> {
+        let mut inner = self.inner.lock().unwrap();
+        let max = inner
+            .max_cores
+            .ok_or_else(|| "The simulation has not started yet.".to_string())?;
+        if cores == 0 {
+            return Err("Cores must be at least 1.".to_string());
+        }
+        if cores > max {
+            return Err(format!(
+                "This simulation can use at most {max} cores because its worker threads were fixed at launch."
+            ));
+        }
+        let pid = inner
+            .pid
+            .ok_or_else(|| "The simulation process is not currently available.".to_string())?;
+        if !matches!(
+            inner.state,
+            InternalControlState::Running | InternalControlState::Paused
+        ) {
+            return Err("The simulation is not currently running.".to_string());
+        }
+
+        set_process_affinity(pid, cores)?;
+        inner.cores = Some(cores);
+        Ok(JobCoreSettings {
+            current: cores,
+            max,
+            available: true,
+        })
     }
 
     fn start_execution(&self) -> bool {
@@ -342,10 +393,12 @@ impl SimulationControl {
         Ok(target)
     }
 
-    fn attach_process(&self, pid: u32) -> ProcessAttachAction {
+    fn attach_process(&self, pid: u32, max_cores: u32) -> (ProcessAttachAction, u32) {
         let mut inner = self.inner.lock().unwrap();
         inner.pid = Some(pid);
-        match inner.state {
+        let max_cores = *inner.max_cores.get_or_insert(max_cores);
+        let cores = *inner.cores.get_or_insert(max_cores);
+        let action = match inner.state {
             InternalControlState::Paused => ProcessAttachAction::Suspend,
             InternalControlState::Cancelled => ProcessAttachAction::Cancel,
             InternalControlState::Pending | InternalControlState::Running => {
@@ -353,7 +406,8 @@ impl SimulationControl {
                 ProcessAttachAction::Continue
             }
             InternalControlState::Finished => ProcessAttachAction::Cancel,
-        }
+        };
+        (action, cores)
     }
 
     fn detach_process(&self) {
@@ -437,6 +491,35 @@ pub fn control_status(job_id: &str) -> Option<JobControlState> {
         .unwrap()
         .get(job_id)
         .and_then(|control| control.public_state())
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct JobCoreSettings {
+    pub current: u32,
+    pub max: u32,
+    pub available: bool,
+}
+
+pub fn process_affinity_supported() -> bool {
+    cfg!(any(target_os = "windows", target_os = "linux"))
+}
+
+pub fn job_core_settings(job_id: &str) -> Option<JobCoreSettings> {
+    JOB_CONTROLS
+        .lock()
+        .unwrap()
+        .get(job_id)
+        .and_then(|control| control.core_settings())
+}
+
+pub fn set_job_cores(job_id: &str, cores: u32) -> std::result::Result<JobCoreSettings, String> {
+    let control = JOB_CONTROLS
+        .lock()
+        .unwrap()
+        .get(job_id)
+        .cloned()
+        .ok_or_else(|| "Live core control is unavailable for this simulation.".to_string())?;
+    control.set_cores(cores)
 }
 
 pub fn start_job_control(job_id: &str) -> bool {
@@ -638,21 +721,80 @@ fn resume_process(pid: u32) -> std::result::Result<(), String> {
 }
 
 #[cfg(windows)]
-fn set_process_affinity(pid: u32, threads: u32) {
+fn set_process_affinity(pid: u32, cores: u32) -> std::result::Result<(), String> {
     const PROCESS_SET_INFORMATION: u32 = 0x0200;
     const PROCESS_QUERY_INFORMATION: u32 = 0x0400;
     unsafe {
         let h = OpenProcess(PROCESS_SET_INFORMATION | PROCESS_QUERY_INFORMATION, 0, pid);
-        if !h.is_null() {
-            let mask: usize = if threads as usize >= usize::BITS as usize {
-                usize::MAX
-            } else {
-                (1usize << threads as usize) - 1
-            };
-            SetProcessAffinityMask(h, mask);
-            CloseHandle(h);
+        if h.is_null() {
+            return Err(format!(
+                "Unable to open SimC process {pid} for CPU affinity: {}",
+                std::io::Error::last_os_error()
+            ));
+        }
+        let mask: usize = if cores as usize >= usize::BITS as usize {
+            usize::MAX
+        } else {
+            (1usize << cores as usize) - 1
+        };
+        let status = SetProcessAffinityMask(h, mask);
+        let error = if status == 0 {
+            Some(std::io::Error::last_os_error())
+        } else {
+            None
+        };
+        CloseHandle(h);
+        match error {
+            Some(error) => Err(format!(
+                "Unable to set SimC process {pid} CPU affinity: {error}"
+            )),
+            None => Ok(()),
         }
     }
+}
+
+#[cfg(target_os = "linux")]
+fn set_process_affinity(pid: u32, cores: u32) -> std::result::Result<(), String> {
+    let mut allowed_cpus: libc::cpu_set_t = unsafe { std::mem::zeroed() };
+    let mut target_cpus: libc::cpu_set_t = unsafe { std::mem::zeroed() };
+    unsafe {
+        let cpu_set_size = std::mem::size_of::<libc::cpu_set_t>();
+        if libc::sched_getaffinity(0, cpu_set_size, &mut allowed_cpus) != 0 {
+            return Err(format!(
+                "Unable to read the backend CPU affinity: {}",
+                std::io::Error::last_os_error()
+            ));
+        }
+
+        libc::CPU_ZERO(&mut target_cpus);
+        let mut selected = 0;
+        for cpu in 0..libc::CPU_SETSIZE as usize {
+            if libc::CPU_ISSET(cpu, &allowed_cpus) {
+                libc::CPU_SET(cpu, &mut target_cpus);
+                selected += 1;
+                if selected == cores {
+                    break;
+                }
+            }
+        }
+        if selected != cores {
+            return Err(format!(
+                "Only {selected} CPUs are available for this backend process"
+            ));
+        }
+        if libc::sched_setaffinity(pid as libc::pid_t, cpu_set_size, &target_cpus) != 0 {
+            return Err(format!(
+                "Unable to set SimC process {pid} CPU affinity: {}",
+                std::io::Error::last_os_error()
+            ));
+        }
+    }
+    Ok(())
+}
+
+#[cfg(not(any(windows, target_os = "linux")))]
+fn set_process_affinity(_pid: u32, _cores: u32) -> std::result::Result<(), String> {
+    Err("Live core control is not supported on this platform.".to_string())
 }
 
 pub const DEFAULT_SIMC_IDLE_TIMEOUT_SECS: u64 = 600;
@@ -1040,7 +1182,8 @@ async fn run_simc_subprocess(
             .lock()
             .unwrap()
             .insert(job_id.to_string(), pid);
-        match control.attach_process(pid) {
+        let (attach_action, affinity_cores) = control.attach_process(pid, threads);
+        match attach_action {
             ProcessAttachAction::Continue => {}
             ProcessAttachAction::Suspend => {
                 if let Err(error) = suspend_process(pid) {
@@ -1057,8 +1200,13 @@ async fn run_simc_subprocess(
                 return Err(AppError::SimcError("Job cancelled".into()));
             }
         }
-        #[cfg(windows)]
-        set_process_affinity(pid, threads);
+        if process_affinity_supported() {
+            if let Err(error) = set_process_affinity(pid, affinity_cores) {
+                on_l(&format!(
+                    "Live CPU affinity unavailable for {affinity_cores} cores: {error}"
+                ));
+            }
+        }
     }
 
     let (tx, mut rx) = tokio::sync::mpsc::channel::<(bool, String)>(256);
@@ -1574,6 +1722,33 @@ mod tests {
         cleanup_job_control(running_id);
     }
 
+    #[test]
+    fn job_core_settings_persist_across_staged_processes() {
+        let job_id = "core-settings-staged-test";
+        cleanup_job_control(job_id);
+        cleanup_cancelled_job(job_id);
+        register_job_control(job_id);
+        assert!(start_job_control(job_id));
+
+        let control = JOB_CONTROLS
+            .lock()
+            .unwrap()
+            .get(job_id)
+            .cloned()
+            .expect("job control should be registered");
+        let (_, first_cores) = control.attach_process(std::process::id(), 4);
+        assert_eq!(first_cores, 4);
+        assert_eq!(
+            job_core_settings(job_id).map(|settings| (settings.current, settings.max)),
+            Some((4, 4))
+        );
+
+        control.detach_process();
+        let (_, next_cores) = control.attach_process(std::process::id(), 4);
+        assert_eq!(next_cores, 4);
+        cleanup_job_control(job_id);
+    }
+
     #[tokio::test]
     async fn simulation_admission_limit_can_be_increased_while_a_job_is_running() {
         let admission = Arc::new(SimulationAdmission::new(1));
@@ -1709,6 +1884,11 @@ mod tests {
         })
         .await
         .expect("fake SimC process should start");
+
+        if process_affinity_supported() {
+            let settings = set_job_cores(job_id, 1).expect("live core update should succeed");
+            assert_eq!(settings.current, 1);
+        }
 
         pause_job(job_id).expect("running subprocess should pause");
         assert_eq!(control_status(job_id), Some(JobControlState::Paused));
