@@ -6,6 +6,10 @@ The format is based on Keep a Changelog and this project uses semantic versionin
 
 ## [Unreleased]
 
+No unreleased changes yet.
+
+## [6.0.1] - 2026-09-06
+
 ### Changed
 
 - What's New now shows updates since the last seen app version and includes major-release highlights when users install a later patch directly; the profile menu also shows an unread indicator for unseen updates.
