@@ -1,5 +1,5 @@
 {
-  "contentRevision": "Unreleased-2ba7fe7b8b67",
+  "contentRevision": "Unreleased-39a8629bc590",
   "releases": [
     {
       "version": "Unreleased",
@@ -359,6 +359,15 @@
           "summary": "The character Raiding tab now displays current-season raid progress when the active raid pool identifies bosses instead of raid instances.",
           "items": [
             "Active raid filters now match both raid instance IDs and boss encounter IDs returned by the game data context."
+          ]
+        },
+        {
+          "category": "fix",
+          "title": "Wait for the embedded backend on startup",
+          "summary": "Desktop startup synchronization now waits for the embedded backend to become available and retries the initial data sync automatically when the frontend opens before the backend is ready.",
+          "items": [
+            "Keep the launch screen in a waiting state for transient backend startup failures.",
+            "Treat an already-running synchronization as progress instead of a fatal error."
           ]
         },
         {

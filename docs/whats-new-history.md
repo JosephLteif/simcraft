@@ -299,6 +299,13 @@ The character Raiding tab now displays current-season raid progress when the act
 
 - Active raid filters now match both raid instance IDs and boss encounter IDs returned by the game data context.
 
+#### Wait for the embedded backend on startup
+
+Desktop startup synchronization now waits for the embedded backend to become available and retries the initial data sync automatically when the frontend opens before the backend is ready.
+
+- Keep the launch screen in a waiting state for transient backend startup failures.
+- Treat an already-running synchronization as progress instead of a fatal error.
+
 #### Keep the login screen in view
 
 The login screen now keeps the WhyLowDps logo visible on short desktop and mobile windows while allowing longer credential setup content to scroll.
