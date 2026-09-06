@@ -1,10 +1,67 @@
 {
-  "contentRevision": "Unreleased-c5295f1f5f6d",
+  "contentRevision": "Unreleased-98ab65624c02",
   "releases": [
     {
       "version": "Unreleased",
       "date": "",
-      "title": "Simulation queue management",
+      "title": "Upcoming changes",
+      "entries": [
+        {
+          "category": "improvement",
+          "title": "Keep major release highlights visible",
+          "summary": "What's New now shows updates since the last app version a user dismissed, including the current major release when they install a later patch directly.",
+          "items": [
+            "See major changes alongside follow-up patch fixes without manually duplicating release notes.",
+            "Use the unread indicator on the profile menu to reopen unseen updates."
+          ]
+        },
+        {
+          "category": "improvement",
+          "title": "Filter What’s New by release version",
+          "summary": "What’s New now includes compact version tags for the releases in the current update feed.",
+          "items": [
+            "Filter the popup to one release or return to All versions without leaving the app."
+          ]
+        },
+        {
+          "category": "improvement",
+          "title": "Put Raid Vault first on character details",
+          "summary": "The character detail Vault tab now places the Raid Track above the Mythic+ Track so raid progress is visible first.",
+          "items": [
+            "Keep the existing raid and Mythic+ vault slots, activity details, and reward calculations unchanged."
+          ]
+        },
+        {
+          "category": "improvement",
+          "title": "Keep source-mode release notes current",
+          "summary": "Desktop development now synchronizes changelog data before the frontend starts, so source launches include the latest released version in What’s New.",
+          "items": [
+            "Apply the same changelog refresh to the Tauri `dev:desktop` path used by desktop development."
+          ]
+        },
+        {
+          "category": "fix",
+          "title": "Prevent duplicate weekly Great Vault dungeon counts",
+          "summary": "Great Vault weekly Mythic+ activity now counts current-period dungeon runs once instead of counting season-best copies again.",
+          "items": [
+            "Keep season-best records out of weekly vault progress and per-slot activity popovers."
+          ]
+        },
+        {
+          "category": "fix",
+          "title": "Wait for the embedded backend on startup",
+          "summary": "Desktop startup synchronization now waits for the embedded backend to become available and retries the initial data sync automatically when the frontend opens before the backend is ready.",
+          "items": [
+            "Keep the launch screen in a waiting state for transient backend startup failures.",
+            "Treat an already-running synchronization as progress instead of a fatal error."
+          ]
+        }
+      ]
+    },
+    {
+      "version": "v6.0.0",
+      "date": "2026-09-06",
+      "title": "Release notes for v6.0.0",
       "entries": [
         {
           "category": "feature",
@@ -54,31 +111,6 @@
             "Apply a new core count while the simulation continues, including across staged SimC runs.",
             "Choose from one core up to the maximum worker-thread count configured when the simulation started.",
             "Keep the control scoped to the simulation owner and disable it when the running process cannot be controlled."
-          ]
-        },
-        {
-          "category": "improvement",
-          "title": "Keep major release highlights visible",
-          "summary": "What's New now shows updates since the last app version a user dismissed, including the current major release when they install a later patch directly.",
-          "items": [
-            "See major changes alongside follow-up patch fixes without manually duplicating release notes.",
-            "Use the unread indicator on the profile menu to reopen unseen updates."
-          ]
-        },
-        {
-          "category": "improvement",
-          "title": "Filter What’s New by release version",
-          "summary": "What’s New now includes compact version tags for the releases in the current update feed.",
-          "items": [
-            "Filter the popup to one release or return to All versions without leaving the app."
-          ]
-        },
-        {
-          "category": "improvement",
-          "title": "Put Raid Vault first on character details",
-          "summary": "The character detail Vault tab now places the Raid Track above the Mythic+ Track so raid progress is visible first.",
-          "items": [
-            "Keep the existing raid and Mythic+ vault slots, activity details, and reward calculations unchanged."
           ]
         },
         {
@@ -336,14 +368,6 @@
         },
         {
           "category": "fix",
-          "title": "Prevent duplicate weekly Great Vault dungeon counts",
-          "summary": "Great Vault weekly Mythic+ activity now counts current-period dungeon runs once instead of counting season-best copies again.",
-          "items": [
-            "Keep season-best records out of weekly vault progress and per-slot activity popovers."
-          ]
-        },
-        {
-          "category": "fix",
           "title": "Preserve data-page state during failures",
           "summary": "Transient refresh and mutation failures no longer turn valid page state into misleading empty screens.",
           "items": [
@@ -367,15 +391,6 @@
           "summary": "The character Raiding tab now displays current-season raid progress when the active raid pool identifies bosses instead of raid instances.",
           "items": [
             "Active raid filters now match both raid instance IDs and boss encounter IDs returned by the game data context."
-          ]
-        },
-        {
-          "category": "fix",
-          "title": "Wait for the embedded backend on startup",
-          "summary": "Desktop startup synchronization now waits for the embedded backend to become available and retries the initial data sync automatically when the frontend opens before the backend is ready.",
-          "items": [
-            "Keep the launch screen in a waiting state for transient backend startup failures.",
-            "Treat an already-running synchronization as progress instead of a fatal error."
           ]
         },
         {

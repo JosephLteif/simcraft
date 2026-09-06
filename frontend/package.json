@@ -8,6 +8,7 @@
     "dev:desktop": "cross-env NEXT_PUBLIC_DESKTOP_BUILD=true next dev --webpack --hostname 127.0.0.1 --port 1420",
     "dev:turbo": "next dev --turbo",
     "predev": "node ../scripts/sync-changelog.js",
+    "predev:desktop": "node ../scripts/sync-changelog.js",
     "build": "next build",
     "prebuild": "node ../scripts/sync-changelog.js",
     "start": "next start",

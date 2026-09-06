@@ -6,7 +6,17 @@ The format is based on Keep a Changelog and this project uses semantic versionin
 
 ## [Unreleased]
 
-No unreleased changes yet.
+### Changed
+
+- What's New now shows updates since the last seen app version and includes major-release highlights when users install a later patch directly; the profile menu also shows an unread indicator for unseen updates.
+- What's New now includes version filter tags so users can quickly view one displayed release or return to All versions.
+- Character detail Vault tabs now place Raid Track above Mythic+ Track so raid progress is visible first.
+- Desktop source launches now synchronize changelog data before starting the frontend, so What’s New reflects the latest released notes.
+
+### Fixed
+
+- Great Vault weekly Mythic+ activity now counts current-period dungeon runs once instead of counting season-best copies again.
+- Desktop startup synchronization now waits for the embedded backend to become available and retries the initial sync automatically instead of showing a fatal error when the app launches before the backend is ready.
 
 ## [6.0.0] - 2026-09-06
 
@@ -26,9 +36,6 @@ No unreleased changes yet.
 
 ### Changed
 
-- What's New now shows updates since the last seen app version and includes major-release highlights when users install a later patch directly; the profile menu also shows an unread indicator for unseen updates.
-- What's New now includes version filter tags so users can quickly view one displayed release or return to All versions.
-- Character detail Vault tabs now place Raid Track above Mythic+ Track so raid progress is visible first.
 - Top Gear rankings now use a compact responsive row layout with reserved metric and action columns, keeping item details, DPS values, and simulation actions readable without overlap.
 - SimC configuration no longer shows a separate Active Character banner; imported profiles continue to synchronize character state automatically.
 - Tracked Characters now use softer overview and vault grouping, compact metadata, bottom-aligned actions, and extra breathing room below the dashboard card.
@@ -62,8 +69,6 @@ No unreleased changes yet.
 
 ### Fixed
 
-- Great Vault weekly Mythic+ activity now counts current-period dungeon runs once instead of counting season-best copies again.
-- Desktop startup synchronization now waits for the embedded backend to become available and retries the initial sync automatically instead of showing a fatal error when the app launches before the backend is ready.
 - History now preserves already-loaded simulation rows when refreshes fail, reports mutation errors, and offers an inline retry action; queue polling also pauses for hidden tabs and disables busy row actions.
 - Warcraft Logs data now merges into Blizzard boss rows without replacing Blizzard data, preserves snapshots through provider failures and refreshes, and keeps real zero-kill bosses visible while hiding catalog-only trash placeholders.
 - Raider.IO raid achievements now request active raid slugs and filter against active Blizzard raids, preventing stale expansion entries such as legacy progression from appearing in the current-season card.
