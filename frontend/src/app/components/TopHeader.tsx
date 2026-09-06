@@ -21,7 +21,11 @@ import { API_URL, fetchJsonCached } from '../lib/api';
 import { characterHref } from '../lib/routes';
 import { useDismissOnOutside } from '../lib/useDismissOnOutside';
 import DesktopWindowTitleBar from './DesktopWindowTitleBar';
-import { CHANGELOG_OPEN_EVENT } from './ChangelogPopup';
+import {
+  CHANGELOG_OPEN_EVENT,
+  CHANGELOG_STATUS_EVENT,
+  isChangelogUnread,
+} from './ChangelogPopup';
 import { COMMAND_PALETTE_OPEN_EVENT } from './CommandPalette';
 import NotificationCenter from './shared/NotificationCenter';
 import { useGuidedTour } from './GuidedTour';
@@ -165,6 +169,7 @@ export default function TopHeader() {
   const [isRecentSearchOpen, setIsRecentSearchOpen] = useState(false);
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [isActionsOpen, setIsActionsOpen] = useState(false);
+  const [hasUnreadChangelog, setHasUnreadChangelog] = useState(false);
 
   useDismissOnOutside(headerRef, isRecentSearchOpen, () => setIsRecentSearchOpen(false));
   useDismissOnOutside(accountMenuRef, isAccountMenuOpen, () => setIsAccountMenuOpen(false));
@@ -172,6 +177,13 @@ export default function TopHeader() {
 
   useEffect(() => {
     setRecentCharacterSearches(readRecentCharacterSearches());
+  }, []);
+
+  useEffect(() => {
+    const updateChangelogStatus = () => setHasUnreadChangelog(isChangelogUnread());
+    updateChangelogStatus();
+    window.addEventListener(CHANGELOG_STATUS_EVENT, updateChangelogStatus);
+    return () => window.removeEventListener(CHANGELOG_STATUS_EVENT, updateChangelogStatus);
   }, []);
 
   const handleLoginClick = async () => {
@@ -576,8 +588,17 @@ export default function TopHeader() {
                           onClick={handleWhatsNew}
                           className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm text-zinc-200 transition-colors hover:bg-white/[0.07] hover:text-white"
                         >
-                          <Sparkles className="h-4 w-4 text-zinc-400" strokeWidth={2} />
+                          <span className="relative inline-flex">
+                            <Sparkles className="h-4 w-4 text-zinc-400" strokeWidth={2} />
+                            {hasUnreadChangelog ? (
+                              <span
+                                aria-hidden="true"
+                                className="bg-gold absolute -top-1 -right-1 h-1.5 w-1.5 rounded-full ring-2 ring-[#15161b]"
+                              />
+                            ) : null}
+                          </span>
                           What&apos;s new
+                          {hasUnreadChangelog ? <span className="sr-only"> (unread)</span> : null}
                         </button>
                         {user.role === 'admin' ? (
                           <Link

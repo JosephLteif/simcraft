@@ -372,7 +372,7 @@ function getWeeklyMythicVaultRuns(
   if (!mythicPlus || typeof mythicPlus !== 'object') return [];
 
   const mythicPlusObject = mythicPlus as Record<string, unknown>;
-  const allRuns = collectRuns(mythicPlus).filter((run) => getRunLevel(run) > 0);
+  const allRuns = collectMythicRuns(mythicPlus).filter((run) => getRunLevel(run) > 0);
   const recentRunsValue = mythicPlusObject.recent_runs ?? mythicPlusObject.recentRuns;
   const currentPeriodValue = mythicPlusObject.current_period ?? mythicPlusObject.currentPeriod;
   const recentSource = Array.isArray(recentRunsValue) ? (recentRunsValue as MythicRun[]) : allRuns;
