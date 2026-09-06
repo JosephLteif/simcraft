@@ -1,5 +1,5 @@
 {
-  "contentRevision": "Unreleased-50e1800cd55b",
+  "contentRevision": "Unreleased-4701ed24c488",
   "releases": [
     {
       "version": "Unreleased",
@@ -54,6 +54,14 @@
             "Apply a new core count while the simulation continues, including across staged SimC runs.",
             "Choose from one core up to the maximum worker-thread count configured when the simulation started.",
             "Keep the control scoped to the simulation owner and disable it when the running process cannot be controlled."
+          ]
+        },
+        {
+          "category": "improvement",
+          "title": "Put Raid Vault first on character details",
+          "summary": "The character detail Vault tab now places the Raid Track above the Mythic+ Track so raid progress is visible first.",
+          "items": [
+            "Keep the existing raid and Mythic+ vault slots, activity details, and reward calculations unchanged."
           ]
         },
         {

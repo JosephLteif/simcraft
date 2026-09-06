@@ -54,6 +54,12 @@ Running simulations now expose a live Cores selector on the result page so CPU u
 
 ### Improvements
 
+#### Put Raid Vault first on character details
+
+The character detail Vault tab now places the Raid Track above the Mythic+ Track so raid progress is visible first.
+
+- Keep the existing raid and Mythic+ vault slots, activity details, and reward calculations unchanged.
+
 #### Simplify SimC profile context
 
 Simulation pages no longer show a separate Active Character banner when the imported profile already provides that context.

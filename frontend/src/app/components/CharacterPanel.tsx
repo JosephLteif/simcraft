@@ -297,12 +297,12 @@ function VaultOverviewCard({
       </h3>
 
       <div className="grid grid-cols-1 gap-2">
-        <SectionCard title="Mythic+ Track">
-          <VaultTrack kind="mythic" data={vaultTrackerData} showHeader={false} />
-        </SectionCard>
-
         <SectionCard title="Raid Track">
           <VaultTrack kind="raid" data={vaultTrackerData} showHeader={false} />
+        </SectionCard>
+
+        <SectionCard title="Mythic+ Track">
+          <VaultTrack kind="mythic" data={vaultTrackerData} showHeader={false} />
         </SectionCard>
       </div>
 

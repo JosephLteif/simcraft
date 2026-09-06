@@ -26,6 +26,7 @@ No unreleased changes yet.
 
 ### Changed
 
+- Character detail Vault tabs now place Raid Track above Mythic+ Track so raid progress is visible first.
 - Top Gear rankings now use a compact responsive row layout with reserved metric and action columns, keeping item details, DPS values, and simulation actions readable without overlap.
 - SimC configuration no longer shows a separate Active Character banner; imported profiles continue to synchronize character state automatically.
 - Tracked Characters now use softer overview and vault grouping, compact metadata, bottom-aligned actions, and extra breathing room below the dashboard card.
