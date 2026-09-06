@@ -21,6 +21,7 @@ The format is based on Keep a Changelog and this project uses semantic versionin
 
 ### Changed
 
+- Top Gear rankings now use a compact responsive row layout with reserved metric and action columns, keeping item details, DPS values, and simulation actions readable without overlap.
 - SimC configuration no longer shows a separate Active Character banner; imported profiles continue to synchronize character state automatically.
 - Tracked Characters now use softer overview and vault grouping, compact metadata, bottom-aligned actions, and extra breathing room below the dashboard card.
 - Wishlist's By Slot view now labels each slot section and removes redundant nested cards for a flatter, easier-to-scan roadmap layout.
