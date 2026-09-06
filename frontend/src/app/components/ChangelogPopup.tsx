@@ -48,9 +48,16 @@ function notifyChangelogStatus(): void {
 export default function ChangelogPopup() {
   const [isOpen, setIsOpen] = useState(false);
   const [lastSeenVersion, setLastSeenVersion] = useState<string | null>(null);
+  const [selectedVersion, setSelectedVersion] = useState<string | null>(null);
   const [visibleReleases, setVisibleReleases] = useState<ChangelogRelease[]>(() =>
     getChangelogReleasesToShow(CHANGELOG_RELEASES, APP_VERSION, null)
   );
+  const versionFilters = Array.from(new Set(visibleReleases.map((release) => release.version)));
+  const activeVersionFilter =
+    selectedVersion && versionFilters.includes(selectedVersion) ? selectedVersion : null;
+  const releasesToRender = activeVersionFilter
+    ? visibleReleases.filter((release) => release.version === activeVersionFilter)
+    : visibleReleases;
   const dialogRef = useRef<HTMLElement | null>(null);
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
 
@@ -172,11 +179,52 @@ export default function ChangelogPopup() {
           <h2 id="changelog-title" className="sr-only">
             What&apos;s new
           </h2>
+          <div className="relative mt-6 border-t border-white/[0.08] pt-4">
+            <p
+              id="changelog-version-filter-label"
+              className="text-[10px] font-semibold tracking-[0.18em] text-zinc-500 uppercase"
+            >
+              Browse by version
+            </p>
+            <div
+              className="mt-3 flex flex-wrap gap-2"
+              role="group"
+              aria-labelledby="changelog-version-filter-label"
+            >
+              <button
+                type="button"
+                onClick={() => setSelectedVersion(null)}
+                aria-pressed={activeVersionFilter === null}
+                className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                  activeVersionFilter === null
+                    ? 'border-gold/40 bg-gold/15 text-gold'
+                    : 'border-white/10 bg-white/[0.04] text-zinc-400 hover:bg-white/[0.1] hover:text-zinc-100'
+                }`}
+              >
+                All versions
+              </button>
+              {versionFilters.map((version) => (
+                <button
+                  key={version}
+                  type="button"
+                  onClick={() => setSelectedVersion(version)}
+                  aria-pressed={activeVersionFilter === version}
+                  className={`rounded-full border px-3 py-1.5 font-mono text-xs font-semibold transition-colors ${
+                    activeVersionFilter === version
+                      ? 'border-gold/40 bg-gold/15 text-gold'
+                      : 'border-white/10 bg-white/[0.04] text-zinc-400 hover:bg-white/[0.1] hover:text-zinc-100'
+                  }`}
+                >
+                  {version}
+                </button>
+              ))}
+            </div>
+          </div>
         </header>
 
         <article className="relative z-0 min-h-0 flex-1 overflow-y-auto px-5 py-6 sm:px-6">
           <div className="space-y-10">
-            {visibleReleases.map((release, releaseIndex) => {
+            {releasesToRender.map((release, releaseIndex) => {
               const releaseSlug = `${release.version}-${releaseIndex}`
                 .toLowerCase()
                 .replace(/[^a-z0-9]+/g, '-');

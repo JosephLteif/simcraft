@@ -91,6 +91,37 @@ describe('ChangelogPopup', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('filters release notes with version tags', async () => {
+    const user = userEvent.setup();
+    render(<ChangelogPopup />);
+
+    const dialog = await screen.findByRole('dialog', { name: /what's new/i });
+    const versionFilters = within(dialog).getByRole('group', {
+      name: /filter.*version|browse.*version/i,
+    });
+    const allVersions = within(versionFilters).getByRole('button', { name: /all versions/i });
+    const releaseButtons = within(versionFilters)
+      .getAllByRole('button')
+      .filter((button) => button !== allVersions);
+
+    expect(releaseButtons.length).toBeGreaterThan(0);
+    expect(allVersions).toHaveAttribute('aria-pressed', 'true');
+
+    const selectedButton = releaseButtons[releaseButtons.length - 1];
+    const selectedVersion = selectedButton.textContent?.trim();
+    await user.click(selectedButton);
+
+    expect(selectedButton).toHaveAttribute('aria-pressed', 'true');
+    expect(allVersions).toHaveAttribute('aria-pressed', 'false');
+    expect(dialog.querySelectorAll('[data-changelog-release]')).toHaveLength(1);
+    expect(
+      dialog.querySelector(`[data-changelog-release="${selectedVersion}"]`)
+    ).toBeInTheDocument();
+
+    await user.click(allVersions);
+    expect(dialog.querySelectorAll('[data-changelog-release]')).toHaveLength(releaseButtons.length);
+  });
+
   it('renders detailed changelog content as rich text', async () => {
     render(<ChangelogPopup />);
 

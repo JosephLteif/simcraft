@@ -1,5 +1,5 @@
 {
-  "contentRevision": "Unreleased-39a8629bc590",
+  "contentRevision": "Unreleased-c5295f1f5f6d",
   "releases": [
     {
       "version": "Unreleased",
@@ -63,6 +63,14 @@
           "items": [
             "See major changes alongside follow-up patch fixes without manually duplicating release notes.",
             "Use the unread indicator on the profile menu to reopen unseen updates."
+          ]
+        },
+        {
+          "category": "improvement",
+          "title": "Filter What’s New by release version",
+          "summary": "What’s New now includes compact version tags for the releases in the current update feed.",
+          "items": [
+            "Filter the popup to one release or return to All versions without leaving the app."
           ]
         },
         {

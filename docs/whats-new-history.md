@@ -61,6 +61,12 @@ What's New now shows updates since the last app version a user dismissed, includ
 - See major changes alongside follow-up patch fixes without manually duplicating release notes.
 - Use the unread indicator on the profile menu to reopen unseen updates.
 
+#### Filter What’s New by release version
+
+What’s New now includes compact version tags for the releases in the current update feed.
+
+- Filter the popup to one release or return to All versions without leaving the app.
+
 #### Put Raid Vault first on character details
 
 The character detail Vault tab now places the Raid Track above the Mythic+ Track so raid progress is visible first.
