@@ -27,6 +27,11 @@ on:
         required: false
         default: ''
         type: string
+      stable_version:
+        description: 'Stable version to publish, without the v prefix (promote-dev only)'
+        required: false
+        default: ''
+        type: string
 
 jobs:
   bump-version-stable:
@@ -140,13 +145,18 @@ jobs:
         shell: bash
         env:
           DEV_VERSION: ${{ inputs.dev_version }}
+          STABLE_VERSION: ${{ inputs.stable_version }}
         run: |
           set -euo pipefail
           if [[ ! "${DEV_VERSION}" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-dev\.[0-9]+\.[0-9]+$ ]]; then
             echo "promote-dev requires an exact developer version such as 4.2.0-dev.6.1"
             exit 1
           fi
-          VERSION="${BASH_REMATCH[1]}"
+          if [[ ! "${STABLE_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "promote-dev requires a stable version such as 6.0.0"
+            exit 1
+          fi
+          VERSION="${STABLE_VERSION}"
           DEV_TAG="dev-build/${DEV_VERSION}"
           if ! git ls-remote --exit-code origin "refs/tags/${DEV_TAG}" >/dev/null; then
             echo "Developer source tag ${DEV_TAG} does not exist; run a new Dev Release after the immutable-tag workflow is deployed."
