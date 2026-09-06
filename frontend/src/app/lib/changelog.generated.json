@@ -1,5 +1,5 @@
 {
-  "contentRevision": "Unreleased-098e0a59af9d",
+  "contentRevision": "Unreleased-38d081f85448",
   "releases": [
     {
       "version": "Unreleased",
@@ -44,6 +44,15 @@
             "Warcraft Logs activates after valid credentials are saved and adds latest-zone rankings, five recent public reports with report dates and end times, and per-boss best and median parses, public kills, best amounts, metrics, and specs.",
             "The integration settings explain what belongs in each Warcraft Logs field and show the exact redirect host and port for the current app address; private reports and private OAuth/PKCE access are not used.",
             "Personal Warcraft Logs credentials take precedence over shared hosted credentials, while environment credentials take precedence over the administrator-managed fallback. Secrets remain protected and are never returned by the API."
+          ]
+        },
+        {
+          "category": "improvement",
+          "title": "Refine the tracked-character dashboard",
+          "summary": "Tracked Characters now use lighter grouping and better vertical balance.",
+          "items": [
+            "Replace heavy nested overview and vault frames with softer surfaces, a compact stat divider, and a focused selected-character accent.",
+            "Anchor overview actions to the bottom of the card and add breathing room below the dashboard widget."
           ]
         },
         {

@@ -1468,7 +1468,7 @@ export default function Home() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 pb-8">
       <div className="flex items-end justify-between">
         <div data-tour="dashboard-heading">
           <h1 className="text-xl font-semibold text-zinc-100">Simulation Dashboard</h1>
@@ -2155,7 +2155,7 @@ export default function Home() {
                         >
                           <div
                             data-tracked-overview
-                            className="flex h-full min-w-0 flex-col gap-3 rounded-xl border border-white/10 bg-black/15 p-3"
+                            className="flex h-full min-w-0 flex-col gap-3 rounded-xl bg-white/[0.02] p-3"
                           >
                             <div className="flex items-center justify-between gap-2">
                               <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
@@ -2236,7 +2236,7 @@ export default function Home() {
                               {dragPointer.label}
                             </div>
                           )}
-                          <div className="rounded-lg border border-gold/20 bg-gold/[0.04] p-3">
+                          <div className="border-gold/30 border-l-2 py-1 pl-3">
                             <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
                               Selected character
                             </p>
@@ -2255,9 +2255,9 @@ export default function Home() {
                             raiderIoUrl={`https://raider.io/characters/${active.region.toLowerCase()}/${active.realm.toLowerCase()}/${active.name.toLowerCase()}`}
                           />
                           <div
-                            className={`grid grid-cols-3 gap-2 ${trackedCompact ? 'text-[11px]' : ''}`}
+                            className={`grid grid-cols-3 gap-2 border-y border-white/10 py-2 ${trackedCompact ? 'text-[11px]' : ''}`}
                           >
-                            <div className="min-w-0 rounded-lg border border-white/10 bg-black/20 p-2">
+                            <div className="min-w-0">
                               <span className="block text-[10px] uppercase tracking-wide text-zinc-500">
                                 Level
                               </span>
@@ -2265,7 +2265,7 @@ export default function Home() {
                                 {mainMeta?.level ?? '-'}
                               </span>
                             </div>
-                            <div className="min-w-0 rounded-lg border border-white/10 bg-black/20 p-2">
+                            <div className="min-w-0">
                               <span className="block text-[10px] uppercase tracking-wide text-zinc-500">
                                 Class
                               </span>
@@ -2273,7 +2273,7 @@ export default function Home() {
                                 {mainMeta?.className ?? '-'}
                               </span>
                             </div>
-                            <div className="min-w-0 rounded-lg border border-white/10 bg-black/20 p-2">
+                            <div className="min-w-0">
                               <span className="block text-[10px] uppercase tracking-wide text-zinc-500">
                                 iLvl
                               </span>
@@ -2282,7 +2282,7 @@ export default function Home() {
                               </span>
                             </div>
                           </div>
-                          <div className="grid grid-cols-2 gap-2 pt-1">
+                          <div className="mt-auto grid grid-cols-2 gap-2 pt-3">
                             <Link
                               href={characterHref(active.region, active.realm, active.name)}
                               className="inline-flex items-center justify-center rounded-md border border-border bg-surface-2 px-2.5 py-1.5 text-center text-xs text-zinc-200 hover:bg-surface"
@@ -2318,7 +2318,7 @@ export default function Home() {
                         </div>
                         <div
                           data-tracked-vault
-                          className="flex h-full min-w-0 flex-col gap-3 rounded-xl border border-gold/20 bg-gradient-to-b from-gold/[0.03] via-black/15 to-black/15 p-3"
+                          className="flex h-full min-w-0 flex-col gap-3 rounded-xl bg-white/[0.015] p-3"
                         >
                           <div className="grid min-h-0 flex-1 auto-rows-fr gap-3">
                             <div className="order-2 border-gold/25 from-gold/[0.06] flex min-h-[12rem] min-w-0 flex-col rounded-xl border bg-gradient-to-b via-black/20 to-black/20 p-3">
