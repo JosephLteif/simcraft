@@ -63,6 +63,14 @@ Wishlist's By Slot view now makes each gear section easier to scan.
 - Show the slot name at the top of each grouped section.
 - Remove redundant nested cards so saved items use a flatter layout.
 
+#### Rework Top Gear rankings layout
+
+Top Gear rankings now keep item details, performance metrics, and row actions in separate responsive regions so long item and talent combinations stay readable.
+
+- Reserve aligned columns for DPS change, DPS, item level, and actions so values and buttons do not overlap the item details.
+- Move the Best marker into the item-content area and tighten row and header spacing to use the available space more effectively.
+- Stack the ranking content cleanly on narrower screens while preserving the existing filters and actions.
+
 #### Flatten character detail sections
 
 Character tabs and simulation result sections now avoid redundant nested containers so the useful data occupies more of the page.

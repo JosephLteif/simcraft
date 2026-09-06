@@ -533,16 +533,17 @@ export default function ResultRow({
         className="absolute inset-y-0 left-0 bg-white/[0.03]"
         style={{ width: `${barWidth}%` }}
       />
-      <div className="relative flex flex-col gap-2 px-4 py-3 xl:flex-row xl:items-center xl:justify-between xl:gap-4">
-        <div className="flex min-w-0 flex-1 items-start gap-2.5 xl:items-center">
+      <div className="relative grid min-w-0 gap-2 px-3 py-2 xl:grid-cols-[minmax(0,1fr)_35.25rem] xl:items-center xl:gap-x-6">
+        <div className="flex min-w-0 items-start gap-2.5">
           {rank != null && (
             <span className="w-6 shrink-0 text-right font-mono text-[14px] tabular-nums text-zinc-300">
               {rank}
             </span>
           )}
 
-          {(() => {
-            const hasChangedItems = changedItems.length > 0;
+          <div className="min-w-0 flex-1">
+            {(() => {
+              const hasChangedItems = changedItems.length > 0;
 
             if (isEquipped || hasConsumableOnlyEquippedRow) {
               return (
@@ -697,17 +698,17 @@ export default function ResultRow({
                 ) : null}
               </div>
             );
-          })()}
-
-          {isBest && (
-            <span className="shrink-0 rounded bg-gold/10 px-2 py-0.5 text-[12px] font-bold uppercase tracking-wider text-gold">
-              Best
-            </span>
-          )}
+            })()}
+            {isBest && (
+              <span className="mt-1 inline-flex rounded bg-gold/10 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-gold">
+                Best
+              </span>
+            )}
+          </div>
         </div>
-        <div className="grid min-w-0 grid-cols-3 gap-3 xl:shrink-0 xl:flex xl:items-center">
+        <div className="grid min-w-0 grid-cols-3 gap-3 xl:grid-cols-[8rem_5rem_7rem_13rem]">
           <span
-            className={`flex min-w-0 items-center justify-start gap-1.5 font-mono text-[14px] tabular-nums xl:w-32 xl:justify-end xl:text-[15px] ${
+            className={`flex min-w-0 items-center justify-start gap-1.5 font-mono text-[14px] tabular-nums xl:justify-end xl:text-[15px] ${
               !isEquipped && result.delta > 0
                 ? 'text-emerald-400'
                 : !isEquipped && result.delta < 0
@@ -735,10 +736,10 @@ export default function ResultRow({
               />
             )}
           </span>
-          <span className="text-left font-mono text-[14px] tabular-nums text-zinc-200 xl:w-20 xl:text-right xl:text-[15px]">
+          <span className="text-left font-mono text-[14px] tabular-nums text-zinc-200 xl:text-right xl:text-[15px]">
             {Math.round(result.dps).toLocaleString()}
           </span>
-          <div className="flex min-w-0 flex-col items-start gap-0.5 xl:w-28 xl:items-end">
+          <div className="flex min-w-0 flex-col items-start gap-0.5 xl:items-end">
             <span className="text-[13px] tabular-nums text-zinc-200 xl:text-[14px]">
               {(baseAvgIlevel + ilvlGain).toFixed(2)}
               {ilvlGain !== 0 && (
@@ -753,7 +754,7 @@ export default function ResultRow({
               )}
             </span>
           </div>
-          <div className="col-span-3 flex items-center justify-end gap-2 xl:col-auto xl:w-52">
+          <div className="col-span-3 flex items-center justify-end gap-2 xl:col-span-1">
             {onAddToWishlist && !isEquipped && (
               <button
                 type="button"
