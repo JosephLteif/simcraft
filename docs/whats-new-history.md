@@ -40,6 +40,14 @@ Character pages can now combine Blizzard data with public Raider.IO and Warcraft
 - The integration settings explain what belongs in each Warcraft Logs field and show the exact redirect host and port for the current app address; private reports and private OAuth/PKCE access are not used.
 - Personal Warcraft Logs credentials take precedence over shared hosted credentials, while environment credentials take precedence over the administrator-managed fallback. Secrets remain protected and are never returned by the API.
 
+#### Adjust cores for running simulations
+
+Running simulations now expose a live Cores selector on the result page so CPU usage can be adjusted without cancelling the job.
+
+- Apply a new core count while the simulation continues, including across staged SimC runs.
+- Choose from one core up to the maximum worker-thread count configured when the simulation started.
+- Keep the control scoped to the simulation owner and disable it when the running process cannot be controlled.
+
 ### Improvements
 
 #### Simplify SimC profile context

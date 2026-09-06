@@ -19,6 +19,7 @@ tempfile = "3"
 chrono = { version = "0.4", features = ["serde"] }
 reqwest = { version = "0.12", features = ["json", "stream"] }
 futures-util = "0.3"
+libc = "0.2"
 hex = "0.4"
 sha2 = "0.11"
 aes-gcm = "0.11"
