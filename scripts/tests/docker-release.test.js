@@ -60,6 +60,7 @@ test('release workflow has a compact stable action selector', () => {
   assert.match(workflow, /release_action:[\s\S]*?- patch[\s\S]*?- promote-dev/);
   assert.doesNotMatch(workflow, /release_channel|release_mode|dev_source_ref|source_ref:/);
   assert.match(workflow, /dev_version:[\s\S]*?type: string/);
+  assert.match(workflow, /stable_version:[\s\S]*?type: string/);
   assert.match(workflow, /promote-dev:[\s\S]*?DEV_TAG="dev-build\/\$\{DEV_VERSION\}"/);
   assert.match(workflow, /git checkout --detach "refs\/tags\/\$\{DEV_TAG\}"/);
   assert.match(workflow, /echo "dev_sha=\$\{DEV_SHA\}" >> "\$GITHUB_OUTPUT"/);
@@ -83,6 +84,9 @@ test('promote-dev publishes synchronized changelog state to master', () => {
     promoteDev,
     /node scripts\/promote-changelog\.js[\s\S]*--version "\$\{VERSION\}"[\s\S]*--date/
   );
+  assert.match(promoteDev, /STABLE_VERSION: \$\{\{ inputs\.stable_version \}\}/);
+  assert.match(promoteDev, /promote-dev requires a stable version such as 6\.0\.0/);
+  assert.match(promoteDev, /VERSION="\$\{STABLE_VERSION\}"/);
   assert.match(promoteDev, /npm run sync:changelog/);
   assert.match(promoteDev, /npm run check:changelog/);
   assert.match(
