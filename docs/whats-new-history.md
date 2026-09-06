@@ -42,6 +42,13 @@ Character pages can now combine Blizzard data with public Raider.IO and Warcraft
 
 ### Improvements
 
+#### Refine the tracked-character dashboard
+
+Tracked Characters now use lighter grouping and better vertical balance.
+
+- Replace heavy nested overview and vault frames with softer surfaces, a compact stat divider, and a focused selected-character accent.
+- Anchor overview actions to the bottom of the card and add breathing room below the dashboard widget.
+
 #### Make Wishlist slot grouping easier to scan
 
 Wishlist's By Slot view now makes each gear section easier to scan.
