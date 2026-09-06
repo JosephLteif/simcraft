@@ -41,6 +41,21 @@ fn stored_combo_count(job: &Job) -> Option<usize> {
     (input_count > 0).then_some(input_count)
 }
 
+fn configured_cpu_cores(simc_input: &str) -> u32 {
+    let default = std::thread::available_parallelism()
+        .map(|n| n.get() as u32)
+        .unwrap_or(4);
+    simc_input
+        .lines()
+        .find_map(|line| {
+            line.trim()
+                .strip_prefix("threads=")
+                .and_then(|value| value.parse::<u32>().ok())
+        })
+        .filter(|cores| *cores > 0)
+        .unwrap_or(default)
+}
+
 fn rerun_options(job: &Job) -> Value {
     let mut options = job
         .options
@@ -427,17 +442,14 @@ pub(super) async fn get_sim_status(
         }
     }
 
-    let mut cpu_cores = std::thread::available_parallelism()
-        .map(|n| n.get() as u32)
-        .unwrap_or(4);
-    for line in job.simc_input.lines() {
-        if let Some(val) = line.trim().strip_prefix("threads=") {
-            if let Ok(n) = val.parse::<u32>() {
-                cpu_cores = n;
-                break;
-            }
-        }
-    }
+    let configured_cores = configured_cpu_cores(&job.simc_input);
+    let core_settings = simc_runner::job_core_settings(&job_id);
+    let cpu_cores = core_settings
+        .map(|settings| settings.current)
+        .unwrap_or(configured_cores);
+    let max_cpu_cores = core_settings
+        .map(|settings| settings.max)
+        .unwrap_or(configured_cores);
 
     let mut cpu_pct = 0.0;
     let mut mem_bytes = 0;
@@ -449,6 +461,9 @@ pub(super) async fn get_sim_status(
     }
 
     let control_available = simc_runner::control_status(&job_id).is_some();
+    let cores_available = core_settings
+        .map(|settings| settings.available)
+        .unwrap_or(false);
     let active_stage_elapsed = job.active_stage_elapsed_seconds();
     let queue_position = if job.status == JobStatus::Pending {
         store
@@ -485,6 +500,8 @@ pub(super) async fn get_sim_status(
         "cpu_pct": cpu_pct,
         "mem_bytes": mem_bytes,
         "cpu_cores": cpu_cores,
+        "max_cpu_cores": max_cpu_cores,
+        "cores_available": cores_available,
         "pause_available": control_available && matches!(job.status, JobStatus::Pending | JobStatus::Running),
         "resume_available": control_available && job.status == JobStatus::Paused,
         "linked_region": job.linked_region,
@@ -568,6 +585,61 @@ pub(super) async fn resume_sim(
         _ => "paused",
     };
     HttpResponse::Ok().json(json!({"status": status}))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SetSimCoresRequest {
+    pub cores: u32,
+}
+
+pub(super) async fn set_sim_cores(
+    req: HttpRequest,
+    auth: web::Data<Arc<crate::server::auth_handlers::BlizzardAuthState>>,
+    path: web::Path<String>,
+    payload: web::Json<SetSimCoresRequest>,
+    store: web::Data<Arc<dyn JobStorage>>,
+) -> HttpResponse {
+    let owner_id = owner_id(&req, &auth);
+    let job_id = path.into_inner();
+    let Some(job) = store.get_owned(&owner_id, &job_id) else {
+        return HttpResponse::NotFound().json(json!({"detail": "Job not found"}));
+    };
+    if !matches!(job.status, JobStatus::Running | JobStatus::Paused) {
+        return HttpResponse::BadRequest().json(json!({
+            "detail": "Cores can only be changed while the simulation is running or paused."
+        }));
+    }
+    if payload.cores == 0 {
+        return HttpResponse::BadRequest().json(json!({"detail": "Cores must be at least 1."}));
+    }
+
+    let Some(current) = simc_runner::job_core_settings(&job_id) else {
+        return HttpResponse::Conflict().json(json!({
+            "detail": "Live core control is unavailable for this simulation."
+        }));
+    };
+    if !current.available {
+        return HttpResponse::Conflict().json(json!({
+            "detail": "The simulation process is not currently available for live core changes."
+        }));
+    }
+    if payload.cores > current.max {
+        return HttpResponse::BadRequest().json(json!({
+            "detail": format!(
+                "This simulation can use at most {} cores because its worker threads were fixed at launch.",
+                current.max
+            )
+        }));
+    }
+
+    match simc_runner::set_job_cores(&job_id, payload.cores) {
+        Ok(settings) => HttpResponse::Ok().json(json!({
+            "status": if job.status == JobStatus::Paused { "paused" } else { "running" },
+            "cores": settings.current,
+            "max_cores": settings.max,
+        })),
+        Err(error) => HttpResponse::Conflict().json(json!({"detail": error})),
+    }
 }
 
 pub(super) async fn get_sim_logs(
@@ -992,6 +1064,13 @@ mod tests {
     ) -> HttpResponse {
         super::resume_sim(test_request(), test_auth(), path, store).await
     }
+    async fn set_sim_cores(
+        path: web::Path<String>,
+        payload: web::Json<SetSimCoresRequest>,
+        store: web::Data<Arc<dyn JobStorage>>,
+    ) -> HttpResponse {
+        super::set_sim_cores(test_request(), test_auth(), path, payload, store).await
+    }
     async fn cancel_sim(
         path: web::Path<String>,
         store: web::Data<Arc<dyn JobStorage>>,
@@ -1306,6 +1385,42 @@ mod tests {
             JobStatus::Running
         );
         simc_runner::cleanup_job_control(running_id);
+    }
+
+    #[actix_web::test]
+    async fn set_sim_cores_rejects_invalid_or_unavailable_processes() {
+        let store = test_store();
+        store.insert(make_job(
+            "cores-running",
+            JobStatus::Running,
+            "2026-01-05T00:00:00Z",
+        ));
+
+        let zero = set_sim_cores(
+            web::Path::from("cores-running".to_string()),
+            web::Json(SetSimCoresRequest { cores: 0 }),
+            store.clone(),
+        )
+        .await;
+        assert_eq!(zero.status(), actix_web::http::StatusCode::BAD_REQUEST);
+
+        let unavailable = set_sim_cores(
+            web::Path::from("cores-running".to_string()),
+            web::Json(SetSimCoresRequest { cores: 1 }),
+            store.clone(),
+        )
+        .await;
+        assert_eq!(unavailable.status(), actix_web::http::StatusCode::CONFLICT);
+
+        let done = make_job("cores-done", JobStatus::Done, "2026-01-06T00:00:00Z");
+        store.insert(done);
+        let terminal = set_sim_cores(
+            web::Path::from("cores-done".to_string()),
+            web::Json(SetSimCoresRequest { cores: 1 }),
+            store,
+        )
+        .await;
+        assert_eq!(terminal.status(), actix_web::http::StatusCode::BAD_REQUEST);
     }
 
     #[actix_web::test]

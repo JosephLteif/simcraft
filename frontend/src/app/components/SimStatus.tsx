@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { Check, Clock3, ListOrdered, Pause, Play, ScrollText } from 'lucide-react';
-import { API_URL, pauseSim, resumeSim } from '../lib/api';
+import { API_URL, pauseSim, resumeSim, setSimCores } from '../lib/api';
 import { formatElapsedCompact, formatEta, formatMegabytes } from '../lib/format';
 
 interface StageTiming {
@@ -35,6 +35,8 @@ interface SimStatusProps {
   cpuPct?: number;
   memBytes?: number;
   cpuCores?: number;
+  maxCpuCores?: number;
+  coresAvailable?: boolean;
   iterations?: number;
   iterationsCompleted?: number;
   fightStyle?: string;
@@ -192,6 +194,8 @@ export default function SimStatus({
   cpuPct,
   memBytes,
   cpuCores,
+  maxCpuCores,
+  coresAvailable,
   iterations,
   iterationsCompleted,
   fightStyle,
@@ -201,6 +205,8 @@ export default function SimStatus({
   const isPaused = status === 'paused';
   const [cancelling, setCancelling] = useState(false);
   const [transitioning, setTransitioning] = useState(false);
+  const [updatingCores, setUpdatingCores] = useState(false);
+  const [selectedCores, setSelectedCores] = useState<number | null>(null);
   const [actionError, setActionError] = useState('');
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [displayedStageElapsed, setDisplayedStageElapsed] = useState(activeStageElapsed ?? 0);
@@ -228,6 +234,19 @@ export default function SimStatus({
   const displayedProgressDetail = parsedProfilesetProgress
     ? progressDetail?.split('·').slice(1).join('·').trim() || undefined
     : progressDetail;
+  const displayedCores = selectedCores ?? cpuCores;
+  const maxCores = Math.max(maxCpuCores ?? 0, cpuCores ?? 0, displayedCores ?? 0);
+  const canChangeCores =
+    !!jobId &&
+    (isRunning || isPaused) &&
+    coresAvailable !== false &&
+    displayedCores !== undefined &&
+    displayedCores > 0 &&
+    maxCores > 0;
+
+  useEffect(() => {
+    setSelectedCores(null);
+  }, [cpuCores]);
 
   useEffect(() => {
     if (!createdAt || !isRunning) {
@@ -300,6 +319,22 @@ export default function SimStatus({
       setActionError(error instanceof Error ? error.message : 'Unable to resume simulation');
     } finally {
       setTransitioning(false);
+    }
+  }
+
+  async function handleCoresChange(nextCores: number) {
+    if (!jobId || updatingCores || !Number.isInteger(nextCores) || nextCores < 1) return;
+    setActionError('');
+    setSelectedCores(nextCores);
+    setUpdatingCores(true);
+    try {
+      const response = await setSimCores(jobId, nextCores);
+      setSelectedCores(response.cores);
+    } catch (error) {
+      setSelectedCores(null);
+      setActionError(error instanceof Error ? error.message : 'Unable to change simulation cores');
+    } finally {
+      setUpdatingCores(false);
     }
   }
 
@@ -476,7 +511,24 @@ export default function SimStatus({
                 <span className="text-[10px] font-semibold tracking-widest text-zinc-500 uppercase">
                   Cores
                 </span>
-                <span className="mt-1 font-mono text-[13px] text-zinc-200">{cpuCores}</span>
+                {canChangeCores ? (
+                  <select
+                    aria-label="CPU cores used by this simulation"
+                    className="bg-surface border-border focus:border-gold/60 mt-1 rounded border px-1.5 py-0.5 font-mono text-[13px] text-zinc-200 outline-none disabled:cursor-wait disabled:opacity-60"
+                    value={displayedCores}
+                    disabled={updatingCores}
+                    onChange={(event) => void handleCoresChange(Number(event.target.value))}
+                    title="Change the CPU cores allocated to this running simulation"
+                  >
+                    {Array.from({ length: maxCores }, (_, index) => index + 1).map((cores) => (
+                      <option key={cores} value={cores}>
+                        {cores}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <span className="mt-1 font-mono text-[13px] text-zinc-200">{cpuCores}</span>
+                )}
               </div>
             )}
             {memBytes !== undefined && memBytes > 0 && (

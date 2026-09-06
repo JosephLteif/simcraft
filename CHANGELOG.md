@@ -13,6 +13,7 @@ The format is based on Keep a Changelog and this project uses semantic versionin
 - Warcraft Logs raid parses now request LFR, Normal, Heroic, and Mythic rankings separately; the Raiding tab can show needed difficulties, all difficulties, or one selected difficulty while preserving the difficulty choice across refreshes.
 - Character pages now support optional public Raider.IO and Warcraft Logs integrations: Raider.IO provides current-season Mythic+ scores, best runs, raid progression, attribution, and profile links, while Warcraft Logs provides latest-zone rankings, five dated recent reports, and per-boss parse, kill, amount, metric, and spec data.
 - Simulation queue management now supports a configurable parallel-job limit across desktop and private Docker hosting; Docker-hosted changes are restricted to administrators.
+- Running simulations can now change their live CPU core affinity from the result page, bounded by the worker-thread count selected at launch.
 - The global activity card now shows running and queued simulations, remains available on result pages, and supports cancellation.
 - The dashboard now shows a live Queued Sims count while simulations are in flight.
 - Wishlist and Upgrade Planner now share a character-scoped Gear Roadmap: Wishlist tracks items to obtain, while the roadmap tracks upgrades for owned items without duplicating the same list.

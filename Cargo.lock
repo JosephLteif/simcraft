@@ -6998,6 +6998,7 @@ dependencies = [
  "hex",
  "jsonwebtoken",
  "keyring",
+ "libc",
  "once_cell",
  "regex",
  "reqwest 0.12.28",

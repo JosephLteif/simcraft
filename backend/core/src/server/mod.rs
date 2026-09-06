@@ -158,7 +158,10 @@ fn public_light_mode_request(req: &ServiceRequest) -> bool {
         let action = segments.next();
         return is_read
             || (is_write
-                && matches!(action, Some("cancel" | "pause" | "resume" | "rerun"))
+                && matches!(
+                    action,
+                    Some("cancel" | "pause" | "resume" | "rerun" | "cores")
+                )
                 && segments.next().is_none());
     }
 
@@ -1322,6 +1325,10 @@ pub async fn start_with_storage_bind_options_and_simc_runtime(
                 .route(
                     "/api/sim/{id}/resume",
                     web::post().to(job_handlers::resume_sim),
+                )
+                .route(
+                    "/api/sim/{id}/cores",
+                    web::post().to(job_handlers::set_sim_cores),
                 )
                 .route("/api/sim/{id}/link", web::post().to(job_handlers::link_sim))
                 .route("/api/sim/{id}/pin", web::post().to(job_handlers::pin_sim))
