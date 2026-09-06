@@ -1,5 +1,5 @@
 {
-  "contentRevision": "Unreleased-eb17b0a6c041",
+  "contentRevision": "Unreleased-07a7c5ab0f60",
   "releases": [
     {
       "version": "Unreleased",
@@ -71,6 +71,16 @@
           "items": [
             "Show the slot name at the top of each grouped section.",
             "Remove redundant nested cards so saved items use a flatter layout."
+          ]
+        },
+        {
+          "category": "improvement",
+          "title": "Rework Top Gear rankings layout",
+          "summary": "Top Gear rankings now keep item details, performance metrics, and row actions in separate responsive regions so long item and talent combinations stay readable.",
+          "items": [
+            "Reserve aligned columns for DPS change, DPS, item level, and actions so values and buttons do not overlap the item details.",
+            "Move the Best marker into the item-content area and tighten row and header spacing to use the available space more effectively.",
+            "Stack the ranking content cleanly on narrower screens while preserving the existing filters and actions."
           ]
         },
         {
