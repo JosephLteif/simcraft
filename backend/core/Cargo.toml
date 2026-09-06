@@ -28,7 +28,7 @@ jsonwebtoken = { version = "11", features = ["rust_crypto"] }
 urlencoding = "2.1"
 thiserror = "2.0.18"
 zip = "4"
-sevenz-rust2 = { version = "0.21", features = ["zstd", "lz4", "deflate", "brotli"] }
+sevenz-rust2 = { version = "0.22", features = ["zstd", "lz4", "deflate", "brotli"] }
 keyring = { version = "4.1.5", optional = true }
 
 actix-web = { version = "4", optional = true }
