@@ -1,7 +1,11 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
-import ChangelogPopup, { CHANGELOG_CONTENT_REVISION, CHANGELOG_OPEN_EVENT } from './ChangelogPopup';
+import ChangelogPopup, {
+  CHANGELOG_CONTENT_REVISION,
+  CHANGELOG_LAST_SEEN_VERSION_KEY,
+  CHANGELOG_OPEN_EVENT,
+} from './ChangelogPopup';
 import { APP_VERSION } from '../lib/version';
 import { CHANGELOG_HISTORY_URL, LATEST_CHANGELOG_RELEASE } from '../lib/changelog';
 
@@ -18,7 +22,9 @@ describe('ChangelogPopup', () => {
 
     const dialog = await screen.findByRole('dialog', { name: /what's new/i });
     expect(dialog).toBeInTheDocument();
-    expect(screen.getByText(LATEST_CHANGELOG_RELEASE.version)).toBeInTheDocument();
+    expect(
+      dialog.querySelector(`[data-changelog-release="${LATEST_CHANGELOG_RELEASE.version}"]`)
+    ).toBeInTheDocument();
     expect(screen.getAllByRole('heading', { level: 4 }).length).toBeGreaterThan(0);
     expect(
       screen.queryByRole('button', { name: /changelog item|changelog page/i })
@@ -30,6 +36,7 @@ describe('ChangelogPopup', () => {
 
     await user.click(screen.getByRole('button', { name: /got it/i }));
     expect(localStorage.getItem(seenKey)).toBe('1');
+    expect(localStorage.getItem(CHANGELOG_LAST_SEEN_VERSION_KEY)).toBe(APP_VERSION);
     await waitFor(() => {
       expect(screen.queryByRole('dialog', { name: /what's new/i })).not.toBeInTheDocument();
     });

@@ -1,5 +1,5 @@
 {
-  "contentRevision": "Unreleased-4701ed24c488",
+  "contentRevision": "Unreleased-2ba7fe7b8b67",
   "releases": [
     {
       "version": "Unreleased",
@@ -54,6 +54,15 @@
             "Apply a new core count while the simulation continues, including across staged SimC runs.",
             "Choose from one core up to the maximum worker-thread count configured when the simulation started.",
             "Keep the control scoped to the simulation owner and disable it when the running process cannot be controlled."
+          ]
+        },
+        {
+          "category": "improvement",
+          "title": "Keep major release highlights visible",
+          "summary": "What's New now shows updates since the last app version a user dismissed, including the current major release when they install a later patch directly.",
+          "items": [
+            "See major changes alongside follow-up patch fixes without manually duplicating release notes.",
+            "Use the unread indicator on the profile menu to reopen unseen updates."
           ]
         },
         {

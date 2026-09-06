@@ -13,7 +13,7 @@ type PaletteCommand = {
 };
 
 const commands: PaletteCommand[] = [
-  { id: 'whats-new', label: "Open What's New", description: 'Review the latest release notes.' },
+  { id: 'whats-new', label: "Open What's New", description: 'Review recent release updates.' },
   {
     id: 'dashboard',
     label: 'Open Dashboard',

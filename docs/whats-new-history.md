@@ -1,6 +1,6 @@
 # What's New History
 
-This is the append-only archive for the public GitHub Pages changelog. The app popup intentionally shows only the latest update; older versions remain available on the Pages archive and at their repository release tags.
+This is the append-only archive for the public GitHub Pages changelog. The app popup shows updates since the user's last seen version, including major-release highlights when a user skips directly to a later patch; older versions remain available on the Pages archive and at their repository release tags.
 
 Add new work under the `Unreleased` section. Stable bump and `promote-dev` releases promote that section to the selected version and date, synchronize the app data, and update `master` for GitHub Pages. `republish` only rebuilds an existing release tag.
 
@@ -53,6 +53,13 @@ Running simulations now expose a live Cores selector on the result page so CPU u
 - Keep the control scoped to the simulation owner and disable it when the running process cannot be controlled.
 
 ### Improvements
+
+#### Keep major release highlights visible
+
+What's New now shows updates since the last app version a user dismissed, including the current major release when they install a later patch directly.
+
+- See major changes alongside follow-up patch fixes without manually duplicating release notes.
+- Use the unread indicator on the profile menu to reopen unseen updates.
 
 #### Put Raid Vault first on character details
 
