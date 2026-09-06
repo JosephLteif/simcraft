@@ -42,6 +42,13 @@ Character pages can now combine Blizzard data with public Raider.IO and Warcraft
 
 ### Improvements
 
+#### Simplify SimC profile context
+
+Simulation pages no longer show a separate Active Character banner when the imported profile already provides that context.
+
+- Keep the SimC export and detected character details as the focused profile context.
+- Continue synchronizing the shared active-character state automatically for defaults, history, dashboard, and rich presence.
+
 #### Refine the tracked-character dashboard
 
 Tracked Characters now use lighter grouping and better vertical balance.
