@@ -259,6 +259,12 @@ The character Raiding tab now opens on the latest concrete expansion so raid pro
 
 ### Bug fixes
 
+#### Prevent duplicate weekly Great Vault dungeon counts
+
+Great Vault weekly Mythic+ activity now counts current-period dungeon runs once instead of counting season-best copies again.
+
+- Keep season-best records out of weekly vault progress and per-slot activity popovers.
+
 #### Preserve data-page state during failures
 
 Transient refresh and mutation failures no longer turn valid page state into misleading empty screens.

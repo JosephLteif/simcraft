@@ -213,6 +213,38 @@ describe('character panel normalization', () => {
     });
   });
 
+  it('does not count season-best copies as weekly dungeon runs', () => {
+    const now = Date.now();
+    const weekStart = new Date(now - 60_000).toISOString();
+    const currentPeriodRuns = [
+      {
+        keystone_level: 11,
+        dungeon: { name: 'Murder Row' },
+        completed_timestamp: now,
+      },
+      {
+        keystone_level: 8,
+        dungeon: { name: 'Den of Nalorakk' },
+        completed_timestamp: now - 10_000,
+      },
+    ];
+    const activity = getWeeklyVaultActivity(
+      {
+        current_period: { best_runs: currentPeriodRuns },
+        season_best_runs: currentPeriodRuns.map((run) => ({ ...run, dungeon: { ...run.dungeon } })),
+      },
+      null,
+      'us',
+      [{ start_time: weekStart }]
+    );
+
+    expect(activity.mplusRuns).toBe(2);
+    expect(activity.mythicRuns.map((run) => `${run.dungeon} +${run.level}`)).toEqual([
+      'Murder Row +11',
+      'Den of Nalorakk +8',
+    ]);
+  });
+
   it('keeps uncompleted active raid bosses for the vault hover and ranks reward levels', () => {
     const now = Date.now();
     const weekStart = new Date(now - 60_000).toISOString();

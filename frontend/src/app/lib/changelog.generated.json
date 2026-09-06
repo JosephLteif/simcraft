@@ -1,10 +1,10 @@
 {
-  "contentRevision": "v6.0.0-53f2c8296629",
+  "contentRevision": "Unreleased-50e1800cd55b",
   "releases": [
     {
-      "version": "v6.0.0",
-      "date": "2026-09-06",
-      "title": "Release notes for v6.0.0",
+      "version": "Unreleased",
+      "date": "",
+      "title": "Simulation queue management",
       "entries": [
         {
           "category": "feature",
@@ -307,6 +307,14 @@
           "items": [
             "The generic `Current expansion` option is no longer shown when it does not map to the character's raid data.",
             "The final expansion in the available raid data is selected by default, while `All expansions` remains available for browsing older content."
+          ]
+        },
+        {
+          "category": "fix",
+          "title": "Prevent duplicate weekly Great Vault dungeon counts",
+          "summary": "Great Vault weekly Mythic+ activity now counts current-period dungeon runs once instead of counting season-best copies again.",
+          "items": [
+            "Keep season-best records out of weekly vault progress and per-slot activity popovers."
           ]
         },
         {

@@ -59,6 +59,7 @@ No unreleased changes yet.
 
 ### Fixed
 
+- Great Vault weekly Mythic+ activity now counts current-period dungeon runs once instead of counting season-best copies again.
 - History now preserves already-loaded simulation rows when refreshes fail, reports mutation errors, and offers an inline retry action; queue polling also pauses for hidden tabs and disables busy row actions.
 - Warcraft Logs data now merges into Blizzard boss rows without replacing Blizzard data, preserves snapshots through provider failures and refreshes, and keeps real zero-kill bosses visible while hiding catalog-only trash placeholders.
 - Raider.IO raid achievements now request active raid slugs and filter against active Blizzard raids, preventing stale expansion entries such as legacy progression from appearing in the current-season card.
