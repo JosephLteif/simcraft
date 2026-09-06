@@ -1,5 +1,5 @@
 {
-  "contentRevision": "Unreleased-5a0de555a5f3",
+  "contentRevision": "Unreleased-098e0a59af9d",
   "releases": [
     {
       "version": "Unreleased",
@@ -44,6 +44,15 @@
             "Warcraft Logs activates after valid credentials are saved and adds latest-zone rankings, five recent public reports with report dates and end times, and per-boss best and median parses, public kills, best amounts, metrics, and specs.",
             "The integration settings explain what belongs in each Warcraft Logs field and show the exact redirect host and port for the current app address; private reports and private OAuth/PKCE access are not used.",
             "Personal Warcraft Logs credentials take precedence over shared hosted credentials, while environment credentials take precedence over the administrator-managed fallback. Secrets remain protected and are never returned by the API."
+          ]
+        },
+        {
+          "category": "improvement",
+          "title": "Make Wishlist slot grouping easier to scan",
+          "summary": "Wishlist's By Slot view now makes each gear section easier to scan.",
+          "items": [
+            "Show the slot name at the top of each grouped section.",
+            "Remove redundant nested cards so saved items use a flatter layout."
           ]
         },
         {

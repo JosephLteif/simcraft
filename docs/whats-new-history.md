@@ -42,6 +42,13 @@ Character pages can now combine Blizzard data with public Raider.IO and Warcraft
 
 ### Improvements
 
+#### Make Wishlist slot grouping easier to scan
+
+Wishlist's By Slot view now makes each gear section easier to scan.
+
+- Show the slot name at the top of each grouped section.
+- Remove redundant nested cards so saved items use a flatter layout.
+
 #### Flatten character detail sections
 
 Character tabs and simulation result sections now avoid redundant nested containers so the useful data occupies more of the page.
