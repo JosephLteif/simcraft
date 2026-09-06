@@ -136,12 +136,14 @@ choose **Settings → App Updates → Dev (pre-release)**, then future developer
 releases can be installed through the normal updater.
 
 When the tested dev build is ready for everyone, open **Actions → Release → Run
-workflow**, choose **promote-dev**, and run it. This promotes the exact commit
-behind the current `dev` release using its stable `VERSION`; it does not bump
-again. It also promotes the `Unreleased` changelog into that version and updates
-the Pages source on `master`. It fails if that stable version already has a
-release tag. Both release workflows require the `TAURI_SIGNING_PRIVATE_KEY` and
-`TAURI_SIGNING_PRIVATE_KEY_PASSWORD` secrets.
+workflow**, choose **promote-dev**, enter the exact **Dev version** and the
+**Stable version**, and run it. The dev version selects the immutable tested
+source tag; the stable version selects the official `v<version>` to publish, so
+it can intentionally differ from the dev prerelease base. It does not bump the
+stable version again. It also promotes the `Unreleased` changelog into that
+version and updates the Pages source on `master`. It fails if that stable
+version already has a release tag. Both release workflows require the
+`TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` secrets.
 
 ## Pull request guidelines
 
