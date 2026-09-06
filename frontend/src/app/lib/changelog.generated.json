@@ -1,10 +1,10 @@
 {
-  "contentRevision": "Unreleased-f8625f2daa2c",
+  "contentRevision": "v6.0.0-53f2c8296629",
   "releases": [
     {
-      "version": "Unreleased",
-      "date": "",
-      "title": "Simulation queue management",
+      "version": "v6.0.0",
+      "date": "2026-09-06",
+      "title": "Release notes for v6.0.0",
       "entries": [
         {
           "category": "feature",

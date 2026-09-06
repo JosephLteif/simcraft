@@ -6,6 +6,10 @@ The format is based on Keep a Changelog and this project uses semantic versionin
 
 ## [Unreleased]
 
+No unreleased changes yet.
+
+## [6.0.0] - 2026-09-06
+
 ### Added
 
 - Drop Finder rankings now include raid-boss and dungeon activity priorities with unique reward counts, likely-upgrade counts, and best DPS gain; selecting a source filters to matching combinations and can be cleared with Show all sources.
